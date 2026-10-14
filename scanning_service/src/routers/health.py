@@ -2,6 +2,7 @@
 Router de health check.
 Verifica conectividad con Django Internal API con cliente HTTP reutilizable (connection pool).
 """
+
 import os
 
 import httpx

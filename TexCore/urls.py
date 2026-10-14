@@ -14,6 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path, re_path
@@ -30,21 +31,21 @@ def health_check(request):
 
 urlpatterns = [
     # 0. Health check — usado por CI/CD y Nginx
-    path('api/health/', health_check, name='health_check'),
+    path("api/health/", health_check, name="health_check"),
     # 1. Rutas de API y Admin
-    path('admin/', admin.site.urls),
-    path('api/inventory/', include('inventory.urls')),
-    path('api/reporting/', include('inventory.urls_reporting')),
-    path('api/scanning/', include('inventory.urls_scanning')),
-    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-    path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
-    path('api/', include('gestion.urls')),
+    path("admin/", admin.site.urls),
+    path("api/inventory/", include("inventory.urls")),
+    path("api/reporting/", include("inventory.urls_reporting")),
+    path("api/scanning/", include("inventory.urls_scanning")),
+    path("api/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", CustomTokenRefreshView.as_view(), name="token_refresh"),
+    path("api/token/logout/", LogoutView.as_view(), name="token_logout"),
+    path("api/", include("gestion.urls")),
     # 2. Internal API — comunicación servicio-a-servicio (JWT RS256)
-    path('api/internal/v1/', include('internal_api.urls', namespace='internal_api')),
+    path("api/internal/v1/", include("internal_api.urls", namespace="internal_api")),
     # 3. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     # 3. SPA React — captura todo lo demás. Excluye 'api/' a propósito: nginx
     # ya sirve index.html vía try_files para las rutas del SPA (Django no
     # tiene ese template en este setup, solo lo builda Vite); sin la
@@ -52,5 +53,5 @@ urlpatterns = [
     # (ej. un código escaneado con caracteres inválidos) caía aquí e
     # intentaba renderizar 'index.html' -> TemplateDoesNotExist -> 500 en vez
     # de un 404 limpio.
-    re_path(r'^(?!api/).*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
+    re_path(r"^(?!api/).*", TemplateView.as_view(template_name="index.html"), name="react_app_root"),
 ]

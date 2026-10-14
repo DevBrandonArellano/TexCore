@@ -3,6 +3,7 @@ JWTServiceAuthentication: valida JWT RS256 de microservicios.
 ISO 27001 A.9.4 — Control de acceso a sistemas y aplicaciones.
 DIP: depende de settings (abstracción), no de archivos físicos.
 """
+
 import logging
 import time
 import uuid
@@ -71,7 +72,8 @@ class JWTServiceAuthentication(BaseAuthentication):
             raise AuthenticationFailed("Token de servicio expirado.") from None
         except jwt.InvalidTokenError as exc:
             logger.warning(
-                "JWT de servicio inválido: %s", exc,
+                "JWT de servicio inválido: %s",
+                exc,
                 extra={"sd": {"severity": 4, "action": "jwt_invalid"}},
             )
             raise AuthenticationFailed(f"Token de servicio inválido: {exc}") from exc
@@ -86,7 +88,8 @@ class JWTServiceAuthentication(BaseAuthentication):
             is_admin=bool(payload.get("is_admin", False)),
         )
         logger.info(
-            "Servicio autenticado: %s", principal.service_name,
+            "Servicio autenticado: %s",
+            principal.service_name,
             extra={"sd": {"severity": 6, "service": principal.service_name}},
         )
         return principal, token
@@ -126,8 +129,4 @@ class JWTServiceAuthentication(BaseAuthentication):
             payload["sede_id"] = sede_id
         if is_admin:
             payload["is_admin"] = True
-        return jwt.encode(
-            payload,
-            settings.INTERNAL_JWT_PRIVATE_KEY,
-            algorithm="RS256"
-        )
+        return jwt.encode(payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256")

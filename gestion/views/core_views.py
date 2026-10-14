@@ -29,14 +29,14 @@ from gestion.serializers import (
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
 class GroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     # Los grupos sostienen el RBAC de los once roles: solo admin_sistemas
     # puede consultarlos (hallazgo crítico C-1). Son de solo lectura: los crean
     # seed_production_masters / setup_permissions, no la UI.
-    queryset = Group.objects.all().order_by('name')
+    queryset = Group.objects.all().order_by("name")
     serializer_class = GroupSerializer
     pagination_class = None
     permission_classes = [IsSystemAdmin]
@@ -47,45 +47,45 @@ class SedeViewSet(viewsets.ModelViewSet):
         # Optimización: usando Subqueries en lugar de Count con JOINs (más eficiente para grandes volúmenes)
         return Sede.objects.annotate(
             num_areas=Coalesce(
-                Subquery(
-                    Area.objects.filter(
-                        sede=OuterRef('pk')).values('sede').annotate(
-                        c=Count('id')).values('c')),
+                Subquery(Area.objects.filter(sede=OuterRef("pk")).values("sede").annotate(c=Count("id")).values("c")),
                 Value(0),
-                output_field=IntegerField()),
+                output_field=IntegerField(),
+            ),
             num_users=Coalesce(
                 Subquery(
-                    CustomUser.objects.filter(
-                        sede=OuterRef('pk')).values('sede').annotate(
-                        c=Count('id')).values('c')),
+                    CustomUser.objects.filter(sede=OuterRef("pk")).values("sede").annotate(c=Count("id")).values("c")
+                ),
                 Value(0),
-                output_field=IntegerField()),
+                output_field=IntegerField(),
+            ),
             num_bodegas=Coalesce(
-                Subquery(
-                    Bodega.objects.filter(
-                        sede=OuterRef('pk')).values('sede').annotate(
-                        c=Count('id')).values('c')),
+                Subquery(Bodega.objects.filter(sede=OuterRef("pk")).values("sede").annotate(c=Count("id")).values("c")),
                 Value(0),
-                output_field=IntegerField()),
+                output_field=IntegerField(),
+            ),
             num_ordenes=Coalesce(
                 Subquery(
-                    OrdenProduccion.objects.filter(
-                        sede=OuterRef('pk')).values('sede').annotate(
-                        c=Count('id')).values('c')),
+                    OrdenProduccion.objects.filter(sede=OuterRef("pk"))
+                    .values("sede")
+                    .annotate(c=Count("id"))
+                    .values("c")
+                ),
                 Value(0),
-                output_field=IntegerField()),
+                output_field=IntegerField(),
+            ),
             num_pedidos=Coalesce(
                 Subquery(
-                    PedidoVenta.objects.filter(
-                        sede=OuterRef('pk')).values('sede').annotate(
-                        c=Count('id')).values('c')),
+                    PedidoVenta.objects.filter(sede=OuterRef("pk")).values("sede").annotate(c=Count("id")).values("c")
+                ),
                 Value(0),
-                output_field=IntegerField())).all()
+                output_field=IntegerField(),
+            ),
+        ).all()
 
     serializer_class = SedeSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
@@ -97,127 +97,135 @@ class AreaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # OWASP A01: áreas de la sede del usuario (admin_sistemas y ejecutivo, todas).
         queryset = filtrar_por_sede(Area.objects.all(), self.request.user)
-        sede_id = self.request.query_params.get('sede_id')
+        sede_id = self.request.query_params.get("sede_id")
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
         return queryset
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+        if not serializer.validated_data.get("sede") and hasattr(user, "sede") and user.sede:
             serializer.save(sede=user.sede)
         else:
             serializer.save()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
-        if self.action == 'reporte_eficiencia':
+        if self.action == "reporte_eficiencia":
             return [IsAuthenticated(), IsSupervisorProduccion()]
         return [IsSystemAdmin()]
 
-    @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
+    @action(detail=True, methods=["get"], url_path="reporte-eficiencia")
     def reporte_eficiencia(self, request, pk=None):
         from django.db.models import Count, Max, Min, Sum
         from django.utils import timezone
+
         area = self.get_object()
         if es_jefe_area_de_linea(request.user) and request.user.area_id != area.id:
-            return Response({'detail': 'Solo puede consultar el reporte de su área.'},
-                            status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Solo puede consultar el reporte de su área."}, status=status.HTTP_403_FORBIDDEN)
         # Misma zona que el lookup __date (TIME_ZONE), no la del SO del servidor
         hoy = timezone.localdate()
 
         # 1. Métricas de Máquinas — una sola query con anotaciones (resuelve N+1)
         maquinas = area.maquina_set.annotate(
             produccion_hoy=Sum(
-                'lotes_producidos__peso_neto_producido',
+                "lotes_producidos__peso_neto_producido",
                 filter=Q(lotes_producidos__hora_final__date=hoy),
             )
-        ).values('id', 'nombre', 'capacidad_maxima', 'produccion_hoy')
+        ).values("id", "nombre", "capacidad_maxima", "produccion_hoy")
 
         maquinas_data = []
         for m in maquinas:
-            produccion = m['produccion_hoy'] or 0
-            cap = m['capacidad_maxima'] or 0
+            produccion = m["produccion_hoy"] or 0
+            cap = m["capacidad_maxima"] or 0
             eficiencia = (Decimal(str(produccion)) / cap * 100) if cap > 0 else 0
-            maquinas_data.append({
-                "maquina_id": m['id'],
-                "maquina_nombre": m['nombre'],
-                "capacidad_maxima": cap,
-                "produccion_total": produccion,
-                "eficiencia": round(eficiencia, 2),
-            })
+            maquinas_data.append(
+                {
+                    "maquina_id": m["id"],
+                    "maquina_nombre": m["nombre"],
+                    "capacidad_maxima": cap,
+                    "produccion_total": produccion,
+                    "eficiencia": round(eficiencia, 2),
+                }
+            )
 
         # 2. Métricas de Operarios — una sola query con anotaciones (resuelve N+1)
-        operarios = CustomUser.objects.filter(
-            area=area, groups__name='operario'
-        ).annotate(
-            total_lotes=Count(
-                'loteproduccion',
-                filter=Q(loteproduccion__hora_final__date=hoy),
-                distinct=True,
-            ),
-            produccion_total_kg=Sum(
-                'loteproduccion__peso_neto_producido',
-                filter=Q(loteproduccion__hora_final__date=hoy),
-            ),
-            hora_inicio_min=Min(
-                'loteproduccion__hora_inicio',
-                filter=Q(loteproduccion__hora_final__date=hoy),
-            ),
-            hora_final_max=Max(
-                'loteproduccion__hora_final',
-                filter=Q(loteproduccion__hora_final__date=hoy),
-            ),
-        ).values('id', 'username', 'total_lotes', 'produccion_total_kg', 'hora_inicio_min', 'hora_final_max')
+        operarios = (
+            CustomUser.objects.filter(area=area, groups__name="operario")
+            .annotate(
+                total_lotes=Count(
+                    "loteproduccion",
+                    filter=Q(loteproduccion__hora_final__date=hoy),
+                    distinct=True,
+                ),
+                produccion_total_kg=Sum(
+                    "loteproduccion__peso_neto_producido",
+                    filter=Q(loteproduccion__hora_final__date=hoy),
+                ),
+                hora_inicio_min=Min(
+                    "loteproduccion__hora_inicio",
+                    filter=Q(loteproduccion__hora_final__date=hoy),
+                ),
+                hora_final_max=Max(
+                    "loteproduccion__hora_final",
+                    filter=Q(loteproduccion__hora_final__date=hoy),
+                ),
+            )
+            .values("id", "username", "total_lotes", "produccion_total_kg", "hora_inicio_min", "hora_final_max")
+        )
 
         operarios_data = []
         for op in operarios:
-            total_kg = op['produccion_total_kg'] or 0
-            count = op['total_lotes'] or 0
+            total_kg = op["produccion_total_kg"] or 0
+            count = op["total_lotes"] or 0
             horas = 0
-            if op['hora_final_max'] and op['hora_inicio_min']:
-                duration = op['hora_final_max'] - op['hora_inicio_min']
+            if op["hora_final_max"] and op["hora_inicio_min"]:
+                duration = op["hora_final_max"] - op["hora_inicio_min"]
                 horas = duration.total_seconds() / 3600
-            operarios_data.append({
-                "operario_id": op['id'],
-                "username": op['username'],
-                "total_lotes": count,
-                "produccion_total_kg": total_kg,
-                "promedio_kg_por_lote": round(total_kg / count, 2) if count > 0 else 0,
-                "horas_trabajadas_aprox": round(horas, 2),
-                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0,
-            })
+            operarios_data.append(
+                {
+                    "operario_id": op["id"],
+                    "username": op["username"],
+                    "total_lotes": count,
+                    "produccion_total_kg": total_kg,
+                    "promedio_kg_por_lote": round(total_kg / count, 2) if count > 0 else 0,
+                    "horas_trabajadas_aprox": round(horas, 2),
+                    "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0,
+                }
+            )
 
-        total_area = sum(m['produccion_total'] for m in maquinas_data)
-        ef_promedio = sum(m['eficiencia'] for m in maquinas_data) / len(maquinas_data) if maquinas_data else 0
+        total_area = sum(m["produccion_total"] for m in maquinas_data)
+        ef_promedio = sum(m["eficiencia"] for m in maquinas_data) / len(maquinas_data) if maquinas_data else 0
 
-        return Response({
-            "area_id": area.id,
-            "area_nombre": area.nombre,
-            "fecha_reporte": hoy,
-            "maquinas": maquinas_data,
-            "operarios": operarios_data,
-            "produccion_total_area": total_area,
-            "eficiencia_promedio_area": round(ef_promedio, 2),
-        })
+        return Response(
+            {
+                "area_id": area.id,
+                "area_nombre": area.nombre,
+                "fecha_reporte": hoy,
+                "maquinas": maquinas_data,
+                "operarios": operarios_data,
+                "produccion_total_area": total_area,
+                "eficiencia_promedio_area": round(ef_promedio, 2),
+            }
+        )
 
 
 class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'desempeno', 'vendedores']:
+        if self.action in ["list", "retrieve", "desempeno", "vendedores"]:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = CustomUser.objects.select_related('sede', 'area').prefetch_related('groups', 'superior').all()
+        queryset = CustomUser.objects.select_related("sede", "area").prefetch_related("groups", "superior").all()
 
         # Security: Jefe de Área only sees their area members by default
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
+        if user.groups.filter(name="jefe_area").exists() and not user.is_superuser:
+            if hasattr(user, "area") and user.area:
                 queryset = queryset.filter(area=user.area)
             else:
                 return CustomUser.objects.none()
@@ -225,11 +233,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         queryset = filtrar_por_sede(queryset, user)
 
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        sede_id = self.request.query_params.get("sede_id", self.request.query_params.get("sede", None))
         if sede_id is not None:
             queryset = queryset.filter(sede_id=sede_id)
 
-        area_id = self.request.query_params.get('area', None)
+        area_id = self.request.query_params.get("area", None)
         if area_id is not None:
             queryset = queryset.filter(area_id=area_id)
 
@@ -237,12 +245,12 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+        if not serializer.validated_data.get("sede") and hasattr(user, "sede") and user.sede:
             serializer.save(sede=user.sede)
         else:
             serializer.save()
 
-    @action(detail=False, methods=['get'], url_path='vendedores')
+    @action(detail=False, methods=["get"], url_path="vendedores")
     def vendedores(self, request):
         """
         Lista vendedores para filtros en dashboards (ejecutivo/admin).
@@ -252,37 +260,36 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
 
         # Solo roles gerenciales (ven todas las sedes): ya validado arriba.
-        qs = CustomUser.objects.filter(groups__name='vendedor').distinct()
+        qs = CustomUser.objects.filter(groups__name="vendedor").distinct()
 
-        data = list(
-            qs.order_by('username').values('id', 'username', 'first_name', 'last_name')
-        )
+        data = list(qs.order_by("username").values("id", "username", "first_name", "last_name"))
         return Response(data)
 
-    @action(detail=True, methods=['get'], url_path='desempeno')
+    @action(detail=True, methods=["get"], url_path="desempeno")
     def desempeno(self, request, pk=None):
         operario = self.get_object()
         # Decisión del usuario (1-oct-2026): el propio operario ve el suyo; los
         # supervisores, los de su alcance (el queryset ya acota área y sede).
         user = request.user
-        es_supervisor = user.is_superuser or user.groups.filter(
-            name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists()
+        es_supervisor = (
+            user.is_superuser
+            or user.groups.filter(name__in=["jefe_area", "jefe_planta", "admin_sistemas", "admin_sede"]).exists()
+        )
         if operario.pk != user.pk and not es_supervisor:
-            return Response({'detail': 'Solo puede consultar su propio desempeño.'},
-                            status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "Solo puede consultar su propio desempeño."}, status=status.HTTP_403_FORBIDDEN)
         from django.db.models import Count, Sum
         from django.utils import timezone
 
-        lotes = LoteProduccion.objects.filter(operario=operario).order_by('-hora_final')[:50]
-        summary = LoteProduccion.objects.filter(
-            operario=operario, hora_final__date=timezone.localdate()).aggregate(
-            total_kg=Sum('peso_neto_producido'),
-            count=Count('id')
+        lotes = LoteProduccion.objects.filter(operario=operario).order_by("-hora_final")[:50]
+        summary = LoteProduccion.objects.filter(operario=operario, hora_final__date=timezone.localdate()).aggregate(
+            total_kg=Sum("peso_neto_producido"), count=Count("id")
         )
 
-        return Response({
-            "operario": operario.username,
-            "produccion_hoy_kg": summary['total_kg'] or 0,
-            "lotes_hoy": summary['count'] or 0,
-            "ultimos_lotes": LoteProduccionSerializer(lotes, many=True).data
-        })
+        return Response(
+            {
+                "operario": operario.username,
+                "produccion_hoy_kg": summary["total_kg"] or 0,
+                "lotes_hoy": summary["count"] or 0,
+                "ultimos_lotes": LoteProduccionSerializer(lotes, many=True).data,
+            }
+        )

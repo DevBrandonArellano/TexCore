@@ -12,6 +12,7 @@ los datos ya resueltos a reporting_excel solo para el formateo a Excel/CSV. Se
 mantienen como endpoints HTTP por compatibilidad y para poder probarlos/usarlos
 de forma independiente.
 """
+
 import logging
 
 from rest_framework.permissions import BasePermission
@@ -136,9 +137,7 @@ class StockActualView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_stock_actual(
-            bodega_id, producto_id=request.query_params.get("producto_id")
-        )
+        data = reporting_data.get_stock_actual(bodega_id, producto_id=request.query_params.get("producto_id"))
         return Response(data)
 
 
@@ -167,9 +166,7 @@ class AgingView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_aging(
-            bodega_id, dias_minimos=request.query_params.get("dias_minimos", 30)
-        )
+        data = reporting_data.get_aging(bodega_id, dias_minimos=request.query_params.get("dias_minimos", 30))
         return Response(data)
 
 
@@ -424,10 +421,7 @@ class PlantaPulsoDiarioView(APIView):
         if sede_id:
             qs_lotes = qs_lotes.filter(orden_produccion__area__sede_id=sede_id)
 
-        aggs = qs_lotes.aggregate(
-            prod=Sum("peso_neto_producido"),
-            merma=Sum("peso_merma")
-        )
+        aggs = qs_lotes.aggregate(prod=Sum("peso_neto_producido"), merma=Sum("peso_merma"))
         kg_producidos_hoy = aggs["prod"] or 0.0
         kg_merma_hoy = aggs["merma"] or 0.0
 
@@ -439,9 +433,11 @@ class PlantaPulsoDiarioView(APIView):
 
         wip_estancado = qs_transferencias.aggregate(total=Sum("cantidad_transferida"))["total"] or 0.0
 
-        return Response({
-            "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
-            "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
-            "kg_merma_hoy": round(float(kg_merma_hoy), 2),
-            "wip_estancado": round(float(wip_estancado), 2),
-        })
+        return Response(
+            {
+                "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
+                "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
+                "kg_merma_hoy": round(float(kg_merma_hoy), 2),
+                "wip_estancado": round(float(wip_estancado), 2),
+            }
+        )

@@ -2,6 +2,7 @@
 Schemas Pydantic para parámetros de los reportes.
 ISP: un schema por caso de uso. Facilita testing de validación de parámetros.
 """
+
 from datetime import date
 
 from pydantic import BaseModel, field_validator
@@ -26,6 +27,7 @@ class KardexParams(BaseModel):
 
 class RangoFechaParams(BaseModel):
     """Parámetros comunes para reportes con rango de fechas y sede opcional."""
+
     fecha_inicio: date
     fecha_fin: date
     sede_id: int | None = None
@@ -41,6 +43,7 @@ class RangoFechaParams(BaseModel):
 
 class VendedorParams(BaseModel):
     """Parámetros para reportes por vendedor."""
+
     vendedor_id: int
     fecha_inicio: date
     fecha_fin: date

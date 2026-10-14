@@ -17,8 +17,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token['username'] = user.username
-        token['groups'] = list(user.groups.values_list('name', flat=True))
+        token["username"] = user.username
+        token["groups"] = list(user.groups.values_list("name", flat=True))
         return token
 
 
@@ -47,20 +47,18 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Serialize user data
         from .profile_views import get_user_role
         from .serializers import CustomUserSerializer
+
         user_serializer = CustomUserSerializer(user)
 
         # Get user's primary role
         role = get_user_role(user)
 
         # Get tokens from validated data
-        access_token = serializer.validated_data['access']
-        refresh_token = serializer.validated_data['refresh']
+        access_token = serializer.validated_data["access"]
+        refresh_token = serializer.validated_data["refresh"]
 
         # Construct the response
-        response_data = {
-            'user': user_serializer.data,
-            'role': role
-        }
+        response_data = {"user": user_serializer.data, "role": role}
 
         # Depending on settings, you might want to include tokens in the body or not.
         # The previous code implied we want to overwrite response.data completely.
@@ -70,28 +68,28 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         response = Response(response_data, status=status.HTTP_200_OK)
 
         # Set cookies
-        access_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE', 'access_token')
-        refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
-        secure_cookie = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SECURE', False)
-        samesite = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SAMESITE', 'Lax')
+        access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
+        secure_cookie = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SECURE", False)
+        samesite = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SAMESITE", "Lax")
 
         response.set_cookie(
             access_cookie_name,
             access_token,
-            max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
+            max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
             httponly=True,
             samesite=samesite,
             secure=secure_cookie,
-            path='/'
+            path="/",
         )
         response.set_cookie(
             refresh_cookie_name,
             refresh_token,
-            max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
             httponly=True,
             samesite=samesite,
             secure=secure_cookie,
-            path='/'
+            path="/",
         )
 
         return response
@@ -105,43 +103,43 @@ class CustomTokenRefreshView(TokenRefreshView):
     permission_classes = [AllowAny]  # type: ignore[assignment]
 
     def post(self, request, *args, **kwargs):
-        refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
         refresh_token = request.COOKIES.get(refresh_cookie_name)
 
         if not refresh_token:
             raise InvalidToken("No refresh token found in cookies.")
 
-        request.data['refresh'] = refresh_token
+        request.data["refresh"] = refresh_token
 
         try:
             response = super().post(request, *args, **kwargs)
         except InvalidToken as e:
             response = Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
-            access_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE', 'access_token')
-            response.delete_cookie(access_cookie_name, path='/')
-            response.delete_cookie(refresh_cookie_name, path='/')
+            access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+            response.delete_cookie(access_cookie_name, path="/")
+            response.delete_cookie(refresh_cookie_name, path="/")
             return response
 
         if response.status_code == 200:
-            access_token = response.data['access']
-            access_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE', 'access_token')
-            secure_cookie = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SECURE', False)
-            samesite = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SAMESITE', 'Lax')
+            access_token = response.data["access"]
+            access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+            secure_cookie = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SECURE", False)
+            samesite = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SAMESITE", "Lax")
 
             response.set_cookie(
                 access_cookie_name,
                 access_token,
-                max_age=int(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'].total_seconds()),
+                max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
                 httponly=True,
                 samesite=samesite,
                 secure=secure_cookie,
-                path='/'
+                path="/",
             )
             # The new refresh token (if rotated) is already handled by the cookie middleware
             # if it's being used, or by the super().post() response.
             # For clarity, we can remove the access token from the response body.
-            if 'access' in response.data:
-                del response.data['access']
+            if "access" in response.data:
+                del response.data["access"]
 
         return response
 
@@ -150,8 +148,8 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        access_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE', 'access_token')
-        refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
+        access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
         refresh_token_str = request.COOKIES.get(refresh_cookie_name)
 
         # Agregar el refresh token a la blacklist para invalidarlo en el servidor.
@@ -169,6 +167,6 @@ class LogoutView(APIView):
                 logger.exception("Error al agregar refresh token a blacklist durante logout")
 
         response = Response({"message": "Logout exitoso"}, status=status.HTTP_200_OK)
-        response.delete_cookie(access_cookie_name, path='/')
-        response.delete_cookie(refresh_cookie_name, path='/')
+        response.delete_cookie(access_cookie_name, path="/")
+        response.delete_cookie(refresh_cookie_name, path="/")
         return response

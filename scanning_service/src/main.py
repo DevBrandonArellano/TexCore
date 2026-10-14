@@ -3,6 +3,7 @@ App factory del scanning_service — versión independiente (v3.0).
 Toda la configuración de BD fue reemplazada por JWT + Django Internal API.
 SRP: crea la app FastAPI, singletons y registra middleware/routers.
 """
+
 import logging
 import logging.handlers
 import os
@@ -23,9 +24,7 @@ from .routers import validate as validate_router
 def _get_required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"Variable de entorno requerida no configurada: '{name}'"
-        )
+        raise RuntimeError(f"Variable de entorno requerida no configurada: '{name}'")
     return value
 
 
@@ -89,13 +88,7 @@ async def log_requests_rfc5424(request: Request, call_next):
     finally:
         duration_ms = int((time.time() - start_time) * 1000)
         status_code = response.status_code if response else 500
-        level = (
-            logging.ERROR
-            if status_code >= 500
-            else logging.WARNING
-            if status_code >= 400
-            else logging.INFO
-        )
+        level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
         logging.getLogger("http-request").log(
             level,
             "%s %s %s",

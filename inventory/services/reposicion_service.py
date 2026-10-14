@@ -17,7 +17,7 @@ from gestion.models import (
     Sede,
 )
 
-logger = logging.getLogger('inventory.reposicion')
+logger = logging.getLogger("inventory.reposicion")
 
 
 class ReposicionService:
@@ -36,7 +36,7 @@ class ReposicionService:
         bodega_salida: Bodega | None = None,
         bodega_entrada: Bodega | None = None,
         formula_color=None,
-        prioridad: str = 'normal',
+        prioridad: str = "normal",
         maquina_asignada=None,
         peso_solicitado: Decimal | None = None,
     ) -> OrdenProduccion:
@@ -48,31 +48,34 @@ class ReposicionService:
             raise ValidationError("Se requiere un detalle de plan válido.")
 
         plan = detalle_plan.plan
-        if plan.estado not in ['aprobado', 'en_ejecucion']:
+        if plan.estado not in ["aprobado", "en_ejecucion"]:
             raise ValidationError(
                 f"No se puede generar órdenes para un plan en estado '{plan.get_estado_display()}'. "
                 "El plan debe estar 'Aprobado' o 'En Ejecución'."
             )
 
         saldo_pendiente = detalle_plan.saldo_pendiente
-        if saldo_pendiente <= Decimal('0.0000'):
+        if saldo_pendiente <= Decimal("0.0000"):
             raise ValidationError(
                 f"El producto {detalle_plan.producto_objetivo.codigo} ya ha cumplido la meta planificada."
             )
 
         peso_requerido = peso_solicitado if peso_solicitado is not None else saldo_pendiente
-        if peso_requerido <= Decimal('0.0000'):
+        if peso_requerido <= Decimal("0.0000"):
             raise ValidationError("El peso requerido debe ser mayor a 0.")
 
         # Resolver bodega de salida por defecto si no se especificó: la primera de la sede
         # del plan. (Bodega no tiene campo `activa`: filtrarlo lanzaba FieldError.)
         if not bodega_salida:
-            bodega_salida = Bodega.objects.filter(sede=plan.sede).order_by('id').first()
+            bodega_salida = Bodega.objects.filter(sede=plan.sede).order_by("id").first()
 
         # Generar código secuencial para la OP ligada al plan
-        correlativo = OrdenProduccion.objects.filter(
-            plan_produccion=plan,
-        ).count() + 1
+        correlativo = (
+            OrdenProduccion.objects.filter(
+                plan_produccion=plan,
+            ).count()
+            + 1
+        )
         codigo_op = f"MTS-{plan.codigo}-{detalle_plan.producto_objetivo.codigo}-{correlativo}"
         if len(codigo_op) > 100:
             codigo_op = codigo_op[:100]
@@ -80,7 +83,7 @@ class ReposicionService:
         op = OrdenProduccion.objects.create(
             codigo=codigo_op,
             producto_salida=detalle_plan.producto_objetivo,
-            peso_neto_requerido=Decimal(str(peso_requerido)).quantize(Decimal('0.01')),
+            peso_neto_requerido=Decimal(str(peso_requerido)).quantize(Decimal("0.01")),
             bodega_salida=bodega_salida,
             bodega_entrada=bodega_entrada,
             formula_color=formula_color,
@@ -90,23 +93,22 @@ class ReposicionService:
             sede=plan.sede,
             plan_produccion=plan,
             detalle_plan=detalle_plan,
-            estado='pendiente',
+            estado="pendiente",
             observaciones=f"Reposición MTS generada desde Plan {plan.codigo}",
         )
 
         # Transicionar plan a 'en_ejecucion' si estaba 'aprobado'
-        if plan.estado == 'aprobado':
-            plan.estado = 'en_ejecucion'
-            plan.save(update_fields=['estado', 'fecha_modificacion'])
+        if plan.estado == "aprobado":
+            plan.estado = "en_ejecucion"
+            plan.save(update_fields=["estado", "fecha_modificacion"])
 
         # Transicionar detalle a 'en_proceso' si estaba 'pendiente'
-        if detalle_plan.estado == 'pendiente':
-            detalle_plan.estado = 'en_proceso'
-            detalle_plan.save(update_fields=['estado'])
+        if detalle_plan.estado == "pendiente":
+            detalle_plan.estado = "en_proceso"
+            detalle_plan.save(update_fields=["estado"])
 
         logger.info(
-            'Orden de Producción MTS %s generada exitosamente para plan %s (Producto: %s, Requerido: '
-            '%skg)',
+            "Orden de Producción MTS %s generada exitosamente para plan %s (Producto: %s, Requerido: %skg)",
             op.codigo,
             plan.codigo,
             detalle_plan.producto_objetivo.codigo,
@@ -136,7 +138,7 @@ class ReposicionService:
         if not plan and not detalle_directo:
             return
 
-        for salida in operacion.salidas.select_related('producto').all():
+        for salida in operacion.salidas.select_related("producto").all():
             target_dp = None
             if detalle_directo and detalle_directo.producto_objetivo_id == salida.producto_id:
                 target_dp = detalle_directo
@@ -149,9 +151,9 @@ class ReposicionService:
             dp_locked = DetallePlanProduccion.objects.select_for_update().get(pk=target_dp.pk)
             dp_locked.cantidad_ejecutada += salida.cantidad_neta
 
-            if salida.clasificacion_calidad == 'primera':
+            if salida.clasificacion_calidad == "primera":
                 dp_locked.cantidad_aceptada += salida.cantidad_neta
-            elif salida.clasificacion_calidad == 'segunda':
+            elif salida.clasificacion_calidad == "segunda":
                 dp_locked.cantidad_segunda += salida.cantidad_neta
 
             dp_locked.actualizar_estado()
@@ -159,17 +161,17 @@ class ReposicionService:
 
             parent_plan = dp_locked.plan
             # Transicionar plan si estaba aprobado
-            if parent_plan.estado == 'aprobado':
-                parent_plan.estado = 'en_ejecucion'
-                parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
+            if parent_plan.estado == "aprobado":
+                parent_plan.estado = "en_ejecucion"
+                parent_plan.save(update_fields=["estado", "fecha_modificacion"])
 
             # Verificar si todos los detalles del plan están completados o sobreproducidos
             todos_detalles = parent_plan.detalles.all()
-            if todos_detalles.exists() and all(d.estado in ['completado', 'sobreproducido'] for d in todos_detalles):
-                parent_plan.estado = 'cerrado'
-                parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
+            if todos_detalles.exists() and all(d.estado in ["completado", "sobreproducido"] for d in todos_detalles):
+                parent_plan.estado = "cerrado"
+                parent_plan.save(update_fields=["estado", "fecha_modificacion"])
                 logger.info(
-                    'Plan de Producción %s cerrado automáticamente al cumplir todas las metas.',
+                    "Plan de Producción %s cerrado automáticamente al cumplir todas las metas.",
                     parent_plan.codigo,
                 )
 
@@ -193,7 +195,7 @@ class ReposicionService:
         if not plan and not detalle_directo:
             return
 
-        for salida in operacion.salidas.select_related('producto').all():
+        for salida in operacion.salidas.select_related("producto").all():
             target_dp = None
             if detalle_directo and detalle_directo.producto_objetivo_id == salida.producto_id:
                 target_dp = detalle_directo
@@ -204,20 +206,20 @@ class ReposicionService:
                 continue
 
             dp_locked = DetallePlanProduccion.objects.select_for_update().get(pk=target_dp.pk)
-            dp_locked.cantidad_ejecutada = max(Decimal('0.0000'), dp_locked.cantidad_ejecutada - salida.cantidad_neta)
+            dp_locked.cantidad_ejecutada = max(Decimal("0.0000"), dp_locked.cantidad_ejecutada - salida.cantidad_neta)
 
-            if salida.clasificacion_calidad == 'primera':
-                dp_locked.cantidad_aceptada = max(Decimal('0.0000'), dp_locked.cantidad_aceptada - salida.cantidad_neta)
-            elif salida.clasificacion_calidad == 'segunda':
-                dp_locked.cantidad_segunda = max(Decimal('0.0000'), dp_locked.cantidad_segunda - salida.cantidad_neta)
+            if salida.clasificacion_calidad == "primera":
+                dp_locked.cantidad_aceptada = max(Decimal("0.0000"), dp_locked.cantidad_aceptada - salida.cantidad_neta)
+            elif salida.clasificacion_calidad == "segunda":
+                dp_locked.cantidad_segunda = max(Decimal("0.0000"), dp_locked.cantidad_segunda - salida.cantidad_neta)
 
             dp_locked.actualizar_estado()
             dp_locked.save()
 
             parent_plan = dp_locked.plan
-            if parent_plan.estado == 'cerrado':
-                parent_plan.estado = 'en_ejecucion'
-                parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
+            if parent_plan.estado == "cerrado":
+                parent_plan.estado = "en_ejecucion"
+                parent_plan.save(update_fields=["estado", "fecha_modificacion"])
 
     @classmethod
     def analizar_necesidades_reposicion(cls, sede_id: int | None = None) -> list[dict[str, Any]]:
@@ -232,7 +234,7 @@ class ReposicionService:
         if sede_id:
             return necesidades_produccion(sede_id)
         resultado = []
-        for sede_activa in Sede.objects.filter(status='activo').order_by('nombre').values_list('id', flat=True):
+        for sede_activa in Sede.objects.filter(status="activo").order_by("nombre").values_list("id", flat=True):
             resultado.extend(necesidades_produccion(sede_activa))
         return resultado
 
@@ -268,30 +270,31 @@ class ReposicionService:
             sede=sede,
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
-            estado='aprobado' if aprobar_inmediatamente else 'borrador',
+            estado="aprobado" if aprobar_inmediatamente else "borrador",
             supervisor=supervisor,
-            observaciones=(f"Plan de reposición generado a partir de alertas de stock mínimo "
-                           f"({len(productos_deficit)} items)"),
+            observaciones=(
+                f"Plan de reposición generado a partir de alertas de stock mínimo ({len(productos_deficit)} items)"
+            ),
         )
 
         for item in productos_deficit:
-            prod = Producto.objects.get(pk=item['producto_id'])
-            deficit = Decimal(str(item.get('deficit', item.get('cantidad_planificada', 0))))
-            if deficit <= Decimal('0.0000'):
+            prod = Producto.objects.get(pk=item["producto_id"])
+            deficit = Decimal(str(item.get("deficit", item.get("cantidad_planificada", 0))))
+            if deficit <= Decimal("0.0000"):
                 continue
 
             DetallePlanProduccion.objects.create(
                 plan=plan,
                 producto_objetivo=prod,
-                cantidad_planificada=deficit.quantize(Decimal('0.0001')),
-                cantidad_ejecutada=Decimal('0.0000'),
-                cantidad_aceptada=Decimal('0.0000'),
-                cantidad_segunda=Decimal('0.0000'),
-                estado='pendiente',
+                cantidad_planificada=deficit.quantize(Decimal("0.0001")),
+                cantidad_ejecutada=Decimal("0.0000"),
+                cantidad_aceptada=Decimal("0.0000"),
+                cantidad_segunda=Decimal("0.0000"),
+                estado="pendiente",
             )
 
         logger.info(
-            'Plan de producción %s creado exitosamente con %s renglones.',
+            "Plan de producción %s creado exitosamente con %s renglones.",
             plan.codigo,
             plan.detalles.count(),
         )

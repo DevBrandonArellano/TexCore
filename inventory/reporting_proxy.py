@@ -39,9 +39,9 @@ class _ProxyContentNegotiation(DefaultContentNegotiation):
 
 # Patrón de rutas permitidas — whitelist explícita para prevenir Path Traversal
 _ALLOWED_REPORT_PATH = re.compile(
-    r'^(export|vendedores|gerencial|produccion)'
-    r'(/[a-zA-Z0-9_-]+)*'
-    r'$'
+    r"^(export|vendedores|gerencial|produccion)"
+    r"(/[a-zA-Z0-9_-]+)*"
+    r"$"
 )
 
 
@@ -69,21 +69,26 @@ def _validate_report_path(report_path: str) -> bool:
     Valida que el path del reporte sea seguro.
     Previene Path Traversal y acceso a rutas no autorizadas.
     """
-    clean = report_path.lstrip('/')
-    if '..' in clean or '//' in clean or '\\' in clean:
+    clean = report_path.lstrip("/")
+    if ".." in clean or "//" in clean or "\\" in clean:
         return False
     return bool(_ALLOWED_REPORT_PATH.match(clean))
 
 
 # Reportes que exigen bodega_id (los generales, como el catálogo de productos, no).
 _REPORTES_POR_BODEGA = (
-    'kardex', 'stock-actual', 'stock-cero', 'stock-bajo', 'valorizacion',
-    'aging', 'rotacion', 'resumen-movimientos',
+    "kardex",
+    "stock-actual",
+    "stock-cero",
+    "stock-bajo",
+    "valorizacion",
+    "aging",
+    "rotacion",
+    "resumen-movimientos",
 )
 
 _RESPUESTA_ASYNC_NO_DISPONIBLE = {
-    "detail": "La exportación asíncrona no está disponible en este entorno. "
-              "Solicite el reporte sin el parámetro async."
+    "detail": "La exportación asíncrona no está disponible en este entorno. Solicite el reporte sin el parámetro async."
 }
 
 
@@ -93,7 +98,7 @@ def _tiene_acceso_a_bodega(user, bodega):
         return True
     # 2. Fallback: misma sede que la bodega. Cubre al administrador que asignó la sede
     #    pero no individualmente las bodegas.
-    user_sede_id = getattr(user, 'sede_id', None)
+    user_sede_id = getattr(user, "sede_id", None)
     return bool(user_sede_id) and bodega.sede_id == user_sede_id
 
 
@@ -111,7 +116,10 @@ def _denegar_por_bodega(user, report_path, bodega_id, is_admin):
         return None
     logger.warning(
         "Acceso denegado a reporte para usuario %s: bodega_id=%s (Sede Usuario: %s, Sede Bodega: %s)",
-        user.username, bodega.id, getattr(user, 'sede_id', 'N/A'), bodega.sede_id
+        user.username,
+        bodega.id,
+        getattr(user, "sede_id", "N/A"),
+        bodega.sede_id,
     )
     return JsonResponse({"detail": "No tiene permiso para acceder a esta bodega"}, status=403)
 
@@ -130,12 +138,12 @@ def _params_reenviados(query_params, user, is_admin):
     (Antes se enviaba un 'user_sede_id' que ningún servicio leía — dead code.)
     """
     params = query_params.dict()
-    report_format = params.pop('format', 'xlsx')
+    report_format = params.pop("format", "xlsx")
     if not is_admin:
-        params.pop('sede_id', None)  # nunca confiar en el valor del cliente
-        user_sede_id = getattr(user, 'sede_id', None)
+        params.pop("sede_id", None)  # nunca confiar en el valor del cliente
+        user_sede_id = getattr(user, "sede_id", None)
         if user_sede_id:
-            params['sede_id'] = str(user_sede_id)
+            params["sede_id"] = str(user_sede_id)
     return params, report_format
 
 
@@ -144,38 +152,35 @@ def _encolar_exportacion(clean_path, params, report_format, user):
     # Con el broker caído, .delay() tarda 20-70 s en fallar (reintentos de kombu y del
     # result backend) y bloquea un worker síncrono de gunicorn: si el entorno no habilita
     # la exportación asíncrona se responde 503 al instante, sin encolar.
-    if not getattr(settings, 'REPORTES_ASYNC_HABILITADO', False):
+    if not getattr(settings, "REPORTES_ASYNC_HABILITADO", False):
         return JsonResponse(_RESPUESTA_ASYNC_NO_DISPONIBLE, status=503)
 
     from kombu.exceptions import OperationalError
 
     from gestion.tasks import async_export_report
+
     # Segunda defensa: el flag está activo pero el broker se cae en tiempo de
     # ejecución → 503 explícito en vez de un 500.
     try:
         task = async_export_report.delay(
-            report_path=clean_path,
-            params=params,
-            report_format=report_format,
-            user_id=user.id
+            report_path=clean_path, params=params, report_format=report_format, user_id=user.id
         )
     except OperationalError as exc:
         logger.warning(
             "Exportación asíncrona no disponible (broker caído) para '%s': %s",
-            clean_path, exc,
+            clean_path,
+            exc,
         )
         return JsonResponse(_RESPUESTA_ASYNC_NO_DISPONIBLE, status=503)
-    return JsonResponse({
-        "detail": "Reporte encolado para generación en background.",
-        "task_id": task.id
-    }, status=202)
+    return JsonResponse({"detail": "Reporte encolado para generación en background.", "task_id": task.id}, status=202)
 
 
 def _respuesta_de_error_del_servicio(response, report_path):
     logger.warning(
         "Report service returned status %s for path '%s'",
-        response.status_code, report_path,
-        extra={'sd': {'report_path': report_path, 'status': response.status_code}}
+        response.status_code,
+        report_path,
+        extra={"sd": {"report_path": report_path, "status": response.status_code}},
     )
     try:
         error_detail = response.json()
@@ -208,9 +213,7 @@ def _generar_archivo(clean_path, report_path, report_format, rows, filename):
                 return _respuesta_de_error_del_servicio(response, report_path)
 
             django_response = HttpResponse(
-                content=response.content,
-                status=response.status_code,
-                content_type=response.headers.get("Content-Type")
+                content=response.content, status=response.status_code, content_type=response.headers.get("Content-Type")
             )
             # Copiar headers importantes de descarga
             for cabecera in ("Content-Disposition", "X-Report-Empty"):
@@ -234,8 +237,10 @@ class ReportingProxyView(APIView):
         user = request.user
         logger.info(
             "Proxying report request: path='%s', user='%s', params=%s",
-            report_path, user.username, request.query_params,
-            extra={'sd': {'report_path': report_path, 'user': user.username, 'params': request.query_params.dict()}}
+            report_path,
+            user.username,
+            request.query_params,
+            extra={"sd": {"report_path": report_path, "user": user.username, "params": request.query_params.dict()}},
         )
 
         # Rol de acceso: los roles globales pueden consultar cualquier sede; el
@@ -243,7 +248,7 @@ class ReportingProxyView(APIView):
         # una sola vez y se reutiliza en la validación de bodega y de sede.
         is_admin = ve_todas_las_sedes(user)
 
-        denegado = _denegar_por_bodega(user, report_path, request.query_params.get('bodega_id'), is_admin)
+        denegado = _denegar_por_bodega(user, report_path, request.query_params.get("bodega_id"), is_admin)
         if denegado:
             return denegado
 
@@ -251,14 +256,16 @@ class ReportingProxyView(APIView):
         if not _validate_report_path(report_path):
             logger.warning(
                 "Intento de path traversal bloqueado: '%s' por usuario %s (ip: %s)",
-                report_path, user.username, request.META.get('REMOTE_ADDR')
+                report_path,
+                user.username,
+                request.META.get("REMOTE_ADDR"),
             )
             return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
 
-        clean_path = report_path.lstrip('/')
+        clean_path = report_path.lstrip("/")
         params, report_format = _params_reenviados(request.query_params, user, is_admin)
 
-        if request.query_params.get('async', 'false').lower() == 'true':
+        if request.query_params.get("async", "false").lower() == "true":
             return _encolar_exportacion(clean_path, params, report_format, user)
 
         # Consultar los datos EN PROCESO (sin red) en vez de reenviar la
@@ -276,10 +283,7 @@ class ReportingProxyView(APIView):
             # Filtro mal formado (p. ej. fecha inválida): el motivo real, no "ruta no permitida".
             return JsonResponse({"detail": str(exc)}, status=400)
         except ValueError:
-            logger.warning(
-                "Ruta de reporte sin mapeo de datos: '%s' por usuario %s",
-                report_path, user.username
-            )
+            logger.warning("Ruta de reporte sin mapeo de datos: '%s' por usuario %s", report_path, user.username)
             return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
         except Exception:
             logger.exception("Error consultando datos para el reporte '%s'", report_path)

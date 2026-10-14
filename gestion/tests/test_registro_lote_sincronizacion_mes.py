@@ -11,6 +11,7 @@ Técnicas ISTQB:
 - Partición de equivalencia (EP): máquina en el payload / solo asignada en la OP / ninguna;
   OP bajo pedido (MTO) / sin pedido.
 """
+
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -30,27 +31,34 @@ from gestion.tests.factories import (
 from inventory.models import MovimientoInventario
 
 LOTE = {
-    'peso_merma': '0.00', 'tipo_merma': 'maquina', 'turno': 'Dia',
-    'hora_inicio': '2026-09-01T08:00:00Z', 'hora_final': '2026-09-01T10:00:00Z',
-    'peso_neto_producido': '40.00',
+    "peso_merma": "0.00",
+    "tipo_merma": "maquina",
+    "turno": "Dia",
+    "hora_inicio": "2026-09-01T08:00:00Z",
+    "hora_final": "2026-09-01T10:00:00Z",
+    "peso_neto_producido": "40.00",
 }
 
 
 class RegistroLoteSincronizacionMesTestCase(TestCase):
-
     def setUp(self):
-        self.orden = OrdenProduccionFactory(peso_neto_requerido=Decimal('100.00'))
+        self.orden = OrdenProduccionFactory(peso_neto_requerido=Decimal("100.00"))
         self.user = CustomUserFactory(sede=self.orden.sede)
         StockBodegaFactory(
-            bodega=self.orden.bodega_entrada, producto=self.orden.producto_entrada,
-            cantidad=Decimal('1000.00'), lote=None,
+            bodega=self.orden.bodega_entrada,
+            producto=self.orden.producto_entrada,
+            cantidad=Decimal("1000.00"),
+            lote=None,
         )
 
     def _hacer_mto(self):
-        pedido = PedidoVentaFactory(sede=self.orden.sede, estado='pendiente')
+        pedido = PedidoVentaFactory(sede=self.orden.sede, estado="pendiente")
         detalle = DetallePedidoFactory(
-            pedido_venta=pedido, producto=self.orden.producto_salida, peso=Decimal('100.000'),
-            cantidad_fabricada=Decimal('0.000'), estado_fabricacion='pendiente',
+            pedido_venta=pedido,
+            producto=self.orden.producto_salida,
+            peso=Decimal("100.000"),
+            cantidad_fabricada=Decimal("0.000"),
+            estado_fabricacion="pendiente",
         )
         OrdenProduccion.objects.filter(pk=self.orden.pk).update(pedido_venta=pedido, detalle_pedido=detalle)
         self.orden.refresh_from_db()
@@ -64,7 +72,7 @@ class RegistroLoteSincronizacionMesTestCase(TestCase):
         lote.refresh_from_db()
         detalle.refresh_from_db()
         self.assertEqual(lote.pedido_venta_reserva, pedido)
-        self.assertEqual(detalle.cantidad_fabricada, Decimal('40.000'))
+        self.assertEqual(detalle.cantidad_fabricada, Decimal("40.000"))
 
     def test_registro_dado_maquina_solo_asignada_en_la_op_cuando_registra_entonces_la_usa_y_crea_la_operacion_mes(self):
         maquina = MaquinaFactory(area=self.orden.area)
@@ -79,12 +87,12 @@ class RegistroLoteSincronizacionMesTestCase(TestCase):
         self.assertEqual(operacion.operario, self.user)
 
     def test_registro_dado_op_sin_maquina_cuando_registra_entonces_guarda_lote_y_avisa_que_no_hay_operacion_mes(self):
-        with self.assertLogs('gestion.services.registro_lote', level='WARNING') as logs:
+        with self.assertLogs("gestion.services.registro_lote", level="WARNING") as logs:
             lote = RegistroLoteService.registrar_lote(self.orden, dict(LOTE), self.user)
 
         self.assertTrue(LoteProduccion.objects.filter(pk=lote.pk).exists())
         self.assertFalse(OperacionProduccion.objects.filter(corrida__orden_produccion=self.orden).exists())
-        self.assertTrue(any('sin máquina' in m for m in logs.output), logs.output)
+        self.assertTrue(any("sin máquina" in m for m in logs.output), logs.output)
 
     def test_registro_dado_fallo_de_bd_en_la_sync_mes_cuando_registra_entonces_conserva_lote_sin_restos_mes(self):
         # La sync MES corre en su propio savepoint: el fallo revierte la corrida ya creada,
@@ -93,11 +101,13 @@ class RegistroLoteSincronizacionMesTestCase(TestCase):
         OrdenProduccion.objects.filter(pk=self.orden.pk).update(maquina_asignada=maquina)
         self.orden.refresh_from_db()
 
-        with patch.object(OperacionProduccion.objects, 'create', side_effect=DatabaseError('caída')), \
-                self.assertLogs('gestion.services.registro_lote', level='WARNING') as logs:
+        with (
+            patch.object(OperacionProduccion.objects, "create", side_effect=DatabaseError("caída")),
+            self.assertLogs("gestion.services.registro_lote", level="WARNING") as logs,
+        ):
             lote = RegistroLoteService.registrar_lote(self.orden, dict(LOTE), self.user)
 
         self.assertTrue(LoteProduccion.objects.filter(pk=lote.pk).exists())
-        self.assertTrue(MovimientoInventario.objects.filter(lote=lote, tipo_movimiento='PRODUCCION').exists())
+        self.assertTrue(MovimientoInventario.objects.filter(lote=lote, tipo_movimiento="PRODUCCION").exists())
         self.assertFalse(CorridaProduccion.objects.filter(orden_produccion=self.orden).exists())
-        self.assertTrue(any('motor MES' in m for m in logs.output), logs.output)
+        self.assertTrue(any("motor MES" in m for m in logs.output), logs.output)

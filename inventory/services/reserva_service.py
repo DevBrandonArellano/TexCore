@@ -14,7 +14,7 @@ from gestion.models import (
 from inventory.models import StockBodega
 from inventory.utils import stock_del_lote
 
-logger = logging.getLogger('inventory.reserva')
+logger = logging.getLogger("inventory.reserva")
 
 
 class ReservaService:
@@ -35,7 +35,7 @@ class ReservaService:
         bodega_entrada: Bodega | None = None,
         formula_color=None,
         maquina_asignada=None,
-        prioridad: str = 'alta',
+        prioridad: str = "alta",
         peso_solicitado: Decimal | None = None,
     ) -> OrdenProduccion:
         """
@@ -51,7 +51,7 @@ class ReservaService:
         if pedido.anulado:
             raise ValidationError("No se pueden crear órdenes de producción para pedidos anulados.")
 
-        if pedido.estado in ['facturado', 'despachado']:
+        if pedido.estado in ["facturado", "despachado"]:
             raise ValidationError(
                 f"No se pueden generar órdenes para un pedido en estado '{pedido.get_estado_display()}'."
             )
@@ -61,23 +61,28 @@ class ReservaService:
             raise ValidationError("El ítem del pedido no tiene producto asignado.")
 
         saldo_pendiente = detalle_pedido.saldo_pendiente_fabricacion
-        if saldo_pendiente <= Decimal('0.000'):
-            raise ValidationError(
-                f"El ítem {producto.codigo} ya ha completado su requerimiento de fabricación."
-            )
+        if saldo_pendiente <= Decimal("0.000"):
+            raise ValidationError(f"El ítem {producto.codigo} ya ha completado su requerimiento de fabricación.")
 
         peso_requerido = peso_solicitado if peso_solicitado is not None else saldo_pendiente
-        if peso_requerido <= Decimal('0.000'):
+        if peso_requerido <= Decimal("0.000"):
             raise ValidationError("El peso requerido debe ser mayor a 0.")
 
         if not bodega_salida:
-            bodega_salida = Bodega.objects.filter(
-                sede=pedido.sede,
-            ).order_by('id').first()
+            bodega_salida = (
+                Bodega.objects.filter(
+                    sede=pedido.sede,
+                )
+                .order_by("id")
+                .first()
+            )
 
-        correlativo = OrdenProduccion.objects.filter(
-            pedido_venta=pedido,
-        ).count() + 1
+        correlativo = (
+            OrdenProduccion.objects.filter(
+                pedido_venta=pedido,
+            ).count()
+            + 1
+        )
         codigo_op = f"MTO-PED-{pedido.id}-{producto.codigo}-{correlativo}"
         if len(codigo_op) > 100:
             codigo_op = codigo_op[:100]
@@ -85,7 +90,7 @@ class ReservaService:
         op = OrdenProduccion.objects.create(
             codigo=codigo_op,
             producto_salida=producto,
-            peso_neto_requerido=Decimal(str(peso_requerido)).quantize(Decimal('0.01')),
+            peso_neto_requerido=Decimal(str(peso_requerido)).quantize(Decimal("0.01")),
             bodega_salida=bodega_salida,
             bodega_entrada=bodega_entrada,
             formula_color=formula_color,
@@ -95,19 +100,18 @@ class ReservaService:
             sede=pedido.sede,
             pedido_venta=pedido,
             detalle_pedido=detalle_pedido,
-            estado='pendiente',
+            estado="pendiente",
             observaciones=(
                 f"Producción MTO vinculada al Pedido #{pedido.id} "
                 f"({pedido.cliente.nombre_razon_social if pedido.cliente else 'Sin Cliente'})"
             ),
         )
 
-        detalle_pedido.estado_fabricacion = 'en_proceso'
-        detalle_pedido.save(update_fields=['estado_fabricacion'])
+        detalle_pedido.estado_fabricacion = "en_proceso"
+        detalle_pedido.save(update_fields=["estado_fabricacion"])
 
         logger.info(
-            'Orden de Producción MTO %s generada exitosamente para Pedido #%s (Producto: %s, '
-            'Requerido: %skg)',
+            "Orden de Producción MTO %s generada exitosamente para Pedido #%s (Producto: %s, Requerido: %skg)",
             op.codigo,
             pedido.id,
             producto.codigo,
@@ -139,20 +143,21 @@ class ReservaService:
                 f"El lote {lote.codigo_lote} ya está reservado para el Pedido #{lote.pedido_venta_reserva.id}."
             )
 
-        cant_reserva = Decimal(
-            str(cantidad if cantidad is not None else lote.peso_neto_producido)).quantize(Decimal('0.001'))
+        cant_reserva = Decimal(str(cantidad if cantidad is not None else lote.peso_neto_producido)).quantize(
+            Decimal("0.001")
+        )
 
         # Actualizar lote
         if lote.pedido_venta_reserva_id != pedido.id:
             lote.pedido_venta_reserva = pedido
-            lote.save(update_fields=['pedido_venta_reserva'])
+            lote.save(update_fields=["pedido_venta_reserva"])
 
         # Bloquear fila de StockBodega y aumentar stock_comprometido
         stock_qs = stock_del_lote(StockBodega.objects.select_for_update(), [lote])
         for stock in stock_qs:
             stock.stock_comprometido = min(stock.cantidad, stock.stock_comprometido + cant_reserva)
             stock._justificacion_auditoria = f"Reserva MTO para Pedido #{pedido.id}"
-            stock.save(update_fields=['stock_comprometido'])
+            stock.save(update_fields=["stock_comprometido"])
 
         # Actualizar DetallePedido
         det = detalle_pedido
@@ -161,7 +166,8 @@ class ReservaService:
 
         prod = lote.producto or (
             (lote.orden_produccion.producto_salida or lote.orden_produccion.producto_entrada)
-            if lote.orden_produccion else None
+            if lote.orden_produccion
+            else None
         )
         if not det and prod:
             det = pedido.detalles.filter(producto=prod).first()
@@ -170,13 +176,13 @@ class ReservaService:
             det_locked = DetallePedido.objects.select_for_update().get(pk=det.pk)
             det_locked.cantidad_fabricada += cant_reserva
             if det_locked.cantidad_fabricada >= det_locked.peso:
-                det_locked.estado_fabricacion = 'fabricado'
+                det_locked.estado_fabricacion = "fabricado"
             else:
-                det_locked.estado_fabricacion = 'en_proceso'
-            det_locked.save(update_fields=['cantidad_fabricada', 'estado_fabricacion'])
+                det_locked.estado_fabricacion = "en_proceso"
+            det_locked.save(update_fields=["cantidad_fabricada", "estado_fabricacion"])
 
         logger.info(
-            'Lote %s (%skg) reservado exitosamente para Pedido #%s.',
+            "Lote %s (%skg) reservado exitosamente para Pedido #%s.",
             lote.codigo_lote,
             cant_reserva,
             pedido.id,
@@ -188,7 +194,7 @@ class ReservaService:
         cls,
         lote: LoteProduccion,
         user=None,
-        justificacion: str = '',
+        justificacion: str = "",
     ) -> None:
         """
         Libera la reserva MTO de un lote, retornando el saldo a venta libre
@@ -202,9 +208,9 @@ class ReservaService:
 
         stock_qs = stock_del_lote(StockBodega.objects.select_for_update(), [lote])
         for stock in stock_qs:
-            stock.stock_comprometido = max(Decimal('0.000'), stock.stock_comprometido - cant_liberar)
+            stock.stock_comprometido = max(Decimal("0.000"), stock.stock_comprometido - cant_liberar)
             stock._justificacion_auditoria = f"Liberación de Reserva MTO: {justificacion}"
-            stock.save(update_fields=['stock_comprometido'])
+            stock.save(update_fields=["stock_comprometido"])
 
         det = None
         if lote.orden_produccion and lote.orden_produccion.detalle_pedido:
@@ -212,27 +218,28 @@ class ReservaService:
 
         prod = lote.producto or (
             (lote.orden_produccion.producto_salida or lote.orden_produccion.producto_entrada)
-            if lote.orden_produccion else None
+            if lote.orden_produccion
+            else None
         )
         if not det and prod:
             det = pedido.detalles.filter(producto=prod).first()
 
         if det:
             det_locked = DetallePedido.objects.select_for_update().get(pk=det.pk)
-            det_locked.cantidad_fabricada = max(Decimal('0.000'), det_locked.cantidad_fabricada - cant_liberar)
+            det_locked.cantidad_fabricada = max(Decimal("0.000"), det_locked.cantidad_fabricada - cant_liberar)
             if det_locked.cantidad_fabricada >= det_locked.peso:
-                det_locked.estado_fabricacion = 'fabricado'
-            elif det_locked.cantidad_fabricada > Decimal('0.000'):
-                det_locked.estado_fabricacion = 'en_proceso'
+                det_locked.estado_fabricacion = "fabricado"
+            elif det_locked.cantidad_fabricada > Decimal("0.000"):
+                det_locked.estado_fabricacion = "en_proceso"
             else:
-                det_locked.estado_fabricacion = 'pendiente'
-            det_locked.save(update_fields=['cantidad_fabricada', 'estado_fabricacion'])
+                det_locked.estado_fabricacion = "pendiente"
+            det_locked.save(update_fields=["cantidad_fabricada", "estado_fabricacion"])
 
         lote.pedido_venta_reserva = None
-        lote.save(update_fields=['pedido_venta_reserva'])
+        lote.save(update_fields=["pedido_venta_reserva"])
 
         logger.info(
-            'Reserva MTO de Lote %s liberada para Pedido #%s. Motivo: %s',
+            "Reserva MTO de Lote %s liberada para Pedido #%s. Motivo: %s",
             lote.codigo_lote,
             pedido.id,
             justificacion,
@@ -247,7 +254,7 @@ class ReservaService:
         if lote.pedido_venta_reserva_id and lote.pedido_venta_reserva_id != pedido_id:
             pedido_reserva = lote.pedido_venta_reserva
             cliente = pedido_reserva.cliente if pedido_reserva else None
-            cliente_nombre = cliente.nombre_razon_social if cliente else 'N/A'
+            cliente_nombre = cliente.nombre_razon_social if cliente else "N/A"
             raise ValidationError(
                 f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
                 f"#{lote.pedido_venta_reserva_id} ({cliente_nombre}) "

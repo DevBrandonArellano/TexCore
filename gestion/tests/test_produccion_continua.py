@@ -38,8 +38,8 @@ class ProduccionContinuaTestCase(TestCase):
         self.bodega_origen = BodegaFactory(sede=self.sede, nombre="Bodega Tela Cruda")
         self.bodega_destino = BodegaFactory(sede=self.sede, nombre="Bodega Tela Terminada")
 
-        self.supervisor = CustomUserFactory(sede=self.sede, username="supervisor_continua", groups=['jefe_planta'])
-        self.operario = CustomUserFactory(sede=self.sede, username="operario_continua", groups=['operario'])
+        self.supervisor = CustomUserFactory(sede=self.sede, username="supervisor_continua", groups=["jefe_planta"])
+        self.operario = CustomUserFactory(sede=self.sede, username="operario_continua", groups=["operario"])
 
         self.producto_crudo = ProductoFactory(
             codigo="TEL-CRUD-01",
@@ -86,7 +86,7 @@ class ProduccionContinuaTestCase(TestCase):
             producto_entrada=self.producto_crudo,
             producto_salida=self.producto_acabado,
             peso_neto_requerido=None,
-            estado='en_proceso',
+            estado="en_proceso",
         )
 
         self.assertIsNotNone(op.pk)
@@ -100,22 +100,22 @@ class ProduccionContinuaTestCase(TestCase):
         THEN: Retorna HTTP 201, estado='en_proceso' y genera código secuencial
         """
         payload = {
-            'area_id': self.area.id,
-            'maquina_principal_id': self.maquina.id,
-            'modalidad': 'CONTINUA',
-            'turno': 'Tarde',
-            'observaciones': 'Inicio de turno continuo sin OP',
+            "area_id": self.area.id,
+            "maquina_principal_id": self.maquina.id,
+            "modalidad": "CONTINUA",
+            "turno": "Tarde",
+            "observaciones": "Inicio de turno continuo sin OP",
         }
 
-        url = '/api/corridas-produccion/iniciar-corrida/'
-        response = self.client.post(url, payload, format='json')
+        url = "/api/corridas-produccion/iniciar-corrida/"
+        response = self.client.post(url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['modalidad'], 'CONTINUA')
-        self.assertEqual(response.data['estado'], 'en_proceso')
-        self.assertEqual(response.data['turno'], 'Tarde')
-        self.assertTrue(response.data['codigo'].startswith('CORR-'))
-        self.assertEqual(response.data['operaciones_count'], 0)
+        self.assertEqual(response.data["modalidad"], "CONTINUA")
+        self.assertEqual(response.data["estado"], "en_proceso")
+        self.assertEqual(response.data["turno"], "Tarde")
+        self.assertTrue(response.data["codigo"].startswith("CORR-"))
+        self.assertEqual(response.data["operaciones_count"], 0)
 
     def test_corrida_dado_operacion_continua_cuando_se_registra_operacion_entonces_actualiza_kardex_y_retorna_201(self):
         """
@@ -127,40 +127,46 @@ class ProduccionContinuaTestCase(TestCase):
             sede=self.sede,
             area=self.area,
             maquina_principal=self.maquina,
-            modalidad='CONTINUA',
-            estado='en_proceso',
+            modalidad="CONTINUA",
+            estado="en_proceso",
         )
 
         payload = {
-            'maquina_id': self.maquina.id,
-            'operario_id': self.operario.id,
-            'observaciones': 'Acabado en rama continua',
-            'consumos': [{
-                'producto_id': self.producto_crudo.id,
-                'bodega_origen_id': self.bodega_origen.id,
-                'lote_origen_id': self.lote_crudo.id,
-                'cantidad_consumida': '200.000',
-            }],
-            'salidas': [{
-                'producto_id': self.producto_acabado.id,
-                'bodega_destino_id': self.bodega_destino.id,
-                'cantidad_neta': '190.000',
-                'codigo_lote': 'LOT-RAMA-ACAB-01',
-                'clasificacion_calidad': 'primera',
-                'cantidad_metros': '570.0000',
-            }],
-            'mermas': [{
-                'peso_merma': '10.000',
-                'tipo_merma': 'corte',
-            }],
+            "maquina_id": self.maquina.id,
+            "operario_id": self.operario.id,
+            "observaciones": "Acabado en rama continua",
+            "consumos": [
+                {
+                    "producto_id": self.producto_crudo.id,
+                    "bodega_origen_id": self.bodega_origen.id,
+                    "lote_origen_id": self.lote_crudo.id,
+                    "cantidad_consumida": "200.000",
+                }
+            ],
+            "salidas": [
+                {
+                    "producto_id": self.producto_acabado.id,
+                    "bodega_destino_id": self.bodega_destino.id,
+                    "cantidad_neta": "190.000",
+                    "codigo_lote": "LOT-RAMA-ACAB-01",
+                    "clasificacion_calidad": "primera",
+                    "cantidad_metros": "570.0000",
+                }
+            ],
+            "mermas": [
+                {
+                    "peso_merma": "10.000",
+                    "tipo_merma": "corte",
+                }
+            ],
         }
 
-        url = f'/api/corridas-produccion/{corrida.id}/registrar-operacion/'
-        response = self.client.post(url, payload, format='json')
+        url = f"/api/corridas-produccion/{corrida.id}/registrar-operacion/"
+        response = self.client.post(url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['estado'], 'completada')
-        self.assertEqual(response.data['numero_secuencia'], 1)
+        self.assertEqual(response.data["estado"], "completada")
+        self.assertEqual(response.data["numero_secuencia"], 1)
 
         # Verificar actualización de saldos
         self.stock_crudo.refresh_from_db()
@@ -169,31 +175,50 @@ class ProduccionContinuaTestCase(TestCase):
         stock_acab = StockBodega.objects.get(
             bodega=self.bodega_destino,
             producto=self.producto_acabado,
-            lote__codigo_lote='LOT-RAMA-ACAB-01',
+            lote__codigo_lote="LOT-RAMA-ACAB-01",
         )
         self.assertEqual(stock_acab.cantidad, Decimal("190.000"))
 
     def test_corrida_dado_proceso_del_catalogo_cuando_se_registra_operacion_entonces_queda_en_la_operacion(self):
         """El selector opcional «Proceso» del registro de operación envía proceso_id."""
         from gestion.models import ProcessStep
-        proceso = ProcessStep.objects.create(name='Rama tensora')
+
+        proceso = ProcessStep.objects.create(name="Rama tensora")
         corrida = CorridaProduccionFactory(
-            sede=self.sede, area=self.area, maquina_principal=self.maquina,
-            modalidad='CONTINUA', estado='en_proceso',
+            sede=self.sede,
+            area=self.area,
+            maquina_principal=self.maquina,
+            modalidad="CONTINUA",
+            estado="en_proceso",
         )
         payload = {
-            'maquina_id': self.maquina.id, 'operario_id': self.operario.id, 'proceso_id': proceso.id,
-            'consumos': [{'producto_id': self.producto_crudo.id, 'bodega_origen_id': self.bodega_origen.id,
-                          'lote_origen_id': self.lote_crudo.id, 'cantidad_consumida': '100.000'}],
-            'salidas': [{'producto_id': self.producto_acabado.id, 'bodega_destino_id': self.bodega_destino.id,
-                         'cantidad_neta': '100.000', 'codigo_lote': 'LOT-RAMA-PROC-01',
-                         'clasificacion_calidad': 'primera'}],
-            'mermas': [],
+            "maquina_id": self.maquina.id,
+            "operario_id": self.operario.id,
+            "proceso_id": proceso.id,
+            "consumos": [
+                {
+                    "producto_id": self.producto_crudo.id,
+                    "bodega_origen_id": self.bodega_origen.id,
+                    "lote_origen_id": self.lote_crudo.id,
+                    "cantidad_consumida": "100.000",
+                }
+            ],
+            "salidas": [
+                {
+                    "producto_id": self.producto_acabado.id,
+                    "bodega_destino_id": self.bodega_destino.id,
+                    "cantidad_neta": "100.000",
+                    "codigo_lote": "LOT-RAMA-PROC-01",
+                    "clasificacion_calidad": "primera",
+                }
+            ],
+            "mermas": [],
         }
         response = self.client.post(
-            f'/api/corridas-produccion/{corrida.id}/registrar-operacion/', payload, format='json')
+            f"/api/corridas-produccion/{corrida.id}/registrar-operacion/", payload, format="json"
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
-        self.assertEqual(OperacionProduccion.objects.get(pk=response.data['id']).proceso_id, proceso.id)
+        self.assertEqual(OperacionProduccion.objects.get(pk=response.data["id"]).proceso_id, proceso.id)
 
     def test_corrida_dado_operacion_con_desbalance_cuando_se_registra_entonces_retorna_400(self):
         """
@@ -205,32 +230,36 @@ class ProduccionContinuaTestCase(TestCase):
             sede=self.sede,
             area=self.area,
             maquina_principal=self.maquina,
-            modalidad='CONTINUA',
-            estado='en_proceso',
+            modalidad="CONTINUA",
+            estado="en_proceso",
         )
 
         payload = {
-            'maquina_id': self.maquina.id,
-            'operario_id': self.operario.id,
-            'consumos': [{
-                'producto_id': self.producto_crudo.id,
-                'bodega_origen_id': self.bodega_origen.id,
-                'lote_origen_id': self.lote_crudo.id,
-                'cantidad_consumida': '200.000',
-            }],
-            'salidas': [{
-                'producto_id': self.producto_acabado.id,
-                'bodega_destino_id': self.bodega_destino.id,
-                'cantidad_neta': '150.000',
-                'codigo_lote': 'LOT-DESBAL-API-01',
-            }],
+            "maquina_id": self.maquina.id,
+            "operario_id": self.operario.id,
+            "consumos": [
+                {
+                    "producto_id": self.producto_crudo.id,
+                    "bodega_origen_id": self.bodega_origen.id,
+                    "lote_origen_id": self.lote_crudo.id,
+                    "cantidad_consumida": "200.000",
+                }
+            ],
+            "salidas": [
+                {
+                    "producto_id": self.producto_acabado.id,
+                    "bodega_destino_id": self.bodega_destino.id,
+                    "cantidad_neta": "150.000",
+                    "codigo_lote": "LOT-DESBAL-API-01",
+                }
+            ],
         }
 
-        url = f'/api/corridas-produccion/{corrida.id}/registrar-operacion/'
-        response = self.client.post(url, payload, format='json')
+        url = f"/api/corridas-produccion/{corrida.id}/registrar-operacion/"
+        response = self.client.post(url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Desbalance de masa detectado', str(response.data))
+        self.assertIn("Desbalance de masa detectado", str(response.data))
 
     def test_corrida_dado_corrida_en_proceso_cuando_se_finaliza_entonces_guarda_hora_fin_y_estado_finalizada(self):
         """
@@ -242,15 +271,15 @@ class ProduccionContinuaTestCase(TestCase):
             sede=self.sede,
             area=self.area,
             maquina_principal=self.maquina,
-            estado='en_proceso',
+            estado="en_proceso",
         )
 
-        url = f'/api/corridas-produccion/{corrida.id}/finalizar-corrida/'
-        response = self.client.post(url, {}, format='json')
+        url = f"/api/corridas-produccion/{corrida.id}/finalizar-corrida/"
+        response = self.client.post(url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['estado'], 'finalizada')
-        self.assertIsNotNone(response.data['hora_fin'])
+        self.assertEqual(response.data["estado"], "finalizada")
+        self.assertIsNotNone(response.data["hora_fin"])
 
     def test_corrida_dado_corrida_activa_cuando_se_pausa_y_reanuda_entonces_alterna_estado(self):
         """
@@ -262,17 +291,17 @@ class ProduccionContinuaTestCase(TestCase):
             sede=self.sede,
             area=self.area,
             maquina_principal=self.maquina,
-            estado='en_proceso',
+            estado="en_proceso",
         )
 
-        url = f'/api/corridas-produccion/{corrida.id}/pausar/'
-        res1 = self.client.post(url, {}, format='json')
+        url = f"/api/corridas-produccion/{corrida.id}/pausar/"
+        res1 = self.client.post(url, {}, format="json")
         self.assertEqual(res1.status_code, status.HTTP_200_OK)
-        self.assertEqual(res1.data['estado'], 'pausada')
+        self.assertEqual(res1.data["estado"], "pausada")
 
-        res2 = self.client.post(url, {}, format='json')
+        res2 = self.client.post(url, {}, format="json")
         self.assertEqual(res2.status_code, status.HTTP_200_OK)
-        self.assertEqual(res2.data['estado'], 'en_proceso')
+        self.assertEqual(res2.data["estado"], "en_proceso")
 
     def test_corrida_dado_operacion_existente_cuando_se_solicita_reversion_entonces_restituye_stock(self):
         """
@@ -284,43 +313,50 @@ class ProduccionContinuaTestCase(TestCase):
             sede=self.sede,
             area=self.area,
             maquina_principal=self.maquina,
-            estado='en_proceso',
+            estado="en_proceso",
         )
 
         # Registrar operación previa
         from gestion.services.ejecucion_produccion import EjecucionProduccionService
+
         op = EjecucionProduccionService.registrar_operacion(
             corrida=corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
-            consumos_data=[{
-                'producto': self.producto_crudo,
-                'bodega_origen': self.bodega_origen,
-                'cantidad_consumida': Decimal('100.000'),
-                'lote_origen': self.lote_crudo,
-            }],
-            salidas_data=[{
-                'producto': self.producto_acabado,
-                'bodega_destino': self.bodega_destino,
-                'cantidad_neta': Decimal('95.000'),
-                'codigo_lote': 'LOT-REV-API-01',
-            }],
-            mermas_data=[{
-                'peso_merma': Decimal('5.000'),
-                'tipo_merma': 'maquina',
-            }],
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
+            consumos_data=[
+                {
+                    "producto": self.producto_crudo,
+                    "bodega_origen": self.bodega_origen,
+                    "cantidad_consumida": Decimal("100.000"),
+                    "lote_origen": self.lote_crudo,
+                }
+            ],
+            salidas_data=[
+                {
+                    "producto": self.producto_acabado,
+                    "bodega_destino": self.bodega_destino,
+                    "cantidad_neta": Decimal("95.000"),
+                    "codigo_lote": "LOT-REV-API-01",
+                }
+            ],
+            mermas_data=[
+                {
+                    "peso_merma": Decimal("5.000"),
+                    "tipo_merma": "maquina",
+                }
+            ],
             user=self.operario,
         )
 
         # Solicitar reversión vía API
-        url = f'/api/corridas-produccion/{corrida.id}/revertir-operacion/'
+        url = f"/api/corridas-produccion/{corrida.id}/revertir-operacion/"
         payload = {
-            'operacion_id': op.id,
-            'justificacion': 'Error en la especificación de acabado del tejido',
+            "operacion_id": op.id,
+            "justificacion": "Error en la especificación de acabado del tejido",
         }
-        response = self.client.post(url, payload, format='json')
+        response = self.client.post(url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['estado'], 'revertida')
+        self.assertEqual(response.data["estado"], "revertida")
 
         # Verificar restitución
         self.stock_crudo.refresh_from_db()
@@ -349,7 +385,7 @@ class ProduccionContinuaTestCase(TestCase):
             operario=self.operario,
             hora_inicio=timezone.now(),
             hora_fin=timezone.now(),
-            estado='completada',
+            estado="completada",
         )
         GenealogiaLote.objects.create(
             lote_padre=self.lote_crudo,
@@ -358,11 +394,11 @@ class ProduccionContinuaTestCase(TestCase):
             cantidad_padre_usada=Decimal("100.000"),
         )
 
-        url = '/api/corridas-produccion/trazabilidad-lote/?codigo=LOT-HIJO-01&direccion=atras'
+        url = "/api/corridas-produccion/trazabilidad-lote/?codigo=LOT-HIJO-01&direccion=atras"
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['nodo_raiz']['codigo_lote'], 'LOT-HIJO-01')
-        self.assertEqual(response.data['total_ancestros'], 1)
-        self.assertEqual(response.data['ancestros'][0]['codigo_lote'], self.lote_crudo.codigo_lote)
-        self.assertEqual(len(response.data['aristas']), 1)
+        self.assertEqual(response.data["nodo_raiz"]["codigo_lote"], "LOT-HIJO-01")
+        self.assertEqual(response.data["total_ancestros"], 1)
+        self.assertEqual(response.data["ancestros"][0]["codigo_lote"], self.lote_crudo.codigo_lote)
+        self.assertEqual(len(response.data["aristas"]), 1)

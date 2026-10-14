@@ -15,6 +15,7 @@ No se usa MovimientoInventario.saldo_resultante: es una foto del stock por lote
 al momento del movimiento (una transferencia guarda un solo lado, el despacho
 guarda 0 y las ediciones no recalculan los posteriores), no un saldo de kárdex.
 """
+
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
@@ -28,9 +29,9 @@ from gestion.models import Bodega
 from inventory.models import MovimientoInventario
 
 _DECIMAL: "DecimalField[Decimal, Decimal]" = DecimalField(max_digits=12, decimal_places=3)
-_CERO = Value(Decimal('0'), output_field=_DECIMAL)
+_CERO = Value(Decimal("0"), output_field=_DECIMAL)
 
-TIPOS_VALIDOS = ('entrada', 'salida')
+TIPOS_VALIDOS = ("entrada", "salida")
 
 
 class FiltroKardexInvalido(ValueError):
@@ -40,7 +41,7 @@ class FiltroKardexInvalido(ValueError):
 
 def _a_fecha(valor, campo):
     """Acepta date o 'YYYY-MM-DD'; vacío -> None; inválido -> ValueError."""
-    if valor in (None, ''):
+    if valor in (None, ""):
         return None
     if isinstance(valor, datetime):
         return valor.date()
@@ -68,16 +69,25 @@ class KardexService:
     sumar cantidades de productos distintos no tiene sentido físico.
     """
 
-    def __init__(self, bodega_id, producto_id=None, fecha_inicio=None, fecha_fin=None,
-                 proveedor_id=None, lote_id=None, lote_codigo=None, tipo=None):
+    def __init__(
+        self,
+        bodega_id,
+        producto_id=None,
+        fecha_inicio=None,
+        fecha_fin=None,
+        proveedor_id=None,
+        lote_id=None,
+        lote_codigo=None,
+        tipo=None,
+    ):
         self.bodega_id = int(bodega_id)
-        self.producto_id = int(producto_id) if producto_id not in (None, '', '0', 0) else None
-        self.fecha_inicio = _a_fecha(fecha_inicio, 'fecha_inicio')
-        self.fecha_fin = _a_fecha(fecha_fin, 'fecha_fin')
+        self.producto_id = int(producto_id) if producto_id not in (None, "", "0", 0) else None
+        self.fecha_inicio = _a_fecha(fecha_inicio, "fecha_inicio")
+        self.fecha_fin = _a_fecha(fecha_fin, "fecha_fin")
         self.proveedor_id = proveedor_id or None
         self.lote_id = lote_id or None
         self.lote_codigo = lote_codigo or None
-        if tipo not in (None, '', 'all') and tipo not in TIPOS_VALIDOS:
+        if tipo not in (None, "", "all") and tipo not in TIPOS_VALIDOS:
             raise FiltroKardexInvalido("tipo debe ser 'entrada' o 'salida'.")
         self.tipo = tipo if tipo in TIPOS_VALIDOS else None
 
@@ -87,8 +97,8 @@ class KardexService:
 
     def _cantidad_firmada(self):
         return Case(
-            When(self._es_entrada(), then=F('cantidad')),
-            default=-F('cantidad'),
+            When(self._es_entrada(), then=F("cantidad")),
+            default=-F("cantidad"),
             output_field=_DECIMAL,
         )
 
@@ -109,7 +119,7 @@ class KardexService:
     def saldo_inicial(self):
         """Saldo acumulado antes de fecha_inicio (0 si no hay fecha); None sin producto.
         Se calcula una sola vez por instancia: lo usan las filas y la respuesta."""
-        if not hasattr(self, '_saldo_inicial'):
+        if not hasattr(self, "_saldo_inicial"):
             self._saldo_inicial = self._calcular_saldo_inicial()
         return self._saldo_inicial
 
@@ -117,10 +127,12 @@ class KardexService:
         if not self.producto_id:
             return None
         if not self.fecha_inicio:
-            return Decimal('0')
-        return self._base().filter(fecha__lt=_inicio_del_dia(self.fecha_inicio)).aggregate(
-            total=Coalesce(Sum(self._cantidad_firmada()), _CERO)
-        )['total']
+            return Decimal("0")
+        return (
+            self._base()
+            .filter(fecha__lt=_inicio_del_dia(self.fecha_inicio))
+            .aggregate(total=Coalesce(Sum(self._cantidad_firmada()), _CERO))["total"]
+        )
 
     def movimientos(self):
         """
@@ -135,13 +147,13 @@ class KardexService:
             # Límite exclusivo del día siguiente: incluye todo fecha_fin y es sargable.
             qs = qs.filter(fecha__lt=_inicio_del_dia(self.fecha_fin + timedelta(days=1)))
 
-        orden = [F('fecha').asc(), F('id').asc()]
+        orden = [F("fecha").asc(), F("id").asc()]
         anotaciones = {
-            'entrada': Case(When(self._es_entrada(), then=F('cantidad')), default=_CERO, output_field=_DECIMAL),
-            'salida': Case(When(self._es_entrada(), then=_CERO), default=F('cantidad'), output_field=_DECIMAL),
+            "entrada": Case(When(self._es_entrada(), then=F("cantidad")), default=_CERO, output_field=_DECIMAL),
+            "salida": Case(When(self._es_entrada(), then=_CERO), default=F("cantidad"), output_field=_DECIMAL),
         }
         if self.producto_id:
-            anotaciones['saldo_rango'] = Window(
+            anotaciones["saldo_rango"] = Window(
                 expression=Sum(self._cantidad_firmada()),
                 order_by=orden,
                 frame=RowRange(start=None, end=0),
@@ -152,33 +164,41 @@ class KardexService:
             # ventana hace que Django envuelva la consulta (QUALIFY emulado con
             # subconsulta; mssql-django lo soporta), así que la dirección se
             # expresa como ventana de una sola fila (partición por id).
-            anotaciones['direccion'] = Window(
-                expression=Max(Case(When(self._es_entrada(), then=Value(1)), default=Value(-1),
-                                    output_field=IntegerField())),
-                partition_by=[F('id')],
+            anotaciones["direccion"] = Window(
+                expression=Max(
+                    Case(When(self._es_entrada(), then=Value(1)), default=Value(-1), output_field=IntegerField())
+                ),
+                partition_by=[F("id")],
             )
 
         qs = qs.annotate(**anotaciones)
         if self.tipo:
-            qs = qs.filter(direccion=1 if self.tipo == 'entrada' else -1)
+            qs = qs.filter(direccion=1 if self.tipo == "entrada" else -1)
 
         campos = [
-            'id', 'fecha', 'tipo_movimiento', 'documento_ref', 'cantidad', 'editado',
-            'entrada', 'salida', 'producto_id',
+            "id",
+            "fecha",
+            "tipo_movimiento",
+            "documento_ref",
+            "cantidad",
+            "editado",
+            "entrada",
+            "salida",
+            "producto_id",
         ]
         if self.producto_id:
-            campos.append('saldo_rango')
+            campos.append("saldo_rango")
         qs = qs.values(
             *campos,
-            codigo_producto=F('producto__codigo'),
-            descripcion_producto=F('producto__descripcion'),
-            bodega_origen_nombre=F('bodega_origen__nombre'),
-            bodega_destino_nombre=F('bodega_destino__nombre'),
-            proveedor_nombre=F('proveedor__nombre'),
-            lote_codigo=F('lote__codigo_lote'),
-            usuario_username=F('usuario__username'),
-            usuario_nombre=F('usuario__first_name'),
-            usuario_apellido=F('usuario__last_name'),
+            codigo_producto=F("producto__codigo"),
+            descripcion_producto=F("producto__descripcion"),
+            bodega_origen_nombre=F("bodega_origen__nombre"),
+            bodega_destino_nombre=F("bodega_destino__nombre"),
+            proveedor_nombre=F("proveedor__nombre"),
+            lote_codigo=F("lote__codigo_lote"),
+            usuario_username=F("usuario__username"),
+            usuario_nombre=F("usuario__first_name"),
+            usuario_apellido=F("usuario__last_name"),
         ).order_by(*orden)
         return _ConSaldo(qs, self.saldo_inicial()) if self.producto_id else qs
 
@@ -186,8 +206,8 @@ class KardexService:
 def _filtro_de_corte(valor):
     """Fecha 'YYYY-MM-DD' -> hasta el final de ese día local; fecha con hora
     (ISO 8601) -> hasta ese instante, inclusive. Inválida -> FiltroKardexInvalido."""
-    texto = str(valor or '').strip()
-    if 'T' in texto or ':' in texto:
+    texto = str(valor or "").strip()
+    if "T" in texto or ":" in texto:
         try:
             instante = parse_datetime(texto)
         except ValueError:
@@ -197,7 +217,7 @@ def _filtro_de_corte(valor):
         if timezone.is_naive(instante):
             instante = timezone.make_aware(instante)
         return Q(fecha__lte=instante)
-    dia = _a_fecha(texto, 'fecha_corte')
+    dia = _a_fecha(texto, "fecha_corte")
     if dia is None:
         raise FiltroKardexInvalido("fecha_corte es requerida.")
     return Q(fecha__lt=_inicio_del_dia(dia + timedelta(days=1)))
@@ -215,24 +235,28 @@ def stock_a_fecha(producto_id, fecha_corte, bodegas=None, bodega_id=None, sede_i
     base = MovimientoInventario.objects.filter(_filtro_de_corte(fecha_corte), producto_id=producto_id)
 
     def _por_bodega(campo):
-        qs = base.filter(**{f'{campo}__isnull': False})
+        qs = base.filter(**{f"{campo}__isnull": False})
         if bodegas is not None:
-            qs = qs.filter(**{f'{campo}__in': bodegas})
+            qs = qs.filter(**{f"{campo}__in": bodegas})
         if bodega_id:
-            qs = qs.filter(**{f'{campo}_id': bodega_id})
+            qs = qs.filter(**{f"{campo}_id": bodega_id})
         if sede_id:
-            qs = qs.filter(**{f'{campo}__sede_id': sede_id})
-        return dict(qs.order_by().values_list(f'{campo}_id').annotate(total=Sum('cantidad')))
+            qs = qs.filter(**{f"{campo}__sede_id": sede_id})
+        return dict(qs.order_by().values_list(f"{campo}_id").annotate(total=Sum("cantidad")))
 
-    saldos = _por_bodega('bodega_destino')
-    for bodega, salida in _por_bodega('bodega_origen').items():
-        saldos[bodega] = saldos.get(bodega, Decimal('0')) - salida
+    saldos = _por_bodega("bodega_destino")
+    for bodega, salida in _por_bodega("bodega_origen").items():
+        saldos[bodega] = saldos.get(bodega, Decimal("0")) - salida
 
     con_saldo = {b: s for b, s in saldos.items() if s != 0}
-    filas = Bodega.objects.filter(pk__in=con_saldo).select_related('sede').order_by('sede__nombre', 'nombre')
+    filas = Bodega.objects.filter(pk__in=con_saldo).select_related("sede").order_by("sede__nombre", "nombre")
     return [
-        {'bodega_id': b.id, 'bodega': b.nombre, 'sede': b.sede.nombre if b.sede_id else None,
-         'stock_calculado': con_saldo[b.id]}
+        {
+            "bodega_id": b.id,
+            "bodega": b.nombre,
+            "sede": b.sede.nombre if b.sede_id else None,
+            "stock_calculado": con_saldo[b.id],
+        }
         for b in filas
     ]
 
@@ -249,7 +273,7 @@ class _ConSaldo:
         self._saldo_inicial = saldo_inicial
 
     def _fila(self, fila):
-        fila['saldo'] = self._saldo_inicial + fila.pop('saldo_rango')
+        fila["saldo"] = self._saldo_inicial + fila.pop("saldo_rango")
         return fila
 
     def __iter__(self):

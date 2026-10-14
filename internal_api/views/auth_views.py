@@ -3,6 +3,7 @@ Endpoints de autenticación servicio-a-servicio.
 SRP: solo emite y renueva JWT de servicio.
 ISO 27001 A.9.4: autenticación de servicios con secretos hasheados.
 """
+
 import ipaddress
 import logging
 import uuid
@@ -75,12 +76,8 @@ def _generate_token_pair(credential: ServiceCredential) -> dict:
         "type": "service_refresh",
     }
     return {
-        "access_token": jwt.encode(
-            access_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"
-        ),
-        "refresh_token": jwt.encode(
-            refresh_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"
-        ),
+        "access_token": jwt.encode(access_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"),
+        "refresh_token": jwt.encode(refresh_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"),
         "expires_in": settings.INTERNAL_JWT_ACCESS_TTL_SECONDS,
     }
 
@@ -187,12 +184,8 @@ class ServiceTokenRefreshView(APIView):
             return Response({"detail": "Tipo de token incorrecto."}, status=401)
 
         try:
-            credential = ServiceCredential.objects.get(
-                name=payload["sub"], is_active=True
-            )
+            credential = ServiceCredential.objects.get(name=payload["sub"], is_active=True)
         except ServiceCredential.DoesNotExist:
-            return Response(
-                {"detail": "Servicio no encontrado o inactivo."}, status=403
-            )
+            return Response({"detail": "Servicio no encontrado o inactivo."}, status=403)
 
         return Response(_generate_token_pair(credential), status=200)

@@ -10,6 +10,7 @@ Técnicas ISTQB aplicadas:
 - Análisis de valores límite (BVA): severity = 2, 3, 4, 5 (fronteras del mapeo).
 - Caja blanca: rama de payload no-dict (400) y payload válido (204).
 """
+
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -19,51 +20,47 @@ from rest_framework.test import APIClient
 class FrontendLogViewTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.url = reverse('frontend-logs')
+        self.url = reverse("frontend-logs")
 
     def test_log_dado_entrada_valida_cuando_post_entonces_204(self):
         resp = self.client.post(
-            self.url, {'severity': 6, 'message': 'evento de prueba', 'msgid': 'ui.click'},
-            format='json'
+            self.url, {"severity": 6, "message": "evento de prueba", "msgid": "ui.click"}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_payload_no_dict_cuando_post_entonces_400(self):
         # Caja blanca: rama `not isinstance(entry, dict)` -> 400
-        resp = self.client.post(self.url, ['no', 'es', 'dict'], format='json')
+        resp = self.client.post(self.url, ["no", "es", "dict"], format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_log_dado_severity_critica_cuando_post_entonces_204(self):
         # BVA: severity = 2 (frontera CRITICAL: <= 2)
-        resp = self.client.post(self.url, {'severity': 2, 'message': 'crit'}, format='json')
+        resp = self.client.post(self.url, {"severity": 2, "message": "crit"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_severity_error_cuando_post_entonces_204(self):
         # BVA: severity = 3 (ERROR)
-        resp = self.client.post(self.url, {'severity': 3, 'message': 'err'}, format='json')
+        resp = self.client.post(self.url, {"severity": 3, "message": "err"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_severity_warning_cuando_post_entonces_204(self):
         # BVA: severity = 4 (WARNING)
-        resp = self.client.post(self.url, {'severity': 4, 'message': 'warn'}, format='json')
+        resp = self.client.post(self.url, {"severity": 4, "message": "warn"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_severity_info_cuando_post_entonces_204(self):
         # BVA: severity = 5 (frontera INFO: >= 5)
-        resp = self.client.post(self.url, {'severity': 5, 'message': 'info'}, format='json')
+        resp = self.client.post(self.url, {"severity": 5, "message": "info"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_msgid_con_puntos_cuando_post_entonces_normaliza_y_204(self):
         # El msgid con puntos se normaliza (replace '.' -> '-')
-        resp = self.client.post(
-            self.url, {'severity': 6, 'message': 'x', 'msgid': 'modulo.sub.accion'},
-            format='json'
-        )
+        resp = self.client.post(self.url, {"severity": 6, "message": "x", "msgid": "modulo.sub.accion"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_sin_campos_cuando_post_entonces_usa_defaults_204(self):
         # Sin severity/message: usa defaults (severity=6 -> INFO)
-        resp = self.client.post(self.url, {}, format='json')
+        resp = self.client.post(self.url, {}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_log_dado_sd_no_dict_cuando_post_entonces_400_y_loguea_el_error(self):
@@ -72,10 +69,10 @@ class FrontendLogViewTestCase(TestCase):
         # logueaba nada pese a que el comentario decía "registrar en el
         # backend si es posible" — la falla de ingesta de logs del frontend
         # era invisible en el propio backend.
-        with self.assertLogs('gestion.views', level='WARNING') as cm:
-            resp = self.client.post(self.url, {'sd': 'no-es-un-dict'}, format='json')
+        with self.assertLogs("gestion.views", level="WARNING") as cm:
+            resp = self.client.post(self.url, {"sd": "no-es-un-dict"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertTrue(any('frontend' in msg.lower() for msg in cm.output))
+        self.assertTrue(any("frontend" in msg.lower() for msg in cm.output))
 
 
 class FrontendLogIpClienteTestCase(TestCase):
@@ -87,18 +84,18 @@ class FrontendLogIpClienteTestCase(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.url = reverse('frontend-logs')
+        self.url = reverse("frontend-logs")
 
     def _ip_registrada(self, **meta):
-        with self.assertLogs('frontend.ui-ip', level='INFO') as capturado:
-            self.client.post(self.url, {'severity': 6, 'message': 'x', 'msgid': 'ui.ip'}, format='json', **meta)
-        return capturado.records[0].sd['ip']
+        with self.assertLogs("frontend.ui-ip", level="INFO") as capturado:
+            self.client.post(self.url, {"severity": 6, "message": "x", "msgid": "ui.ip"}, format="json", **meta)
+        return capturado.records[0].sd["ip"]
 
     def test_log_dado_peticion_desde_proxy_de_confianza_cuando_post_entonces_registra_ip_del_cliente(self):
-        ip = self._ip_registrada(REMOTE_ADDR='172.18.0.5', HTTP_X_FORWARDED_FOR='190.15.1.20, 172.18.0.5')
-        self.assertEqual(ip, '190.15.1.20')
+        ip = self._ip_registrada(REMOTE_ADDR="172.18.0.5", HTTP_X_FORWARDED_FOR="190.15.1.20, 172.18.0.5")
+        self.assertEqual(ip, "190.15.1.20")
 
     def test_log_dado_forwarded_for_desde_ip_publica_cuando_post_entonces_ignora_el_encabezado(self):
         # Anti-spoofing: un cliente externo no puede elegir la IP que queda en el log.
-        ip = self._ip_registrada(REMOTE_ADDR='200.1.1.1', HTTP_X_FORWARDED_FOR='10.9.9.9')
-        self.assertEqual(ip, '200.1.1.1')
+        ip = self._ip_registrada(REMOTE_ADDR="200.1.1.1", HTTP_X_FORWARDED_FOR="10.9.9.9")
+        self.assertEqual(ip, "200.1.1.1")

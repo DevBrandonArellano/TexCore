@@ -7,6 +7,7 @@ Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): con DJANGO_SUPERUSER_PASSWORD / sin ella,
   superuser ya existente / no existente.
 """
+
 import os
 
 from django.contrib.auth import get_user_model
@@ -16,31 +17,31 @@ from django.test import TestCase
 
 class CreateAdminCommandTestCase(TestCase):
     def test_create_admin_dado_sin_env_vars_cuando_ejecuta_entonces_password_no_es_estatica(self):
-        call_command('create_admin')
+        call_command("create_admin")
         User = get_user_model()
-        user = User.objects.get(username='sistemas')
-        self.assertFalse(user.check_password('Sistemas2026*'))
+        user = User.objects.get(username="sistemas")
+        self.assertFalse(user.check_password("Sistemas2026*"))
 
     def test_create_admin_dado_password_env_var_cuando_ejecuta_entonces_usa_esa_password(self):
-        os.environ['DJANGO_SUPERUSER_PASSWORD'] = 'ClaveDePruebaSegura123!'
+        os.environ["DJANGO_SUPERUSER_PASSWORD"] = "ClaveDePruebaSegura123!"
         try:
-            call_command('create_admin')
+            call_command("create_admin")
             User = get_user_model()
-            user = User.objects.get(username='sistemas')
-            self.assertTrue(user.check_password('ClaveDePruebaSegura123!'))
+            user = User.objects.get(username="sistemas")
+            self.assertTrue(user.check_password("ClaveDePruebaSegura123!"))
         finally:
-            del os.environ['DJANGO_SUPERUSER_PASSWORD']
+            del os.environ["DJANGO_SUPERUSER_PASSWORD"]
 
     def test_create_admin_dado_superuser_ya_existe_cuando_ejecuta_entonces_no_duplica(self):
-        call_command('create_admin')
+        call_command("create_admin")
         User = get_user_model()
-        self.assertEqual(User.objects.filter(username='sistemas').count(), 1)
-        call_command('create_admin')
-        self.assertEqual(User.objects.filter(username='sistemas').count(), 1)
+        self.assertEqual(User.objects.filter(username="sistemas").count(), 1)
+        call_command("create_admin")
+        self.assertEqual(User.objects.filter(username="sistemas").count(), 1)
 
     def test_create_admin_dado_superuser_con_otro_username_cuando_ejecuta_entonces_no_duplica(self):
         User = get_user_model()
-        User.objects.create_superuser('otro_admin', 'otro@example.com', 'ClaveSegura456!')
-        call_command('create_admin')
+        User.objects.create_superuser("otro_admin", "otro@example.com", "ClaveSegura456!")
+        call_command("create_admin")
         self.assertEqual(User.objects.filter(is_superuser=True).count(), 1)
-        self.assertFalse(User.objects.filter(username='sistemas').exists())
+        self.assertFalse(User.objects.filter(username="sistemas").exists())

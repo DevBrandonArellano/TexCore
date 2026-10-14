@@ -2,6 +2,7 @@
 Tests unitarios de LabelService.
 No requieren HTTP ni WeasyPrint — solo qrcode/python-barcode.
 """
+
 import base64
 from unittest.mock import patch
 

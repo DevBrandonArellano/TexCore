@@ -1,4 +1,5 @@
 """conftest.py del printing_service. Proporciona fixtures compartidos para tests."""
+
 import os
 from unittest.mock import patch
 
@@ -33,4 +34,5 @@ def auth_headers():
 @pytest.fixture
 def app_client():
     from fastapi.testclient import TestClient
+
     return TestClient(app)

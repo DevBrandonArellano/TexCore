@@ -1,4 +1,5 @@
 """Tests para JWTServiceAuthentication. EP + BVA."""
+
 import uuid
 from datetime import UTC, datetime, timedelta
 

@@ -74,7 +74,7 @@ class PagoReversionService:
         # así que sumarlo de vuelta la restaura — no se itera el historial de pagos).
 
         logger.info(
-            '[REVERSIÓN PAGO] Usuario: %s, Pago: %s, Cliente: %s, Monto: %s, Justificación: %s',
+            "[REVERSIÓN PAGO] Usuario: %s, Pago: %s, Cliente: %s, Monto: %s, Justificación: %s",
             usuario.username,
             pago.id,
             cliente.nombre_razon_social,
@@ -90,23 +90,23 @@ class PagoReversionService:
             pago.delete()
 
             logger.info(
-                '[REVERSIÓN PAGO EXITOSA] Pago %s eliminado. Deuda restaurada a: %s',
+                "[REVERSIÓN PAGO EXITOSA] Pago %s eliminado. Deuda restaurada a: %s",
                 pago.id,
                 saldo_anterior_pago,
             )
 
             return {
-                'pago_id': pago_id,
-                'cliente_id': cliente.id,
-                'cliente_nombre': cliente.nombre_razon_social,
-                'monto_revertido': monto,
-                'saldo_anterior_pago': saldo_anterior_pago,
-                'saldo_despues_reversion': saldo_anterior_pago  # Será el nuevo saldo calculado
+                "pago_id": pago_id,
+                "cliente_id": cliente.id,
+                "cliente_nombre": cliente.nombre_razon_social,
+                "monto_revertido": monto,
+                "saldo_anterior_pago": saldo_anterior_pago,
+                "saldo_despues_reversion": saldo_anterior_pago,  # Será el nuevo saldo calculado
             }
 
         except Exception as e:
             logger.exception(
-                '[ERROR REVERSIÓN PAGO] Pago %s, Cliente %s: %s',
+                "[ERROR REVERSIÓN PAGO] Pago %s, Cliente %s: %s",
                 pago.id,
                 cliente.id,
                 str(e),

@@ -10,6 +10,7 @@ Técnicas ISTQB aplicadas:
 - Caja blanca (CB-D): configuración por defecto de DRF y recorrido de todas las
   rutas del proyecto para comprobar que cada vista declara sus permisos.
 """
+
 from django.conf import settings
 from django.test import TestCase
 from django.urls import get_resolver, reverse
@@ -20,7 +21,7 @@ from rest_framework.views import APIView
 
 from gestion.tests.factories import CustomUserFactory
 
-APPS_PROPIAS = ('gestion', 'inventory', 'internal_api', 'TexCore')
+APPS_PROPIAS = ("gestion", "inventory", "internal_api", "TexCore")
 
 
 def _iterar_patrones(patrones):
@@ -39,7 +40,7 @@ def _es_vista_de_funcion(cls):
     como 'WrappedAPIView'. No sirve mirar `__module__`: ya apunta al módulo
     propio de la vista.
     """
-    return cls.__qualname__.endswith('WrappedAPIView')
+    return cls.__qualname__.endswith("WrappedAPIView")
 
 
 def _declara_permisos(cls):
@@ -53,9 +54,9 @@ def _declara_permisos(cls):
     for k in cls.__mro__:
         if not k.__module__.startswith(APPS_PROPIAS):
             continue
-        if 'get_permissions' in k.__dict__:
+        if "get_permissions" in k.__dict__:
             return True
-        if 'permission_classes' in k.__dict__:
+        if "permission_classes" in k.__dict__:
             return True
     return False
 
@@ -65,7 +66,7 @@ class GroupViewSetPermisosTestCase(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.url_list = reverse('group-list')
+        self.url_list = reverse("group-list")
 
     def test_list_dado_anonimo_cuando_get_entonces_rechazado(self):
         resp = self.client.get(self.url_list)
@@ -73,47 +74,51 @@ class GroupViewSetPermisosTestCase(TestCase):
 
     def test_create_dado_anonimo_cuando_post_entonces_rechazado_sin_crear(self):
         from django.contrib.auth.models import Group
+
         antes = Group.objects.count()
-        resp = self.client.post(self.url_list, {'name': 'intruso'}, format='json')
+        resp = self.client.post(self.url_list, {"name": "intruso"}, format="json")
         self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
         self.assertEqual(Group.objects.count(), antes)
 
     def test_delete_dado_anonimo_cuando_delete_entonces_rechazado_sin_borrar(self):
         from django.contrib.auth.models import Group
-        grupo = Group.objects.create(name='grupo_protegido')
+
+        grupo = Group.objects.create(name="grupo_protegido")
         # Los grupos son de solo lectura: la ruta de detalle ya no existe (404).
-        resp = self.client.delete(f'/api/groups/{grupo.id}/')
-        self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN,
-                                         status.HTTP_404_NOT_FOUND))
+        resp = self.client.delete(f"/api/groups/{grupo.id}/")
+        self.assertIn(
+            resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+        )
         self.assertTrue(Group.objects.filter(id=grupo.id).exists())
 
     def test_list_dado_rol_no_administrativo_cuando_get_entonces_403(self):
-        self.client.force_authenticate(user=CustomUserFactory(groups=['vendedor']))
+        self.client.force_authenticate(user=CustomUserFactory(groups=["vendedor"]))
         resp = self.client.get(self.url_list)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_dado_rol_no_administrativo_cuando_post_entonces_403(self):
-        self.client.force_authenticate(user=CustomUserFactory(groups=['jefe_planta']))
-        resp = self.client.post(self.url_list, {'name': 'escalada'}, format='json')
+        self.client.force_authenticate(user=CustomUserFactory(groups=["jefe_planta"]))
+        resp = self.client.post(self.url_list, {"name": "escalada"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_update_dado_admin_sede_cuando_patch_entonces_rechazado_sin_modificar(self):
         from django.contrib.auth.models import Group
-        grupo = Group.objects.create(name='grupo_original')
-        self.client.force_authenticate(user=CustomUserFactory(groups=['admin_sede']))
+
+        grupo = Group.objects.create(name="grupo_original")
+        self.client.force_authenticate(user=CustomUserFactory(groups=["admin_sede"]))
         # Los grupos son de solo lectura: la ruta de detalle ya no existe (404).
-        resp = self.client.patch(f'/api/groups/{grupo.id}/', {'name': 'alterado'}, format='json')
+        resp = self.client.patch(f"/api/groups/{grupo.id}/", {"name": "alterado"}, format="json")
         self.assertIn(resp.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         grupo.refresh_from_db()
-        self.assertEqual(grupo.name, 'grupo_original')
+        self.assertEqual(grupo.name, "grupo_original")
 
 
 class PermisoPorDefectoTestCase(TestCase):
     """Cuatro pruebas: configuración segura por defecto, raíz del router y recorrido de rutas."""
 
     def test_configuracion_dado_settings_cuando_se_lee_entonces_exige_autenticacion(self):
-        defaults = settings.REST_FRAMEWORK.get('DEFAULT_PERMISSION_CLASSES', ())
-        self.assertIn('rest_framework.permissions.IsAuthenticated', defaults)
+        defaults = settings.REST_FRAMEWORK.get("DEFAULT_PERMISSION_CLASSES", ())
+        self.assertIn("rest_framework.permissions.IsAuthenticated", defaults)
 
     def test_vista_sin_permisos_dado_anonimo_cuando_get_entonces_rechazado(self):
         from rest_framework.response import Response
@@ -121,16 +126,16 @@ class PermisoPorDefectoTestCase(TestCase):
 
         class VistaSinPermisos(APIView):
             def get(self, request):
-                return Response({'ok': True})
+                return Response({"ok": True})
 
-        request = APIRequestFactory().get('/vista-sin-permisos/')
+        request = APIRequestFactory().get("/vista-sin-permisos/")
         resp = VistaSinPermisos.as_view()(request)
         self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
 
     def test_rutas_dado_todas_las_vistas_del_proyecto_cuando_se_recorren_entonces_declaran_permisos(self):
         sin_permisos = set()
         for patron in _iterar_patrones(get_resolver().url_patterns):
-            cls = getattr(patron.callback, 'cls', None) or getattr(patron.callback, 'view_class', None)
+            cls = getattr(patron.callback, "cls", None) or getattr(patron.callback, "view_class", None)
             if cls is None or not issubclass(cls, APIView):
                 continue
             # Las vistas @api_view heredan el __module__ de la función, así que
@@ -138,10 +143,10 @@ class PermisoPorDefectoTestCase(TestCase):
             if not cls.__module__.startswith(APPS_PROPIAS):
                 continue
             if not _declara_permisos(cls):
-                sin_permisos.add(f'{cls.__module__}.{cls.__name__} ({patron.pattern})')
-        self.assertEqual(sorted(sin_permisos), [], 'Vistas sin permisos declarados')
+                sin_permisos.add(f"{cls.__module__}.{cls.__name__} ({patron.pattern})")
+        self.assertEqual(sorted(sin_permisos), [], "Vistas sin permisos declarados")
 
     def test_raiz_api_dado_anonimo_cuando_get_entonces_rechazado(self):
         # La raíz del router no declara permisos: debe quedar cubierta por el valor por defecto.
-        resp = APIClient().get('/api/inventory/')
+        resp = APIClient().get("/api/inventory/")
         self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))

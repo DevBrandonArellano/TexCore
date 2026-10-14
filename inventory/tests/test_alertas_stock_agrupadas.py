@@ -26,9 +26,9 @@ class AlertasStockAgrupadasTestCase(TestCase):
         self.client = APIClient()
         self.sede = SedeFactory(nombre="Sede Alertas Test")
         self.bodega = BodegaFactory(sede=self.sede, nombre="Bodega Principal")
-        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.client.force_authenticate(user=self.admin)
-        self.url = '/api/inventory/alertas-stock/'
+        self.url = "/api/inventory/alertas-stock/"
 
     def test_alerta_stock_dado_lotes_que_juntos_superan_minimo_cuando_consulta_entonces_no_aparece(self):
         """
@@ -53,11 +53,11 @@ class AlertasStockAgrupadasTestCase(TestCase):
         StockBodega.objects.create(bodega=self.bodega, producto=producto, lote=lote2, cantidad=Decimal("40.000"))
         StockBodega.objects.create(bodega=self.bodega, producto=producto, lote=lote3, cantidad=Decimal("40.000"))
 
-        response = self.client.get(self.url, {'sede_id': self.sede.id})
+        response = self.client.get(self.url, {"sede_id": self.sede.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # No debe haber alerta para HILO-30-1
-        codigos_en_alerta = [item['producto_codigo'] for item in response.data]
+        codigos_en_alerta = [item["producto_codigo"] for item in response.data]
         self.assertNotIn("HILO-30-1", codigos_en_alerta)
 
     def test_alerta_stock_dado_lotes_que_juntos_no_superan_minimo_cuando_consulta_entonces_aparece_agrupado(self):
@@ -81,14 +81,14 @@ class AlertasStockAgrupadasTestCase(TestCase):
         StockBodega.objects.create(bodega=self.bodega, producto=producto, lote=lote1, cantidad=Decimal("30.000"))
         StockBodega.objects.create(bodega=self.bodega, producto=producto, lote=lote2, cantidad=Decimal("30.000"))
 
-        response = self.client.get(self.url, {'sede_id': self.sede.id})
+        response = self.client.get(self.url, {"sede_id": self.sede.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        alertas_producto = [item for item in response.data if item['producto_codigo'] == "TELA-PIQUE-01"]
+        alertas_producto = [item for item in response.data if item["producto_codigo"] == "TELA-PIQUE-01"]
         # Debe aparecer exactamente una vez (no duplicado por lote)
         self.assertEqual(len(alertas_producto), 1)
 
         alerta = alertas_producto[0]
-        self.assertEqual(alerta['stock_actual'], Decimal("60.000"))
-        self.assertEqual(alerta['stock_minimo'], Decimal("100.000"))
-        self.assertEqual(alerta['faltante'], Decimal("40.000"))
+        self.assertEqual(alerta["stock_actual"], Decimal("60.000"))
+        self.assertEqual(alerta["stock_minimo"], Decimal("100.000"))
+        self.assertEqual(alerta["faltante"], Decimal("40.000"))

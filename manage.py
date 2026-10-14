@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
+
 import os
 import pathlib
 import sys
@@ -9,16 +10,17 @@ def main():
     """Run administrative tasks."""
     try:
         from dotenv import load_dotenv
+
         # Desarrollo: preferir .env. Solo usar .env.test cuando no haya .env
         # (p.ej. en CI), no por el mero hecho de que el archivo exista en el repo.
-        if pathlib.Path('.env').exists():
-            load_dotenv('.env')
-        elif pathlib.Path('.env.test').exists():
-            load_dotenv('.env.test')
+        if pathlib.Path(".env").exists():
+            load_dotenv(".env")
+        elif pathlib.Path(".env.test").exists():
+            load_dotenv(".env.test")
     except ImportError:
         pass
 
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TexCore.settings')
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TexCore.settings")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
@@ -30,5 +32,5 @@ def main():
     execute_from_command_line(sys.argv)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

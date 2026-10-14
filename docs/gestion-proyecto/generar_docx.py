@@ -4,6 +4,7 @@ con portada e indice, para anexar al documento Capstone.
 
 Uso: python generar_docx.py <backlog.md> <planificacion.md> <salida.docx>
 """
+
 import pathlib
 import re
 import sys
@@ -290,8 +291,7 @@ def main():
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run(
-        "Documento derivado de las secciones 5.1 y 5.2 y de la Tabla 14 "
-        "del documento Capstone. Marco de trabajo Scrum."
+        "Documento derivado de las secciones 5.1 y 5.2 y de la Tabla 14 del documento Capstone. Marco de trabajo Scrum."
     )
     run.font.size = Pt(9)
     run.italic = True

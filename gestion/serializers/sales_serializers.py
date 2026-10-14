@@ -26,28 +26,30 @@ def _fecha_pedido_to_iso_utc(val):
         dt = datetime.combine(val, datetime.min.time(), tzinfo=UTC)
     else:
         return str(val)
-    return dt.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
-    producto_descripcion = serializers.CharField(source='producto.descripcion', read_only=True)
+    producto_descripcion = serializers.CharField(source="producto.descripcion", read_only=True)
 
     class Meta:
         model = DetallePedido
-        fields = '__all__'
+        fields = "__all__"
 
     def validate(self, data):
-        producto = data.get('producto')
-        precio_unitario = data.get('precio_unitario')
+        producto = data.get("producto")
+        precio_unitario = data.get("precio_unitario")
 
         if producto and precio_unitario is not None and precio_unitario < producto.precio_base:
-            raise serializers.ValidationError({
-                "precio_unitario": (
-                    f"El precio unitario (${precio_unitario:.3f}) no puede"
-                    f" ser menor al costo base del producto"
-                    f" (${producto.precio_base:.3f})."
-                )
-            })
+            raise serializers.ValidationError(
+                {
+                    "precio_unitario": (
+                        f"El precio unitario (${precio_unitario:.3f}) no puede"
+                        f" ser menor al costo base del producto"
+                        f" (${producto.precio_base:.3f})."
+                    )
+                }
+            )
         return data
 
 
@@ -57,10 +59,10 @@ class DetallePedidoEntradaSerializer(DetallePedidoSerializer):
 
     class Meta:
         model = DetallePedido
-        fields = ['producto', 'lote', 'cantidad', 'piezas', 'peso', 'precio_unitario', 'incluye_iva']
+        fields = ["producto", "lote", "cantidad", "piezas", "peso", "precio_unitario", "incluye_iva"]
         extra_kwargs = {
-            'producto': {'required': True, 'allow_null': False},
-            'peso': {'min_value': Decimal('0.001')},
+            "producto": {"required": True, "allow_null": False},
+            "peso": {"min_value": Decimal("0.001")},
         }
 
 
@@ -68,25 +70,27 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
     """
     Serializer minimalista para mostrar el historial de pedidos dentro del cliente.
     """
+
     total = serializers.SerializerMethodField()
     fecha_pedido = serializers.SerializerMethodField()
-    vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
+    vendedor_nombre = serializers.ReadOnlyField(source="vendedor_asignado.username")
     detalles = DetallePedidoSerializer(many=True, read_only=True)
 
     class Meta:
         model = PedidoVenta
         fields = [
-            'id',
-            'fecha_pedido',
-            'esta_pagado',
-            'total',
-            'guia_remision',
-            'estado',
-            'vendedor_nombre',
-            'cliente',
-            'sede',
-            'valor_retencion',
-            'detalles']
+            "id",
+            "fecha_pedido",
+            "esta_pagado",
+            "total",
+            "guia_remision",
+            "estado",
+            "vendedor_nombre",
+            "cliente",
+            "sede",
+            "valor_retencion",
+            "detalles",
+        ]
 
     def get_fecha_pedido(self, obj):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
@@ -97,28 +101,29 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
         total = 0
         for d in obj.detalles.all():
             subt = Decimal(str(d.peso)) * Decimal(str(d.precio_unitario))
-            total += subt * Decimal('1.15') if d.incluye_iva else subt
+            total += subt * Decimal("1.15") if d.incluye_iva else subt
 
         retencion = obj.valor_retencion or 0
         return total - retencion
 
 
 class PagoClienteSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
+    cliente_nombre = serializers.ReadOnlyField(source="cliente.nombre_razon_social")
 
     class Meta:
         model = PagoCliente
         fields = [
-            'id',
-            'cliente',
-            'cliente_nombre',
-            'fecha',
-            'monto',
-            'metodo_pago',
-            'comprobante',
-            'notas',
-            'sede',
-            'es_anticipo']
+            "id",
+            "cliente",
+            "cliente_nombre",
+            "fecha",
+            "monto",
+            "metodo_pago",
+            "comprobante",
+            "notas",
+            "sede",
+            "es_anticipo",
+        ]
 
 
 class UltimaCompraMixin:
@@ -126,42 +131,32 @@ class UltimaCompraMixin:
     byte a byte entre ClienteListSerializer y ClienteSerializer."""
 
     def get_ultima_compra(self, obj):
-        ultima_compra_por_id = self.context.get('ultima_compra_por_id')
+        ultima_compra_por_id = self.context.get("ultima_compra_por_id")
         if ultima_compra_por_id is not None:
-            last_order = ultima_compra_por_id.get(getattr(obj, '_ultima_compra_id', None))
+            last_order = ultima_compra_por_id.get(getattr(obj, "_ultima_compra_id", None))
         else:
             # retrieve (un solo objeto): ClienteViewSet.list() no pasó el bulk-fetch,
             # una query directa es aceptable fuera de listados masivos.
-            last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+            last_order = obj.pedidoventa_set.order_by("-fecha_pedido").first()
 
         if not last_order:
             return None
 
         detalles = last_order.detalles.all()
         items = [
-            {
-                "producto": d.producto.descripcion,
-                "cantidad": d.cantidad,
-                "piezas": d.piezas,
-                "peso": d.peso
-            }
+            {"producto": d.producto.descripcion, "cantidad": d.cantidad, "piezas": d.piezas, "peso": d.peso}
             for d in detalles
         ]
 
-        return {
-            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
-            "id_pedido": last_order.id,
-            "items": items
-        }
+        return {"fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido), "id_pedido": last_order.id, "items": items}
 
 
 class ClienteListSerializer(UltimaCompraMixin, serializers.ModelSerializer):
     """Serializer ligero para listados masivos (Admin/Vendedor Dashboard)"""
+
     saldo_pendiente = serializers.DecimalField(
-        source='saldo_calculado',
-        max_digits=12,
-        decimal_places=3,
-        read_only=True)
+        source="saldo_calculado", max_digits=12, decimal_places=3, read_only=True
+    )
     cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     saldo_a_favor = serializers.SerializerMethodField()
     ultima_compra = serializers.SerializerMethodField()
@@ -169,38 +164,37 @@ class ClienteListSerializer(UltimaCompraMixin, serializers.ModelSerializer):
     class Meta:
         model = Cliente
         fields = [
-            'id',
-            'ruc_cedula',
-            'nombre_razon_social',
-            'direccion_envio',
-            'nivel_precio',
-            'tiene_beneficio',
-            'limite_credito',
-            'plazo_credito_dias',
-            'saldo_pendiente',
-            'cartera_vencida',
-            'saldo_a_favor',
-            'ultima_compra',
-            'sede',
-            'vendedor_asignado',
-            'is_active']
-        read_only_fields = ['vendedor_asignado']
+            "id",
+            "ruc_cedula",
+            "nombre_razon_social",
+            "direccion_envio",
+            "nivel_precio",
+            "tiene_beneficio",
+            "limite_credito",
+            "plazo_credito_dias",
+            "saldo_pendiente",
+            "cartera_vencida",
+            "saldo_a_favor",
+            "ultima_compra",
+            "sede",
+            "vendedor_asignado",
+            "is_active",
+        ]
+        read_only_fields = ["vendedor_asignado"]
 
     def get_saldo_a_favor(self, obj):
         """P1-002: anticipo disponible = saldo_calculado negativo invertido."""
-        saldo = getattr(obj, 'saldo_calculado', None) or Decimal('0.000')
-        return -saldo if saldo < 0 else Decimal('0.000')
+        saldo = getattr(obj, "saldo_calculado", None) or Decimal("0.000")
+        return -saldo if saldo < 0 else Decimal("0.000")
 
 
 class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
     saldo_pendiente = serializers.DecimalField(
-        source='saldo_calculado',
-        max_digits=12,
-        decimal_places=3,
-        read_only=True)
+        source="saldo_calculado", max_digits=12, decimal_places=3, read_only=True
+    )
     cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
-    pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
+    pedidos = PedidoVentaResumenSerializer(source="pedidoventa_set", many=True, read_only=True)
     pagos = PagoClienteSerializer(many=True, read_only=True)
 
     _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -208,17 +202,28 @@ class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializ
     class Meta:
         model = Cliente
         fields = [
-            'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio',
-            'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos',
-            'sede', 'vendedor_asignado', 'is_active', '_justificacion_auditoria'
+            "id",
+            "ruc_cedula",
+            "nombre_razon_social",
+            "direccion_envio",
+            "nivel_precio",
+            "tiene_beneficio",
+            "limite_credito",
+            "plazo_credito_dias",
+            "saldo_pendiente",
+            "cartera_vencida",
+            "ultima_compra",
+            "pedidos",
+            "pagos",
+            "sede",
+            "vendedor_asignado",
+            "is_active",
+            "_justificacion_auditoria",
         ]
-        extra_kwargs = {
-            'vendedor_asignado': {'read_only': True}
-        }
+        extra_kwargs = {"vendedor_asignado": {"read_only": True}}
 
     def create(self, validated_data):
-        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        justificacion = validated_data.pop("_justificacion_auditoria", None)
         instance = super().create(validated_data)
         if justificacion:
             instance._justificacion_auditoria = justificacion
@@ -229,29 +234,30 @@ class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializ
         from django.core.exceptions import ValidationError as DjangoValidationError
         from rest_framework.exceptions import ValidationError as DRFValidationError
 
-        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        justificacion = validated_data.pop("_justificacion_auditoria", None)
         if justificacion:
             instance._justificacion_auditoria = justificacion
         try:
             return super().update(instance, validated_data)
         except DjangoValidationError as e:
-            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
+            raise DRFValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
 
     def validate_tiene_beneficio(self, value):
-        user = self.context['request'].user
+        user = self.context["request"].user
         # Check if the field is actually being changed
         if self.instance and self.instance.tiene_beneficio != value:
-            is_authorized = user.is_superuser or user.groups.filter(
-                name__in=['admin_sistemas', 'admin_sede', 'vendedor']).exists()
+            is_authorized = (
+                user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "admin_sede", "vendedor"]).exists()
+            )
             if not is_authorized:
                 raise serializers.ValidationError("No tienes permiso para modificar los beneficios de un cliente.")
         return value
 
 
 class PedidoVentaSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
-    vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
-    sede_nombre = serializers.ReadOnlyField(source='sede.nombre')
+    cliente_nombre = serializers.ReadOnlyField(source="cliente.nombre_razon_social")
+    vendedor_nombre = serializers.ReadOnlyField(source="vendedor_asignado.username")
+    sede_nombre = serializers.ReadOnlyField(source="sede.nombre")
     detalles = DetallePedidoSerializer(many=True, read_only=True)
     fecha_pedido = serializers.SerializerMethodField()
     porcentaje_pagado = serializers.SerializerMethodField()
@@ -261,21 +267,44 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PedidoVenta
         fields = [
-            'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido',
-            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'monto_pagado',
-            'porcentaje_pagado', 'sede', 'sede_nombre',
-            'valor_retencion', 'detalles',
-            'anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion',
+            "id",
+            "cliente",
+            "cliente_nombre",
+            "vendedor_nombre",
+            "guia_remision",
+            "fecha_pedido",
+            "fecha_despacho",
+            "fecha_vencimiento",
+            "estado",
+            "esta_pagado",
+            "monto_pagado",
+            "porcentaje_pagado",
+            "sede",
+            "sede_nombre",
+            "valor_retencion",
+            "detalles",
+            "anulado",
+            "motivo_anulacion",
+            "anulado_por",
+            "anulado_por_nombre",
+            "fecha_anulacion",
         ]
-        read_only_fields = ['anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion',
-                            'monto_pagado', 'porcentaje_pagado']
+        read_only_fields = [
+            "anulado",
+            "motivo_anulacion",
+            "anulado_por",
+            "anulado_por_nombre",
+            "fecha_anulacion",
+            "monto_pagado",
+            "porcentaje_pagado",
+        ]
 
     def get_porcentaje_pagado(self, obj):
         """P1-003: % del valor del pedido cubierto por la reconciliación FIFO."""
-        total = sum(d.total_con_iva for d in obj.detalles.all()) - (obj.valor_retencion or Decimal('0.000'))
+        total = sum(d.total_con_iva for d in obj.detalles.all()) - (obj.valor_retencion or Decimal("0.000"))
         if total <= 0:
-            return Decimal('0.00')
-        return (Decimal(str(obj.monto_pagado)) / Decimal(str(total)) * 100).quantize(Decimal('0.01'))
+            return Decimal("0.00")
+        return (Decimal(str(obj.monto_pagado)) / Decimal(str(total)) * 100).quantize(Decimal("0.01"))
 
     def get_anulado_por_nombre(self, obj):
         if obj.anulado_por:
@@ -287,66 +316,71 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         # Allow initial_data access for nested validation
-        cliente = data.get('cliente')
-        esta_pagado = data.get('esta_pagado', False)
+        cliente = data.get("cliente")
+        esta_pagado = data.get("esta_pagado", False)
 
         # Sede is mandatory but usually derived from user
-        user = self.context['request'].user
-        if not data.get('sede') and hasattr(user, 'sede'):
-            data['sede'] = user.sede
+        user = self.context["request"].user
+        if not data.get("sede") and hasattr(user, "sede"):
+            data["sede"] = user.sede
 
         detalles = self._validar_detalles(cliente) if self.instance is None else []
 
         if cliente and not esta_pagado:
-            nuevo_total = Decimal('0.000')
+            nuevo_total = Decimal("0.000")
             for d in detalles:
-                mult = Decimal('1.15') if d.get('incluye_iva', True) else Decimal('1.00')
-                nuevo_total += (d['peso'] * d['precio_unitario'] * mult)
+                mult = Decimal("1.15") if d.get("incluye_iva", True) else Decimal("1.00")
+                nuevo_total += d["peso"] * d["precio_unitario"] * mult
 
             # Re-fetch via custom manager so saldo_calculado annotation
             # is present
             from gestion.models import Cliente as ClienteModel
+
             cliente_annotated = ClienteModel.objects.get(pk=cliente.pk)
             saldo_actual = cliente_annotated.saldo_calculado
 
             if (saldo_actual + nuevo_total) > cliente.limite_credito:
-                raise serializers.ValidationError({
-                    "cliente": (
-                        f"El cliente ha excedido su límite de crédito."
-                        f" Límite: ${cliente.limite_credito:.3f},"
-                        f" Saldo proyectado:"
-                        f" ${(saldo_actual + nuevo_total):.3f}"
-                    )
-                })
+                raise serializers.ValidationError(
+                    {
+                        "cliente": (
+                            f"El cliente ha excedido su límite de crédito."
+                            f" Límite: ${cliente.limite_credito:.3f},"
+                            f" Saldo proyectado:"
+                            f" ${(saldo_actual + nuevo_total):.3f}"
+                        )
+                    }
+                )
 
             # ISO 27001 - Validación de Cartera Vencida (bloqueo estricto)
             cartera_vencida = PedidoVenta.objects.filter(
-                cliente=cliente,
-                esta_pagado=False,
-                fecha_vencimiento__lt=timezone.now().date()
+                cliente=cliente, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()
             ).exists()
 
             if cartera_vencida:
-                raise serializers.ValidationError({
-                    "cliente": (
-                        "OPERACIÓN DENEGADA: El cliente mantiene deuda con"
-                        " plazo vencido. Regularice el pago antes de emitir"
-                        " nuevos pedidos."
-                    )
-                })
+                raise serializers.ValidationError(
+                    {
+                        "cliente": (
+                            "OPERACIÓN DENEGADA: El cliente mantiene deuda con"
+                            " plazo vencido. Regularice el pago antes de emitir"
+                            " nuevos pedidos."
+                        )
+                    }
+                )
 
             # ISO 27001 - Validación de Contado
             if cliente.plazo_credito_dias == 0 and not esta_pagado:
                 pedidos_impagos = PedidoVenta.objects.filter(cliente=cliente, esta_pagado=False).exists()
                 if pedidos_impagos:
-                    raise serializers.ValidationError({
-                        "esta_pagado": (
-                            "POLÍTICA DE CRÉDITO: Los clientes de 'Contado'"
-                            " ya tienen un pedido pendiente de pago. Deben"
-                            " cancelar la factura anterior antes de generar"
-                            " un nuevo pedido."
-                        )
-                    })
+                    raise serializers.ValidationError(
+                        {
+                            "esta_pagado": (
+                                "POLÍTICA DE CRÉDITO: Los clientes de 'Contado'"
+                                " ya tienen un pedido pendiente de pago. Deben"
+                                " cancelar la factura anterior antes de generar"
+                                " un nuevo pedido."
+                            )
+                        }
+                    )
 
         return data
 
@@ -354,26 +388,26 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         """Los detalles llegan anidados en `initial_data` (el campo `detalles` es
         de solo lectura): se validan con DetallePedidoEntradaSerializer, y el
         producto debe ser global o de la sede del cliente."""
-        entrada = DetallePedidoEntradaSerializer(data=self.initial_data.get('detalles', []), many=True)
+        entrada = DetallePedidoEntradaSerializer(data=self.initial_data.get("detalles", []), many=True)
         if not entrada.is_valid():
-            raise serializers.ValidationError({'detalles': entrada.errors})
+            raise serializers.ValidationError({"detalles": entrada.errors})
         sede_id = cliente.sede_id if cliente else None
-        if any(d['producto'].sede_id not in (None, sede_id) for d in entrada.validated_data):
-            raise serializers.ValidationError({'detalles': 'Producto no encontrado.'})
+        if any(d["producto"].sede_id not in (None, sede_id) for d in entrada.validated_data):
+            raise serializers.ValidationError({"detalles": "Producto no encontrado."})
         self._detalles_validados = entrada.validated_data
         return entrada.validated_data
 
     @transaction.atomic
     def create(self, validated_data):
-        detalles_data = getattr(self, '_detalles_validados', [])
+        detalles_data = getattr(self, "_detalles_validados", [])
 
-        cliente = validated_data.get('cliente')
+        cliente = validated_data.get("cliente")
         # Calcular fecha vencimiento
         plazo = cliente.plazo_credito_dias if cliente else 0
-        validated_data['fecha_vencimiento'] = timezone.now().date() + timedelta(days=plazo)
+        validated_data["fecha_vencimiento"] = timezone.now().date() + timedelta(days=plazo)
 
-        if 'valor_retencion' not in validated_data:
-            validated_data['valor_retencion'] = self.initial_data.get('valor_retencion', 0)
+        if "valor_retencion" not in validated_data:
+            validated_data["valor_retencion"] = self.initial_data.get("valor_retencion", 0)
 
         pedido = PedidoVenta.objects.create(**validated_data)
 

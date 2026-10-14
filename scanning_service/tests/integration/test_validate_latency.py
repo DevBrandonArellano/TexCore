@@ -22,6 +22,7 @@ scripts/loadtest/locustfile.py (tarea UsuarioDespachoTexCore.flujo_despacho),
 que golpea /api/scanning/validate a través de Nginx exactamente como lo
 hace DespachoDashboard.tsx.
 """
+
 import time
 from unittest.mock import MagicMock
 
@@ -55,10 +56,7 @@ def client_lote_valido():
 
 
 class TestValidateLatency:
-
-    def test_validate_dado_peticion_valida_cuando_se_invoca_entonces_responde_bajo_1_segundo(
-        self, client_lote_valido
-    ):
+    def test_validate_dado_peticion_valida_cuando_se_invoca_entonces_responde_bajo_1_segundo(self, client_lote_valido):
         inicio = time.perf_counter()
         response = client_lote_valido.post("/validate", json={"code": "LOTE-00001"})
         duracion = time.perf_counter() - inicio

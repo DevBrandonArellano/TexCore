@@ -3,6 +3,7 @@ Strategy Pattern para formatos de salida del printing_service.
 OCP: agregar un nuevo formato (HTML, PNG) solo requiere crear una nueva clase
 que implemente OutputStrategy, sin modificar los routers ni el servicio.
 """
+
 import io
 import logging
 from typing import Protocol, runtime_checkable
@@ -39,6 +40,7 @@ class PdfOutputStrategy:
 
     def render(self, template_name: str, context: dict, filename: str) -> StreamingResponse:
         from weasyprint import HTML  # Import tardío: WeasyPrint no disponible en tests
+
         template = self._env.get_template(template_name)
         html_content = template.render(**context)
         pdf_bytes = HTML(string=html_content).write_pdf()

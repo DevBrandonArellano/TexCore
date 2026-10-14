@@ -3,6 +3,7 @@
 El script vive fuera de un paquete: se carga por ruta para probar cómo elige
 el encabezado Host a partir de ALLOWED_HOSTS.
 """
+
 import importlib.util
 from pathlib import Path
 from unittest import mock
@@ -48,14 +49,15 @@ class MainHealthcheckTest(SimpleTestCase):
         return respuesta
 
     def test_main_dado_backend_responde_200_cuando_se_sondea_entonces_sale_con_0_y_envia_el_host(self):
-        with mock.patch.dict("os.environ", {"ALLOWED_HOSTS": "erp.planta.local"}), \
-                mock.patch("urllib.request.urlopen", return_value=self._respuesta(200)) as urlopen:
+        with (
+            mock.patch.dict("os.environ", {"ALLOWED_HOSTS": "erp.planta.local"}),
+            mock.patch("urllib.request.urlopen", return_value=self._respuesta(200)) as urlopen,
+        ):
             self.assertEqual(self.healthcheck.main(), 0)
         peticion = urlopen.call_args.args[0]
         self.assertEqual(peticion.full_url, "http://127.0.0.1:8000/api/health/")
         self.assertEqual(peticion.get_header("Host"), "erp.planta.local")
 
     def test_main_dado_backend_no_responde_cuando_se_sondea_entonces_sale_con_1(self):
-        with mock.patch("urllib.request.urlopen", side_effect=OSError("connection refused")), \
-                mock.patch("sys.stderr"):
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("connection refused")), mock.patch("sys.stderr"):
             self.assertEqual(self.healthcheck.main(), 1)

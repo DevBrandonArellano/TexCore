@@ -10,6 +10,7 @@ son columnas indexadas de gestion_auditlog.
 Técnica ISTQB: partición de equivalencia (usuario con sede, sin sede, sin usuario) y
 caja blanca del relleno de filas existentes (migración 0005).
 """
+
 import importlib
 
 from django.apps import apps
@@ -24,7 +25,7 @@ def _log(**campos):
     return AuditLog.objects.create(
         content_type=ContentType.objects.get_for_model(AuditLog),
         object_id=1,
-        accion='UPDATE',
+        accion="UPDATE",
         **campos,
     )
 
@@ -51,14 +52,16 @@ class AuditLogUsuarioSedeTestCase(TestCase):
 
     def test_auditlog_dado_modelo_auditable_cuando_se_guarda_entonces_el_log_lleva_la_sede_del_usuario(self):
         from gestion import middleware
+
         usuario = CustomUserFactory()
         middleware._local.user = usuario
         try:
             producto = ProductoFactory()
         finally:
-            middleware._local.__dict__.pop('user', None)
+            middleware._local.__dict__.pop("user", None)
         log = AuditLog.objects.filter(
-            content_type=ContentType.objects.get_for_model(producto), object_id=producto.pk).latest('id')
+            content_type=ContentType.objects.get_for_model(producto), object_id=producto.pk
+        ).latest("id")
         self.assertEqual(log.usuario_id, usuario.pk)
         self.assertEqual(log.usuario_sede_id, usuario.sede_id)
 
@@ -67,7 +70,7 @@ class RellenoUsuarioSedeTestCase(TestCase):
     """Caja blanca del RunPython de la migración 0005 (localmente se corre --nomigrations)."""
 
     def setUp(self):
-        self.migracion = importlib.import_module('gestion.migrations.0005_rellenar_auditlog_usuario_sede')
+        self.migracion = importlib.import_module("gestion.migrations.0005_rellenar_auditlog_usuario_sede")
 
     def test_relleno_dado_logs_previos_sin_sede_cuando_corre_entonces_copia_la_del_usuario(self):
         usuario = CustomUserFactory()
@@ -78,7 +81,7 @@ class RellenoUsuarioSedeTestCase(TestCase):
         self.migracion.rellenar_usuario_sede(apps, None, tamano_lote=2)
 
         self.assertEqual(
-            set(AuditLog.objects.filter(pk__in=[p.pk for p in previos]).values_list('usuario_sede_id', flat=True)),
+            set(AuditLog.objects.filter(pk__in=[p.pk for p in previos]).values_list("usuario_sede_id", flat=True)),
             {usuario.sede_id},
         )
         sin_usuario.refresh_from_db()
@@ -106,14 +109,14 @@ class IndiceListadoAuditoriaTestCase(TestCase):
         return {indice.name: indice for indice in AuditLog._meta.indexes}
 
     def test_auditlog_dado_listado_por_sede_cuando_cuenta_entonces_hay_indice_por_fecha_que_incluye_las_dos_sedes(self):
-        indice = self._indices().get('idx_audit_fecha_sedes')
+        indice = self._indices().get("idx_audit_fecha_sedes")
         self.assertIsNotNone(indice)
-        self.assertEqual(list(indice.fields), ['-fecha_hora'])
-        self.assertEqual(set(indice.include), {'usuario_sede_id', 'object_sede_id'})
+        self.assertEqual(list(indice.fields), ["-fecha_hora"])
+        self.assertEqual(set(indice.include), {"usuario_sede_id", "object_sede_id"})
 
     def test_auditlog_dado_indice_cubriente_cuando_se_define_entonces_no_quedan_indices_redundantes(self):
         # Los compuestos por sede y el índice simple de fecha_hora quedan cubiertos por el
         # nuevo: mantenerlos solo encarece cada inserción de auditoría.
-        self.assertNotIn('idx_audit_objsede_fecha', self._indices())
-        self.assertNotIn('idx_audit_usrsede_fecha', self._indices())
-        self.assertFalse(AuditLog._meta.get_field('fecha_hora').db_index)
+        self.assertNotIn("idx_audit_objsede_fecha", self._indices())
+        self.assertNotIn("idx_audit_usrsede_fecha", self._indices())
+        self.assertFalse(AuditLog._meta.get_field("fecha_hora").db_index)

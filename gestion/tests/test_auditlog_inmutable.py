@@ -12,6 +12,7 @@ registros con usuario NULL (SET_NULL), sin borrar la auditoría.
 Técnicas ISTQB: partición de equivalencia sobre las vías de escritura del ORM y prueba
 de transición (alta → intento de cambio).
 """
+
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
@@ -23,18 +24,22 @@ class AuditLogInmutableTestCase(TestCase):
     def setUp(self):
         self.usuario = CustomUserFactory()
         self.log = AuditLog.objects.create(
-            usuario=self.usuario, content_type=ContentType.objects.get_for_model(Producto), object_id=1,
-            accion='UPDATE', justificacion='Ajuste original')
+            usuario=self.usuario,
+            content_type=ContentType.objects.get_for_model(Producto),
+            object_id=1,
+            accion="UPDATE",
+            justificacion="Ajuste original",
+        )
 
     def test_auditlog_dado_registro_nuevo_cuando_se_crea_entonces_se_guarda(self):
         self.assertTrue(AuditLog.objects.filter(pk=self.log.pk).exists())
 
     def test_auditlog_dado_registro_existente_cuando_se_edita_y_guarda_entonces_lanza(self):
-        self.log.justificacion = 'Texto alterado'
+        self.log.justificacion = "Texto alterado"
         with self.assertRaises(RegistroAuditoriaInmutable):
             self.log.save()
         self.log.refresh_from_db()
-        self.assertEqual(self.log.justificacion, 'Ajuste original')
+        self.assertEqual(self.log.justificacion, "Ajuste original")
 
     def test_auditlog_dado_registro_cuando_se_borra_entonces_lanza_y_se_conserva(self):
         with self.assertRaises(RegistroAuditoriaInmutable):
@@ -43,9 +48,9 @@ class AuditLogInmutableTestCase(TestCase):
 
     def test_auditlog_dado_queryset_cuando_update_masivo_entonces_lanza(self):
         with self.assertRaises(RegistroAuditoriaInmutable):
-            AuditLog.objects.filter(pk=self.log.pk).update(justificacion='Masivo')
+            AuditLog.objects.filter(pk=self.log.pk).update(justificacion="Masivo")
         self.log.refresh_from_db()
-        self.assertEqual(self.log.justificacion, 'Ajuste original')
+        self.assertEqual(self.log.justificacion, "Ajuste original")
 
     def test_auditlog_dado_queryset_cuando_delete_masivo_entonces_lanza(self):
         with self.assertRaises(RegistroAuditoriaInmutable):

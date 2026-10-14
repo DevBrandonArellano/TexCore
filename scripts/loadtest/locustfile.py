@@ -37,6 +37,7 @@ Correr esta prueba EXCLUSIVAMENTE contra el stack Docker de pruebas
 sembrado con `python manage.py stress_test_data` / `stress_ventas_data`,
 NUNCA contra producción.
 """
+
 import os
 import random
 import re
@@ -52,8 +53,17 @@ from locust import HttpUser, between, events, task
 # alguna vez tiene más de 11 grupos, actualizar esta lista para que siga
 # siendo 1:1 con los grupos reales de Django.
 ROLES = [
-    "admin_sistemas", "admin_sede", "bodeguero", "despacho", "ejecutivo", "empaquetado",
-    "jefe_area", "jefe_planta", "operario", "tintorero", "vendedor",
+    "admin_sistemas",
+    "admin_sede",
+    "bodeguero",
+    "despacho",
+    "ejecutivo",
+    "empaquetado",
+    "jefe_area",
+    "jefe_planta",
+    "operario",
+    "tintorero",
+    "vendedor",
 ]
 PREFIJO_USUARIOS = os.environ.get("LOADTEST_PREFIJO_USUARIOS", "user_")
 ROLE_USERS = {rol: f"{PREFIJO_USUARIOS}{rol}" for rol in ROLES}
@@ -180,6 +190,7 @@ class _UsuarioRolBase(HttpUser):
     cookie de su rol. Por eso se espera activamente (con timeout) en vez
     de fallar de inmediato.
     """
+
     abstract = True
     role: str = ""
 
@@ -214,10 +225,16 @@ class AdminSistemasUser(_UsuarioRolBase):
 
     @task
     def navegar_catalogo(self):
-        endpoint = random.choice([
-            "/api/productos/", "/api/users/", "/api/sedes/",
-            "/api/areas/", "/api/bodegas/", "/api/proveedores/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/productos/",
+                "/api/users/",
+                "/api/sedes/",
+                "/api/areas/",
+                "/api/bodegas/",
+                "/api/proveedores/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint)
 
     @task
@@ -240,9 +257,13 @@ class AdminSedeUser(_UsuarioRolBase):
 
     @task
     def ver_stock_y_despachos(self):
-        endpoint = random.choice([
-            "/api/inventory/stock/", "/api/users/", "/api/inventory/historial-despachos/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/inventory/stock/",
+                "/api/users/",
+                "/api/inventory/historial-despachos/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint)
 
 
@@ -266,8 +287,8 @@ class BodegueroUser(_UsuarioRolBase):
         no de despacho: con despacho el endpoint responde 403 siempre.
         Página al azar: ver `_pagina_al_azar`."""
         self._stock_disponible = [
-            s for s in _pagina_al_azar(self.client, "/api/inventory/stock/",
-                                       "/api/inventory/stock/ (pool transferencia)")
+            s
+            for s in _pagina_al_azar(self.client, "/api/inventory/stock/", "/api/inventory/stock/ (pool transferencia)")
             if float(s.get("cantidad") or 0) > 0
         ]
         resp = self.client.get("/api/bodegas/", name="/api/bodegas/ (pool transferencia)")
@@ -276,9 +297,14 @@ class BodegueroUser(_UsuarioRolBase):
 
     @task
     def navegar_bodega(self):
-        endpoint = random.choice([
-            "/api/materia-prima/", "/api/productos/", "/api/bodegas/", "/api/proveedores/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/materia-prima/",
+                "/api/productos/",
+                "/api/bodegas/",
+                "/api/proveedores/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint)
 
     @task
@@ -299,10 +325,7 @@ class BodegueroUser(_UsuarioRolBase):
         resp = self.client.get("/api/inventory/stock/", name="/api/inventory/stock/ (pool kardex)")
         if resp.status_code != 200:
             return
-        items = [
-            s for s in _extraer_lista(resp.json())
-            if s.get("bodega_id") and s.get("producto_id")
-        ]
+        items = [s for s in _extraer_lista(resp.json()) if s.get("bodega_id") and s.get("producto_id")]
         if not items:
             return  # sin stock asignado — no-op en vez de fallar el run
         item = random.choice(items)
@@ -318,8 +341,7 @@ class BodegueroUser(_UsuarioRolBase):
                 response.failure(f"HTTP {response.status_code}")
             elif elapsed is not None and elapsed > UMBRAL_KARDEX_SEGUNDOS:
                 response.failure(
-                    f"Kárdex tardó {elapsed:.3f}s — supera el umbral de "
-                    f"{UMBRAL_KARDEX_SEGUNDOS}s (TEX-22 CA-3)"
+                    f"Kárdex tardó {elapsed:.3f}s — supera el umbral de {UMBRAL_KARDEX_SEGUNDOS}s (TEX-22 CA-3)"
                 )
             else:
                 response.success()
@@ -389,7 +411,8 @@ class DespachoUser(_UsuarioRolBase):
         if resp.status_code == 200:
             self._pedidos_pendientes = {
                 p["id"]: [d["producto"] for d in p.get("detalles", []) if d.get("producto")]
-                for p in _extraer_lista(resp.json()) if p.get("estado") == "pendiente"
+                for p in _extraer_lista(resp.json())
+                if p.get("estado") == "pendiente"
             }
 
     def _lotes_del_producto(self, producto_id):
@@ -400,13 +423,12 @@ class DespachoUser(_UsuarioRolBase):
         razón («ya no tiene stock disponible»). Página al azar: ver
         `_pagina_al_azar`."""
         filas = _pagina_al_azar(
-            self.client, "/api/inventory/stock/", "/api/inventory/stock/ (lotes del producto)",
+            self.client,
+            "/api/inventory/stock/",
+            "/api/inventory/stock/ (lotes del producto)",
             params={"producto_id": producto_id},
         )
-        return [
-            s["lote_codigo"] for s in filas
-            if s.get("lote_codigo") and float(s.get("cantidad") or 0) > 0
-        ]
+        return [s["lote_codigo"] for s in filas if s.get("lote_codigo") and float(s.get("cantidad") or 0) > 0]
 
     @task(50)
     def flujo_despacho(self):
@@ -438,10 +460,7 @@ class DespachoUser(_UsuarioRolBase):
                 if response.status_code >= 500:
                     response.failure(f"HTTP {response.status_code}")
                 elif elapsed is not None and elapsed > UMBRAL_ESCANEO_SEGUNDOS:
-                    response.failure(
-                        f"Escaneo tardó {elapsed:.3f}s — supera el umbral de "
-                        f"{UMBRAL_ESCANEO_SEGUNDOS}s"
-                    )
+                    response.failure(f"Escaneo tardó {elapsed:.3f}s — supera el umbral de {UMBRAL_ESCANEO_SEGUNDOS}s")
                 else:
                     response.success()
 
@@ -493,11 +512,17 @@ class EjecutivoUser(_UsuarioRolBase):
 
     @task(60)
     def ver_kpis_y_resumen(self):
-        endpoint = random.choice([
-            "/api/kpi-ejecutivo/", "/api/produccion/resumen/", "/api/produccion/tendencia/",
-            "/api/inventory/alertas-stock/", "/api/inventory/stock/",
-            "/api/clientes/", "/api/sedes/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/kpi-ejecutivo/",
+                "/api/produccion/resumen/",
+                "/api/produccion/tendencia/",
+                "/api/inventory/alertas-stock/",
+                "/api/inventory/stock/",
+                "/api/clientes/",
+                "/api/sedes/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint)
 
     @task(20)
@@ -506,12 +531,19 @@ class EjecutivoUser(_UsuarioRolBase):
 
     @task(20)
     def exportar_reporte(self):
-        ruta = random.choice([
-            "gerencial/ventas", "gerencial/top-clientes", "gerencial/deudores",
-            "produccion/ordenes", "produccion/lotes", "produccion/tendencia",
-        ])
+        ruta = random.choice(
+            [
+                "gerencial/ventas",
+                "gerencial/top-clientes",
+                "gerencial/deudores",
+                "produccion/ordenes",
+                "produccion/lotes",
+                "produccion/tendencia",
+            ]
+        )
         self.client.get(
-            f"/api/reporting/{ruta}", params={"format": "xlsx"},
+            f"/api/reporting/{ruta}",
+            params={"format": "xlsx"},
             name=f"/api/reporting/{ruta} (export)",
         )
 
@@ -528,9 +560,12 @@ class EmpaquetadoUser(_UsuarioRolBase):
 
     @task
     def navegar_produccion(self):
-        endpoint = random.choice([
-            "/api/ordenes-produccion/?estado=en_proceso", "/api/maquinas/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/ordenes-produccion/?estado=en_proceso",
+                "/api/maquinas/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint.split("?")[0])
 
     @task
@@ -551,10 +586,16 @@ class JefeAreaUser(_UsuarioRolBase):
 
     @task
     def navegar_area(self):
-        endpoint = random.choice([
-            "/api/kpi-area/", "/api/maquinas/", "/api/ordenes-produccion/",
-            "/api/users/", "/api/productos/", LOTES_BLOQUE,
-        ])
+        endpoint = random.choice(
+            [
+                "/api/kpi-area/",
+                "/api/maquinas/",
+                "/api/ordenes-produccion/",
+                "/api/users/",
+                "/api/productos/",
+                LOTES_BLOQUE,
+            ]
+        )
         self.client.get(endpoint, name=LOTES_BLOQUE_NOMBRE if endpoint == LOTES_BLOQUE else endpoint)
 
 
@@ -573,9 +614,15 @@ class JefeAreaUser(_UsuarioRolBase):
 #    como fallo explícito en el CSV/UI igual que las otras filas RNF-03.
 # ---------------------------------------------------------------------------
 ENDPOINTS_PANEL_PLANTA = [
-    "/api/ordenes-produccion/", "/api/productos/", "/api/formula-colors/",
-    "/api/sedes/", "/api/maquinas/", "/api/areas/", "/api/bodegas/",
-    "/api/users/", "/api/produccion/pulso-diario/",
+    "/api/ordenes-produccion/",
+    "/api/productos/",
+    "/api/formula-colors/",
+    "/api/sedes/",
+    "/api/maquinas/",
+    "/api/areas/",
+    "/api/bodegas/",
+    "/api/users/",
+    "/api/produccion/pulso-diario/",
 ]
 
 
@@ -620,10 +667,18 @@ class JefePlantaUser(_UsuarioRolBase):
 
     @task
     def navegar_planta(self):
-        endpoint = random.choice([
-            "/api/ordenes-produccion/", "/api/productos/", "/api/formula-colors/",
-            "/api/sedes/", "/api/maquinas/", "/api/areas/", "/api/bodegas/", "/api/users/",
-        ])
+        endpoint = random.choice(
+            [
+                "/api/ordenes-produccion/",
+                "/api/productos/",
+                "/api/formula-colors/",
+                "/api/sedes/",
+                "/api/maquinas/",
+                "/api/areas/",
+                "/api/bodegas/",
+                "/api/users/",
+            ]
+        )
         self.client.get(endpoint, name=endpoint)
 
 
@@ -655,8 +710,10 @@ class OperarioUser(_UsuarioRolBase):
             self.client.get("/api/ordenes-produccion/", name="/api/ordenes-produccion/")
         else:
             # OperarioDashboard: sus últimos 10 lotes, una sola página ordenada.
-            self.client.get("/api/lotes-produccion/?ordering=-hora_final&page=1&page_size=10",
-                            name="/api/lotes-produccion/ (últimos 10)")
+            self.client.get(
+                "/api/lotes-produccion/?ordering=-hora_final&page=1&page_size=10",
+                name="/api/lotes-produccion/ (últimos 10)",
+            )
 
     @task(30)
     def registrar_lote(self):
@@ -718,7 +775,8 @@ class VendedorUser(_UsuarioRolBase):
             # vencida o sin cupo, la API rechaza el pedido (regla de negocio), y
             # la simulación de 3 años deja clientes con pagos atrasados a propósito.
             self._clientes = [
-                c["id"] for c in _extraer_lista(resp.json())
+                c["id"]
+                for c in _extraer_lista(resp.json())
                 if float(c.get("cartera_vencida") or 0) == 0
                 and float(c.get("saldo_pendiente") or 0) < float(c.get("limite_credito") or 0) * 0.9
             ]
@@ -748,16 +806,20 @@ class VendedorUser(_UsuarioRolBase):
                 "estado": "pendiente",
                 "esta_pagado": False,
                 "guia_remision": f"GR-STR-{random.randint(100000, 999999)}",
-                "detalles": [{
-                    "producto": producto["id"],
-                    "cantidad": random.randint(1, 5),
-                    # `piezas` es obligatorio desde bd78c11 (NuevaVentaDialog lo envía siempre).
-                    "piezas": random.randint(1, 24),
-                    "peso": round(random.uniform(5, 50), 2),
-                    # Regla de negocio: nunca por debajo del precio base del producto.
-                    "precio_unitario": round(float(producto.get("precio_base") or 10) * random.uniform(1.0, 1.15), 3),
-                    "incluye_iva": True,
-                }],
+                "detalles": [
+                    {
+                        "producto": producto["id"],
+                        "cantidad": random.randint(1, 5),
+                        # `piezas` es obligatorio desde bd78c11 (NuevaVentaDialog lo envía siempre).
+                        "piezas": random.randint(1, 24),
+                        "peso": round(random.uniform(5, 50), 2),
+                        # Regla de negocio: nunca por debajo del precio base del producto.
+                        "precio_unitario": round(
+                            float(producto.get("precio_base") or 10) * random.uniform(1.0, 1.15), 3
+                        ),
+                        "incluye_iva": True,
+                    }
+                ],
             },
             "/api/pedidos-venta/ (crear)",
         )

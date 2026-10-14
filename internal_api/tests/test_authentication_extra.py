@@ -3,6 +3,7 @@ Pruebas complementarias de internal_api/authentication.py — ramas que
 test_authentication.py no ejercita: token malformado, claim requerido
 ausente, generate_token, y authenticate_header.
 """
+
 from django.test import RequestFactory, TestCase
 from rest_framework.exceptions import AuthenticationFailed
 
@@ -23,7 +24,8 @@ class JWTServiceAuthenticationExtraTestCase(TestCase):
     def test_auth_dado_request_sin_token_cuando_pide_header_entonces_retorna_bearer_realm(self):
         request = self.factory.get("/")
         self.assertEqual(
-            self.auth.authenticate_header(request), 'Bearer realm="texcore-internal"',
+            self.auth.authenticate_header(request),
+            'Bearer realm="texcore-internal"',
         )
 
     def test_generate_token_dado_service_name_y_scopes_cuando_genera_entonces_decodificable(self):
@@ -31,7 +33,9 @@ class JWTServiceAuthenticationExtraTestCase(TestCase):
         from django.conf import settings
 
         token = JWTServiceAuthentication.generate_token(
-            service_name="backend-proxy", scopes=["reports:read"], expires_in=60,
+            service_name="backend-proxy",
+            scopes=["reports:read"],
+            expires_in=60,
         )
         payload = jwt.decode(token, settings.INTERNAL_JWT_PUBLIC_KEY, algorithms=["RS256"])
         self.assertEqual(payload["sub"], "backend-proxy")

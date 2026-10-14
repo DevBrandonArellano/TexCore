@@ -11,6 +11,7 @@ Formato de respuesta de error estándar para toda la API:
     }
 }
 """
+
 import logging
 
 from django.conf import settings
@@ -21,7 +22,7 @@ from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 # RFC 5424: logger bajo namespace 'gestion' para que settings.py lo capture
-logger = logging.getLogger('gestion.exceptions')
+logger = logging.getLogger("gestion.exceptions")
 
 
 def _extract_message(data) -> str:
@@ -32,10 +33,10 @@ def _extract_message(data) -> str:
         first = data[0]
         return str(first) if not isinstance(first, dict) else _extract_message(first)
     if isinstance(data, dict):
-        if 'detail' in data:
-            return str(data['detail'])
-        if 'non_field_errors' in data:
-            val = data['non_field_errors']
+        if "detail" in data:
+            return str(data["detail"])
+        if "non_field_errors" in data:
+            val = data["non_field_errors"]
             return str(val[0]) if isinstance(val, list) and val else str(val)
         first_key = next(iter(data))
         val = data[first_key]
@@ -46,7 +47,7 @@ def _extract_message(data) -> str:
 
 def _protected_message(exc: ProtectedError) -> str:
     """Mensaje del 409 por ProtectedError; específico cuando lo bloquean órdenes de producción."""
-    ordenes = [o for o in exc.protected_objects if o._meta.model_name == 'ordenproduccion']
+    ordenes = [o for o in exc.protected_objects if o._meta.model_name == "ordenproduccion"]
     if ordenes:
         return (
             f"No se puede eliminar la fórmula: tiene {len(ordenes)} órdenes de producción asociadas. "
@@ -72,7 +73,7 @@ def texcore_exception_handler(exc, context):
     if isinstance(exc, DjangoValidationError):
         # Reglas de negocio de Model.clean()/save() (p. ej. lanzar una OP sin versión
         # oficial de su fórmula): son errores del cliente, no un 500.
-        exc = DRFValidationError(exc.message_dict if hasattr(exc, 'error_dict') else exc.messages)
+        exc = DRFValidationError(exc.message_dict if hasattr(exc, "error_dict") else exc.messages)
 
     response = exception_handler(exc, context)
 
@@ -84,17 +85,17 @@ def texcore_exception_handler(exc, context):
 
     if response is None:
         # RFC 5424 Severity 3 (ERROR) — excepción no manejada por DRF
-        view = context.get('view')
-        view_name = view.__class__.__name__ if view is not None else 'unknown'
-        request = context.get('request')
+        view = context.get("view")
+        view_name = view.__class__.__name__ if view is not None else "unknown"
+        request = context.get("request")
         logger.error(
             "Excepción no manejada en vista",
             extra={
-                'sd': {
-                    'view': view_name,
-                    'method': getattr(request, 'method', '-'),
-                    'path': getattr(request, 'path', '-'),
-                    'error': type(exc).__name__,
+                "sd": {
+                    "view": view_name,
+                    "method": getattr(request, "method", "-"),
+                    "path": getattr(request, "path", "-"),
+                    "error": type(exc).__name__,
                 }
             },
             exc_info=exc,
@@ -112,7 +113,7 @@ def texcore_exception_handler(exc, context):
     # Incluir detalle de campos solo en errores de validación (400)
     if response.status_code == 400 and isinstance(response.data, dict):
         # Filtrar claves internas de DRF que no son campos reales
-        fields = {k: v for k, v in response.data.items() if k not in ('detail', 'non_field_errors')}
+        fields = {k: v for k, v in response.data.items() if k not in ("detail", "non_field_errors")}
         if fields:
             error_body["fields"] = fields
 

@@ -37,104 +37,100 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = get_env_variable('SECRET_KEY')
+SECRET_KEY = get_env_variable("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Acepta: 1, true, yes (case-insensitive). Cualquier otro valor = False.
-DEBUG = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes')
+DEBUG = os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 
 
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
     # Third-party Apps
-    'rest_framework',
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',  # JWT Blacklist (requiere migrate)
-    'corsheaders',
-    'drf_spectacular',  # Documentación OpenAPI 3.1 en /api/docs/
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  # JWT Blacklist (requiere migrate)
+    "corsheaders",
+    "drf_spectacular",  # Documentación OpenAPI 3.1 en /api/docs/
     # Local Apps (GestionConfig carga las señales de auditoría en ready())
-    'gestion.apps.GestionConfig',
-    'inventory.apps.InventoryConfig',
-    'internal_api.apps.InternalApiConfig',
+    "gestion.apps.GestionConfig",
+    "inventory.apps.InventoryConfig",
+    "internal_api.apps.InternalApiConfig",
 ]
 
 # Security & Middleware
 APPEND_SLASH = False
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # Added for CORS
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'gestion.middleware.AuditMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # Added for CORS
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "gestion.middleware.AuditMiddleware",
 ]
 
 # CORS Configuration - Strict
-CORS_ALLOWED_ORIGINS_ENV = get_env_variable('CORS_ALLOWED_ORIGINS')
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',')]
+CORS_ALLOWED_ORIGINS_ENV = get_env_variable("CORS_ALLOWED_ORIGINS")
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(",")]
 
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF Trusted Origins - Strict
-CSRF_TRUSTED_ORIGINS_ENV = get_env_variable('CSRF_TRUSTED_ORIGINS')
-CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS_ENV = get_env_variable("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(",")]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # RNF-01: las cookies de sesión y CSRF (admin de Django) solo viajan por HTTPS en
 # producción, igual que las JWT (AUTH_COOKIE_SECURE).
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
 
-ROOT_URLCONF = 'TexCore.urls'
+ROOT_URLCONF = "TexCore.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-        ],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'TexCore.wsgi.application'
+WSGI_APPLICATION = "TexCore.wsgi.application"
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': get_env_variable('DB_ENGINE'),
-        'NAME': get_env_variable('DB_NAME'),
-        'USER': get_env_variable('DB_USER'),
-        'PASSWORD': get_env_variable('DB_PASSWORD'),
-        'HOST': get_env_variable('DB_HOST'),
-        'PORT': get_env_variable('DB_PORT'),
-        'OPTIONS': {
-            'driver': get_env_variable('DB_DRIVER'),
-            'extra_params': 'Encrypt=yes;TrustServerCertificate=yes'
-        },
+    "default": {
+        "ENGINE": get_env_variable("DB_ENGINE"),
+        "NAME": get_env_variable("DB_NAME"),
+        "USER": get_env_variable("DB_USER"),
+        "PASSWORD": get_env_variable("DB_PASSWORD"),
+        "HOST": get_env_variable("DB_HOST"),
+        "PORT": get_env_variable("DB_PORT"),
+        "OPTIONS": {"driver": get_env_variable("DB_DRIVER"), "extra_params": "Encrypt=yes;TrustServerCertificate=yes"},
     }
 }
 
@@ -144,16 +140,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -161,9 +157,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -173,76 +169,70 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
 STATICFILES_DIRS = [
-    d for d in [
-        BASE_DIR / 'frontend' / 'dist',
-    ] if Path(d).exists()
+    d
+    for d in [
+        BASE_DIR / "frontend" / "dist",
+    ]
+    if Path(d).exists()
 ]
 
-STATIC_ROOT = os.environ.get('STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
+STATIC_ROOT = os.environ.get("STATIC_ROOT", str(BASE_DIR / "staticfiles"))
 
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'gestion.auth_backends.CookieJWTAuthentication',
-    ),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("gestion.auth_backends.CookieJWTAuthentication",),
     # Seguro por defecto: una vista que omita permission_classes queda cerrada,
     # no pública (DRF usa AllowAny si no se define). Ver test_permisos_por_defecto.py.
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'EXCEPTION_HANDLER': 'gestion.exceptions.texcore_exception_handler',
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 50,
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "EXCEPTION_HANDLER": "gestion.exceptions.texcore_exception_handler",
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'TexCore API',
-    'DESCRIPTION': 'Sistema Integral de Gestión Textil — API REST',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+    "TITLE": "TexCore API",
+    "DESCRIPTION": "Sistema Integral de Gestión Textil — API REST",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
     # Solo exponer docs en DEBUG — en producción requiere autenticación
-    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
 }
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': True,
-
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
     # Custom settings for cookie-based auth
-    'AUTH_COOKIE': 'access_token',
-    'AUTH_COOKIE_REFRESH': 'refresh_token',
-    'AUTH_COOKIE_DOMAIN': None,
-    'AUTH_COOKIE_SECURE': not DEBUG,  # True in production (when DEBUG=False)
-    'AUTH_COOKIE_HTTP_ONLY': True,
-    'AUTH_COOKIE_PATH': '/',
-    'AUTH_COOKIE_SAMESITE': 'Lax',
+    "AUTH_COOKIE": "access_token",
+    "AUTH_COOKIE_REFRESH": "refresh_token",
+    "AUTH_COOKIE_DOMAIN": None,
+    "AUTH_COOKIE_SECURE": not DEBUG,  # True in production (when DEBUG=False)
+    "AUTH_COOKIE_HTTP_ONLY": True,
+    "AUTH_COOKIE_PATH": "/",
+    "AUTH_COOKIE_SAMESITE": "Lax",
 }
 
 # Custom User Model
-AUTH_USER_MODEL = 'gestion.CustomUser'
+AUTH_USER_MODEL = "gestion.CustomUser"
 
 # ---------------------------------------------------------------------------
 # Logging — RFC 5424 (IETF Syslog Protocol)
@@ -253,83 +243,87 @@ AUTH_USER_MODEL = 'gestion.CustomUser'
 
 
 # Directorio de logs — se crea en arranque si no existe
-_LOGS_DIR = BASE_DIR / 'logs'
+_LOGS_DIR = BASE_DIR / "logs"
 _LOGS_DIR.mkdir(exist_ok=True, parents=True)
 
 LOGGING: dict[str, Any] = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
         # Formatter principal — RFC 5424 Syslog
-        'rfc5424': {
-            '()': _RFC5424Formatter,
-            'facility': 16,   # local0 — backend Django
-            'app_name': 'texcore-backend',
+        "rfc5424": {
+            "()": _RFC5424Formatter,
+            "facility": 16,  # local0 — backend Django
+            "app_name": "texcore-backend",
         },
         # Fallback legible para desarrollo local (DEBUG=True)
-        'verbose': {
-            'format': '{levelname} {asctime} [{name}] {message}',
-            'style': '{',
+        "verbose": {
+            "format": "{levelname} {asctime} [{name}] {message}",
+            "style": "{",
         },
     },
-    'handlers': {
+    "handlers": {
         # stdout → recogido por Docker / systemd journal en producción
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'rfc5424' if not DEBUG else 'verbose',
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "rfc5424" if not DEBUG else "verbose",
         },
         # Archivo rotante — RFC 5424 en producción, verbose en dev
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': str(_LOGS_DIR / 'backend.log'),
-            'maxBytes': 1024 * 1024 * 5,  # 5 MB por archivo
-            'backupCount': 5,
-            'formatter': 'rfc5424',
-            'encoding': 'utf-8',
+        "file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(_LOGS_DIR / "backend.log"),
+            "maxBytes": 1024 * 1024 * 5,  # 5 MB por archivo
+            "backupCount": 5,
+            "formatter": "rfc5424",
+            "encoding": "utf-8",
         },
         # SysLogHandler — solo activo si /dev/log existe (Linux / Docker)
-        **({
-            'syslog': {
-                'level': 'WARNING',
-                'class': 'logging.handlers.SysLogHandler',
-                'address': '/dev/log',
-                'facility': 'local0',
-                'formatter': 'rfc5424',
+        **(
+            {
+                "syslog": {
+                    "level": "WARNING",
+                    "class": "logging.handlers.SysLogHandler",
+                    "address": "/dev/log",
+                    "facility": "local0",
+                    "formatter": "rfc5424",
+                }
             }
-        } if Path('/dev/log').exists() else {}),
+            if Path("/dev/log").exists()
+            else {}
+        ),
     },
-    'loggers': {
+    "loggers": {
         # App de gestión — todos los niveles a archivo + consola
-        'gestion': {
-            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
+        "gestion": {
+            "handlers": ["console", "file"] + (["syslog"] if Path("/dev/log").exists() else []),
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
         },
         # App de inventario / MRP
-        'inventory': {
-            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
-            'level': 'DEBUG' if DEBUG else 'INFO',
-            'propagate': False,
+        "inventory": {
+            "handlers": ["console", "file"] + (["syslog"] if Path("/dev/log").exists() else []),
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
         },
         # Django core — solo WARNING y superior
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'WARNING',
-            'propagate': False,
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "WARNING",
+            "propagate": False,
         },
         # Errores HTTP — siempre a archivo y syslog
-        'django.request': {
-            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
-            'level': 'ERROR',
-            'propagate': False,
+        "django.request": {
+            "handlers": ["console", "file"] + (["syslog"] if Path("/dev/log").exists() else []),
+            "level": "ERROR",
+            "propagate": False,
         },
         # ORM queries — solo en modo DEBUG para evitar flood
-        'django.db.backends': {
-            'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'WARNING',
-            'propagate': False,
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "DEBUG" if DEBUG else "WARNING",
+            "propagate": False,
         },
     },
 }
@@ -352,15 +346,15 @@ INTERNAL_JWT_ACCESS_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_ACCESS_T
 INTERNAL_JWT_REFRESH_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_REFRESH_TTL_SECONDS", 86400))  # 24h
 
 # Agregar logger para internal_api al bloque de loggers existente
-LOGGING['loggers']['internal_api'] = {
-    'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
-    'level': 'DEBUG' if DEBUG else 'INFO',
-    'propagate': False,
+LOGGING["loggers"]["internal_api"] = {
+    "handlers": ["console", "file"] + (["syslog"] if Path("/dev/log").exists() else []),
+    "level": "DEBUG" if DEBUG else "INFO",
+    "propagate": False,
 }
-LOGGING['loggers']['internal_api.audit'] = {
-    'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
-    'level': 'INFO',
-    'propagate': False,
+LOGGING["loggers"]["internal_api.audit"] = {
+    "handlers": ["console", "file"] + (["syslog"] if Path("/dev/log").exists() else []),
+    "level": "INFO",
+    "propagate": False,
 }
 
 # ---------------------------------------------------------------------------
@@ -369,7 +363,7 @@ LOGGING['loggers']['internal_api.audit'] = {
 # entorno para que dev/staging no impriman etiquetas apuntando al dominio
 # de producción.
 # ---------------------------------------------------------------------------
-TRAZABILIDAD_BASE_URL = os.environ.get('TRAZABILIDAD_BASE_URL', 'https://app.texcore.com/trazabilidad')
+TRAZABILIDAD_BASE_URL = os.environ.get("TRAZABILIDAD_BASE_URL", "https://app.texcore.com/trazabilidad")
 
 # ---------------------------------------------------------------------------
 # RUC de la empresa — usado únicamente para mostrarlo en documentos
@@ -377,7 +371,7 @@ TRAZABILIDAD_BASE_URL = os.environ.get('TRAZABILIDAD_BASE_URL', 'https://app.tex
 # La facturación electrónica oficial (SRI) la maneja software externo; este
 # valor NO participa de ningún flujo de autorización electrónica.
 # ---------------------------------------------------------------------------
-EMPRESA_RUC = os.environ.get('EMPRESA_RUC', '')
+EMPRESA_RUC = os.environ.get("EMPRESA_RUC", "")
 
 # ---------------------------------------------------------------------------
 # Microservicio de impresión — usado por gestion/utils.py (ZPL/PDF de
@@ -388,21 +382,21 @@ EMPRESA_RUC = os.environ.get('EMPRESA_RUC', '')
 # llama 'printing'), y ningún docker-compose seteaba la env var, así que
 # siempre se usaba el default equivocado.
 # ---------------------------------------------------------------------------
-PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
+PRINTING_SERVICE_URL = os.environ.get("PRINTING_SERVICE_URL", "http://printing:8001")
 # Timeout en segundos para la llamada al printing_service — WeasyPrint puede
 # tardar para documentos grandes (internal_api/views/pdf_produccion_views.py).
-PRINTING_PDF_TIMEOUT = float(os.environ.get('PRINTING_PDF_TIMEOUT', '60.0'))
+PRINTING_PDF_TIMEOUT = float(os.environ.get("PRINTING_PDF_TIMEOUT", "60.0"))
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 # Exportación asíncrona de reportes (?async=true → Celery). Apagada por
 # defecto: producción no despliega Redis y, con el broker caído, .delay()
 # bloquea el worker de gunicorn 20-70 s por los reintentos de kombu y del
 # result backend. Solo se activa en entornos que sí levantan Redis
 # (infrastructure/docker/docker-compose.yml). Ver inventory/reporting_proxy.py.
-REPORTES_ASYNC_HABILITADO = os.environ.get('REPORTES_ASYNC_HABILITADO', 'false').lower() in ('1', 'true', 'yes')
+REPORTES_ASYNC_HABILITADO = os.environ.get("REPORTES_ASYNC_HABILITADO", "false").lower() in ("1", "true", "yes")

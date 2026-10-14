@@ -40,28 +40,29 @@ from gestion.utils import PrintingService
 
 from ._common import parse_int_param, parse_rango_fechas
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
 class LotesProduccionPagination(PageNumberPagination):
     """Siempre activa: el historial de lotes crece con la operación y una lista sin
     tope degradó el endpoint bajo carga. El frontend pide bloques de 4 páginas de
     30 (page_size=120) y los muestra de 30 en 30 (usePaginacionIncremental)."""
+
     page_size = 30
-    page_size_query_param = 'page_size'
+    page_size_query_param = "page_size"
     max_page_size = 120
 
 
 _FILTROS_ENTEROS = (
-    ('operario', 'operario_id'),
-    ('sede_id', 'orden_produccion__sede_id'),
-    ('orden_produccion', 'orden_produccion_id'),
+    ("operario", "operario_id"),
+    ("sede_id", "orden_produccion__sede_id"),
+    ("orden_produccion", "orden_produccion_id"),
 )
 _FILTROS_TEXTO = (
-    ('turno', 'turno__icontains'),
-    ('codigo_lote', 'codigo_lote__icontains'),
-    ('clasificacion_calidad', 'clasificacion_calidad'),
-    ('presentacion', 'presentacion__icontains'),
+    ("turno", "turno__icontains"),
+    ("codigo_lote", "codigo_lote__icontains"),
+    ("clasificacion_calidad", "clasificacion_calidad"),
+    ("presentacion", "presentacion__icontains"),
 )
 
 
@@ -77,26 +78,31 @@ def _filtrar_por_rango_de_fechas(queryset, params):
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     # Sin DELETE: un lote se rechaza (`rechazar`), que revierte su stock y lo audita.
-    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
     serializer_class = LoteProduccionSerializer
     pagination_class = LotesProduccionPagination
     filter_backends = [filters.OrderingFilter]
-    ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido', 'codigo_lote']
-    ordering = ['-hora_final']
+    ordering_fields = ["hora_final", "hora_inicio", "peso_neto_producido", "codigo_lote"]
+    ordering = ["-hora_final"]
 
-    @action(detail=False, methods=['get'], url_path='resumen-hoy')
+    @action(detail=False, methods=["get"], url_path="resumen-hoy")
     def resumen_hoy(self, request):
         """GET /lotes-produccion/resumen-hoy/ — bultos, peso total y promedio de los
         lotes terminados hoy (fecha local), con el mismo alcance que el listado."""
-        resumen = self.get_queryset().filter(hora_final__date=timezone.localdate()).aggregate(
-            bultos=Count('id'), peso_total_kg=Sum('peso_neto_producido'),
+        resumen = (
+            self.get_queryset()
+            .filter(hora_final__date=timezone.localdate())
+            .aggregate(
+                bultos=Count("id"),
+                peso_total_kg=Sum("peso_neto_producido"),
+            )
         )
-        bultos = resumen['bultos']
-        peso_total = resumen['peso_total_kg'] or Decimal('0')
-        promedio = (peso_total / bultos).quantize(Decimal('0.001')) if bultos else Decimal('0')
-        return Response({'bultos': bultos, 'peso_total_kg': peso_total, 'peso_promedio_kg': promedio})
+        bultos = resumen["bultos"]
+        peso_total = resumen["peso_total_kg"] or Decimal("0")
+        promedio = (peso_total / bultos).quantize(Decimal("0.001")) if bultos else Decimal("0")
+        return Response({"bultos": bultos, "peso_total_kg": peso_total, "peso_promedio_kg": promedio})
 
-    @action(detail=True, methods=['get'], url_path='obtener-costo')
+    @action(detail=True, methods=["get"], url_path="obtener-costo")
     def obtener_costo(self, request, pk=None):
         """GET /api/lotes-produccion/{id}/obtener-costo/ — F0-002.
 
@@ -113,16 +119,19 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = LoteProduccion.objects.select_related(
-            'orden_produccion', 'orden_produccion__producto_entrada',
-            'orden_produccion__producto_salida',
-            'orden_produccion__sede', 'maquina', 'operario'
+            "orden_produccion",
+            "orden_produccion__producto_entrada",
+            "orden_produccion__producto_salida",
+            "orden_produccion__sede",
+            "maquina",
+            "operario",
         ).all()
         # OWASP A01: también en retrieve y en las acciones de detalle (get_object → 404).
         queryset = filtrar_lotes_por_sede(queryset, user)
 
         # Security: Jefe de Área only sees lots from their area
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
+        if user.groups.filter(name="jefe_area").exists() and not user.is_superuser:
+            if hasattr(user, "area") and user.area:
                 queryset = queryset.filter(orden_produccion__area=user.area)
             else:
                 return LoteProduccion.objects.none()
@@ -137,7 +146,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # F3: buscador dedicado — fecha, turno, código de lote, máquina, calidad, presentación.
         queryset = _filtrar_por_rango_de_fechas(queryset, params)
 
-        maquina_id = parse_int_param(params.get('maquina'), 'maquina')
+        maquina_id = parse_int_param(params.get("maquina"), "maquina")
         if maquina_id:
             queryset = queryset.filter(maquina_id=maquina_id)
 
@@ -151,9 +160,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     def _validar_duenio(self, lote):
         """El operario solo edita o rechaza los lotes que registró."""
         user = self.request.user
-        grupos = set(user.groups.values_list('name', flat=True))
-        if not user.is_superuser and grupos == {'operario'} and lote.operario_id != user.id:
-            raise PermissionDenied('Solo puede modificar los lotes que registró.')
+        grupos = set(user.groups.values_list("name", flat=True))
+        if not user.is_superuser and grupos == {"operario"} and lote.operario_id != user.id:
+            raise PermissionDenied("Solo puede modificar los lotes que registró.")
 
     @transaction.atomic
     def perform_update(self, serializer):
@@ -165,34 +174,37 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         updated_lote = serializer.save()
 
         LoteStockAdjustmentService.ajustar_por_cambio_peso(
-            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, self.request.user)
+            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, self.request.user
+        )
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'resumen_hoy', 'generate_zpl', 'generate_pdf_label', 'genealogia',
-                           'etiquetas']:
+        if self.action in [
+            "list",
+            "retrieve",
+            "resumen_hoy",
+            "generate_zpl",
+            "generate_pdf_label",
+            "genealogia",
+            "etiquetas",
+        ]:
             return [IsAuthenticated()]
-        if self.action == 'reetiquetar':
+        if self.action == "reetiquetar":
             # F4: reetiquetar cambia datos del lote y anula la etiqueta previa — solo supervisor.
             return [IsAuthenticated(), IsJefeAreaOrAdmin()]
-        if self.action in ('update', 'partial_update', 'rechazar'):
+        if self.action in ("update", "partial_update", "rechazar"):
             # Editar el peso ajusta stock y rechazar borra el lote revirtiendo su stock:
             # el operario solo sobre sus lotes (ver _validar_duenio); sin empaquetado.
             return [IsAuthenticated(), IsLoteEditorRole()]
-        if self.action == 'obtener_costo':
+        if self.action == "obtener_costo":
             # F0-002 expone costos de materia prima y químicos.
             return [IsAuthenticated(), IsTrazabilidadCostosRole()]
         if self.request.user.groups.filter(
-            name__in=[
-                'jefe_area',
-                'jefe_planta',
-                'admin_sistemas',
-                'admin_sede',
-                'empaquetado',
-                'operario']).exists():
+            name__in=["jefe_area", "jefe_planta", "admin_sistemas", "admin_sede", "empaquetado", "operario"]
+        ).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def genealogia(self, request, pk=None):
         """
         Retorna la genealogía y trazabilidad inversa del lote.
@@ -203,56 +215,59 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         data = {
             "lote_codigo": lote.codigo_lote,
-            "producto": (lote.orden_produccion.producto_salida.descripcion
-                         if lote.orden_produccion and lote.orden_produccion.producto_salida else None),
+            "producto": (
+                lote.orden_produccion.producto_salida.descripcion
+                if lote.orden_produccion and lote.orden_produccion.producto_salida
+                else None
+            ),
             "peso_neto": lote.peso_neto_producido,
             "peso_merma": lote.peso_merma,
             "tipo_merma": lote.get_tipo_merma_display() if lote.tipo_merma else None,
             "calidad": lote.get_clasificacion_calidad_display(),
             "operario": lote.operario.username if lote.operario else None,
             "maquina": lote.maquina.nombre if lote.maquina else None,
-            "fechas": {
-                "inicio": lote.hora_inicio,
-                "final": lote.hora_final},
+            "fechas": {"inicio": lote.hora_inicio, "final": lote.hora_final},
             "orden_produccion": {
                 "codigo": orden.codigo if orden else None,
-                "formula_color": (
-                    orden.formula_color.nombre_color
-                    if orden and orden.formula_color else None
-                ),
+                "formula_color": (orden.formula_color.nombre_color if orden and orden.formula_color else None),
             },
-            "quimicos_consumidos": []}
+            "quimicos_consumidos": [],
+        }
 
         if orden:
             # Obtener descargas de químicos de esta OP
             from gestion.models import DescargaQuimicoOP
-            descargas = DescargaQuimicoOP.objects.filter(
-                orden_produccion=orden,
-                estado='aplicada'
-            ).select_related('producto', 'fase__proceso')
+
+            descargas = DescargaQuimicoOP.objects.filter(orden_produccion=orden, estado="aplicada").select_related(
+                "producto", "fase__proceso"
+            )
 
             # El consumo de la OP es global, proporcionamos el listado de químicos
             # consumidos para producir todo el batch.
             for d in descargas:
-                data["quimicos_consumidos"].append({
-                    "quimico": d.producto.descripcion,
-                    "cantidad_total_op_kg": d.cantidad_real_kg or d.cantidad_calculada_kg,
-                    "fase": d.fase.proceso.nombre if d.fase else 'N/A'
-                })
+                data["quimicos_consumidos"].append(
+                    {
+                        "quimico": d.producto.descripcion,
+                        "cantidad_total_op_kg": d.cantidad_real_kg or d.cantidad_calculada_kg,
+                        "fase": d.fase.proceso.nombre if d.fase else "N/A",
+                    }
+                )
 
         logger.info(
             "Genealogía de lote consultada",
-            extra={'sd': {
-                'entity': 'LoteProduccion',
-                'action': 'READ_GENEALOGY',
-                'lote_codigo': lote.codigo_lote,
-                'user': request.user.username
-            }}
+            extra={
+                "sd": {
+                    "entity": "LoteProduccion",
+                    "action": "READ_GENEALOGY",
+                    "lote_codigo": lote.codigo_lote,
+                    "user": request.user.username,
+                }
+            },
         )
 
         return Response(data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     @transaction.atomic
     def rechazar(self, request, pk=None):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
@@ -262,11 +277,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         self._validar_duenio(lote)
         orden = lote.orden_produccion
 
-        justificacion = request.data.get('justificacion', '')
+        justificacion = request.data.get("justificacion", "")
         if not justificacion:
             return Response(
-                {'success': False, 'error': {'message': 'Justificación requerida para rechazar un lote.'}},
-                status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": {"message": "Justificación requerida para rechazar un lote."}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Revertir consumo de mezcla (si aplica)
@@ -299,28 +314,30 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             clear_cascade_justification()
 
         # 4. Update order status
-        total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
-            'peso_neto_producido__sum'] or Decimal('0.00')
+        total_producido = orden.lotes.aggregate(Sum("peso_neto_producido"))["peso_neto_producido__sum"] or Decimal(
+            "0.00"
+        )
         requerido = orden.peso_neto_requerido
-        if requerido is not None and total_producido < requerido and orden.estado == 'finalizada':
-            orden.estado = 'en_proceso'
+        if requerido is not None and total_producido < requerido and orden.estado == "finalizada":
+            orden.estado = "en_proceso"
             orden.save()
 
-        return Response({"message": "Lote rechazado y movimientos revertidos correctamente."},
-                        status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Lote rechazado y movimientos revertidos correctamente."}, status=status.HTTP_200_OK
+        )
 
     @staticmethod
     def _build_zpl_payload(lote):
         """Construye el payload base para el microservicio de impresión a partir del lote."""
         orden = lote.orden_produccion
 
-        empresa = orden.sede.nombre if orden and orden.sede else 'Sede Principal'
+        empresa = orden.sede.nombre if orden and orden.sede else "Sede Principal"
 
-        if hasattr(orden, 'producto_descripcion'):
+        if hasattr(orden, "producto_descripcion"):
             producto_desc = orden.producto_descripcion
         else:
             producto = (orden.producto_salida or orden.producto_entrada) if orden else None
-            producto_desc = producto.descripcion if producto else 'N/A'
+            producto_desc = producto.descripcion if producto else "N/A"
 
         peso_neto = float(lote.peso_neto_producido)
         tara = float(lote.tara) if lote.tara else 0.0
@@ -328,7 +345,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         cantidad_metros = float(lote.cantidad_metros) if lote.cantidad_metros else None
 
         producto_op = (orden.producto_salida or orden.producto_entrada) if orden else None
-        unidad = producto_op.unidad_medida if producto_op else 'kg'
+        unidad = producto_op.unidad_medida if producto_op else "kg"
         lote_codigo = lote.codigo_lote
         qr_data = f"{settings.TRAZABILIDAD_BASE_URL}/{lote_codigo}"
 
@@ -358,20 +375,19 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         tiene ningún escapado propio. Sin esto, un valor de catálogo con '^'
         o '~' corrompe el stream que interpreta la impresora Zebra.
         """
-        return value.replace('^', '').replace('~', '') if isinstance(value, str) else value
+        return value.replace("^", "").replace("~", "") if isinstance(value, str) else value
 
     @classmethod
     def _build_zpl_fallback(cls, data, sello=None):
         """ZPL local simple, usado si el microservicio de impresión no responde."""
-        empresa = cls._sanitize_zpl_field(data['empresa'])
-        producto_desc = cls._sanitize_zpl_field(data['producto_desc'])
-        lote_codigo = cls._sanitize_zpl_field(data['lote_codigo'])
-        metros_text = f"Metros: {data['cantidad_metros']}" if data['cantidad_metros'] else ""
+        empresa = cls._sanitize_zpl_field(data["empresa"])
+        producto_desc = cls._sanitize_zpl_field(data["producto_desc"])
+        lote_codigo = cls._sanitize_zpl_field(data["lote_codigo"])
+        metros_text = f"Metros: {data['cantidad_metros']}" if data["cantidad_metros"] else ""
         sello_text = f"^FO50,320^ADN,18,10^FD{sello}^FS" if sello else ""
-        piezas_totales = data.get('piezas_totales') or 1
+        piezas_totales = data.get("piezas_totales") or 1
         pieza_text = (
-            f"^FO50,300^ADN,18,10^FDPIEZA {data.get('pieza')}/{piezas_totales}^FS"
-            if piezas_totales > 1 else ""
+            f"^FO50,300^ADN,18,10^FDPIEZA {data.get('pieza')}/{piezas_totales}^FS" if piezas_totales > 1 else ""
         )
         return f"""
 ^XA
@@ -380,8 +396,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 ^FO50,50^ADN,36,20^FD{empresa}^FS
 ^FO50,100^ADN,18,10^FD{producto_desc} (FALLBACK)^FS
 ^FO50,150^ADN,18,10^FDLote/Pieza: {lote_codigo}^FS
-^FO50,200^ADN,24,14^FDBruto: {data['peso_bruto']}kg  Tara: {data['tara']}kg^FS
-^FO50,230^ADN,36,20^FDNeto: {data['peso_neto']} {data['unidad']} {metros_text}^FS
+^FO50,200^ADN,24,14^FDBruto: {data["peso_bruto"]}kg  Tara: {data["tara"]}kg^FS
+^FO50,230^ADN,36,20^FDNeto: {data["peso_neto"]} {data["unidad"]} {metros_text}^FS
 ^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
 {sello_text}
 {pieza_text}
@@ -405,7 +421,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         Retorna (zpl, uso_fallback).
         """
-        total_piezas = data.get('piezas_totales') or 1
+        total_piezas = data.get("piezas_totales") or 1
         if total_piezas <= 1:
             zpl = PrintingService.generate_zpl_label(data)
             if zpl:
@@ -415,7 +431,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         bloques = []
         uso_fallback = False
         for pieza in range(1, total_piezas + 1):
-            payload_pieza = {**data, 'pieza': pieza}
+            payload_pieza = {**data, "pieza": pieza}
             zpl = PrintingService.generate_zpl_label(payload_pieza)
             if zpl:
                 bloques.append(zpl)
@@ -424,7 +440,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 bloques.append(cls._build_zpl_fallback(payload_pieza, sello=sello))
         return "\n".join(bloques), uso_fallback
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def generate_zpl(self, request, pk=None):
         lote = self.get_object()
         data = self._build_zpl_payload(lote)
@@ -432,12 +448,13 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         zpl, uso_fallback = self._generar_zpl_completo(data)
 
         if uso_fallback:
-            return Response({"zpl": zpl,
-                             "warning": "Servicio de impresión no disponible, usando fallback local."},
-                            status=status.HTTP_200_OK)
+            return Response(
+                {"zpl": zpl, "warning": "Servicio de impresión no disponible, usando fallback local."},
+                status=status.HTTP_200_OK,
+            )
         return Response({"zpl": zpl}, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'], url_path='generate-pdf-label')
+    @action(detail=True, methods=["get"], url_path="generate-pdf-label")
     def generate_pdf_label(self, request, pk=None):
         """
         GET /lotes-produccion/{id}/generate-pdf-label/ — F5: etiqueta en PDF,
@@ -452,11 +469,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         lote = self.get_object()
         data = self._build_zpl_payload(lote)
 
-        tipo_evento = request.query_params.get('tipo_evento')
-        if tipo_evento in ('REIMPRESION', 'REETIQUETADO'):
-            data['tipo_evento'] = tipo_evento
-            data['version'] = parse_int_param(request.query_params.get('version'), 'version') or 1
-            data['usuario'] = request.user.username
+        tipo_evento = request.query_params.get("tipo_evento")
+        if tipo_evento in ("REIMPRESION", "REETIQUETADO"):
+            data["tipo_evento"] = tipo_evento
+            data["version"] = parse_int_param(request.query_params.get("version"), "version") or 1
+            data["usuario"] = request.user.username
 
         pdf_bytes = PrintingService.generate_label_pdf(data)
         if not pdf_bytes:
@@ -469,24 +486,24 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             # este 503 de otros para monitoreo/alertas.
             return Response(
                 {
-                    'success': False,
-                    'error': {
-                        'code': 'PRINTING_SERVICE_UNAVAILABLE',
-                        'message': 'Servicio de impresión no disponible para generar PDF.',
+                    "success": False,
+                    "error": {
+                        "code": "PRINTING_SERVICE_UNAVAILABLE",
+                        "message": "Servicio de impresión no disponible para generar PDF.",
                     },
                 },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="{lote.codigo_lote}.pdf"'
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{lote.codigo_lote}.pdf"'
         return response
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def etiquetas(self, request, pk=None):
         """GET /lotes-produccion/{id}/etiquetas/ — historial de eventos de etiqueta del lote."""
         lote = self.get_object()
-        eventos = lote.etiquetas.select_related('usuario', 'anula_a').order_by('secuencia')
+        eventos = lote.etiquetas.select_related("usuario", "anula_a").order_by("secuencia")
         data = [
             {
                 "id": e.id,
@@ -505,7 +522,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         ]
         return Response(data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def reimprimir(self, request, pk=None):
         """
         POST /lotes-produccion/{id}/reimprimir/ — reimpresión idéntica gobernada.
@@ -514,65 +531,77 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         reimprime la etiqueta con los datos actuales.
         """
         lote = self.get_object()
-        motivo = request.data.get('motivo', '')
+        motivo = request.data.get("motivo", "")
         if not motivo:
             return Response(
-                {'success': False, 'error': {'message': 'Motivo requerido para reimprimir una etiqueta.'}},
-                status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": {"message": "Motivo requerido para reimprimir una etiqueta."}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         motivos_validos = dict(EventoEtiqueta.MOTIVO_CHOICES)
         if motivo not in motivos_validos:
             return Response(
-                {'success': False, 'error': {
-                    'message': f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."}},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "error": {"message": f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        detalle_motivo = request.data.get('detalle_motivo', '')
-        formato = request.data.get('formato', 'ZPL')
+        detalle_motivo = request.data.get("detalle_motivo", "")
+        formato = request.data.get("formato", "ZPL")
 
         evento = EventoEtiquetaService.registrar_reimpresion(
             lote, request.user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
         )
 
         data = self._build_zpl_payload(lote)
-        data['motivo'] = motivo
-        data['tipo_evento'] = evento.tipo_evento
-        data['version'] = evento.version
-        data['usuario'] = request.user.username
-        data['reimpreso'] = True
+        data["motivo"] = motivo
+        data["tipo_evento"] = evento.tipo_evento
+        data["version"] = evento.version
+        data["usuario"] = request.user.username
+        data["reimpreso"] = True
 
         sello = f"REIMPRESION v{evento.version}"
         zpl, _ = self._generar_zpl_completo(data, sello=sello)
 
         logger.info(
             "Reimpresión de etiqueta",
-            extra={'sd': {
-                'entity': 'EventoEtiqueta',
-                'action': 'REIMPRESION',
-                'lote_codigo': lote.codigo_lote,
-                'version': evento.version,
-                'secuencia': evento.secuencia,
-                'motivo': motivo,
-                'user': request.user.username,
-            }}
+            extra={
+                "sd": {
+                    "entity": "EventoEtiqueta",
+                    "action": "REIMPRESION",
+                    "lote_codigo": lote.codigo_lote,
+                    "version": evento.version,
+                    "secuencia": evento.secuencia,
+                    "motivo": motivo,
+                    "user": request.user.username,
+                }
+            },
         )
 
-        return Response({
-            "zpl": zpl,
-            "evento": {
-                "id": evento.id,
-                "tipo_evento": evento.tipo_evento,
-                "secuencia": evento.secuencia,
-                "version": evento.version,
+        return Response(
+            {
+                "zpl": zpl,
+                "evento": {
+                    "id": evento.id,
+                    "tipo_evento": evento.tipo_evento,
+                    "secuencia": evento.secuencia,
+                    "version": evento.version,
+                },
             },
-        }, status=status.HTTP_200_OK)
+            status=status.HTTP_200_OK,
+        )
 
     CAMBIOS_REETIQUETADO_PERMITIDOS = {
-        'peso_bruto', 'tara', 'peso_neto_producido', 'clasificacion_calidad',
-        'presentacion', 'cantidad_metros', 'unidades_empaque',
+        "peso_bruto",
+        "tara",
+        "peso_neto_producido",
+        "clasificacion_calidad",
+        "presentacion",
+        "cantidad_metros",
+        "unidades_empaque",
     }
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     @transaction.atomic
     def reetiquetar(self, request, pk=None):
         """
@@ -585,7 +614,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         """
         lote = self.get_object()
         supervisor_user = request.user
-        supervisor_roles = {'jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede'}
+        supervisor_roles = {"jefe_area", "jefe_planta", "admin_sistemas", "admin_sede"}
 
         def es_supervisor(u):
             # El RBAC del proyecto se basa en grupos de Django (CustomUser no tiene
@@ -593,106 +622,122 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             return bool(u) and (u.is_superuser or u.groups.filter(name__in=supervisor_roles).exists())
 
         if not es_supervisor(request.user):
-            sup_username = request.data.get('supervisor_username')
-            sup_password = request.data.get('supervisor_password')
+            sup_username = request.data.get("supervisor_username")
+            sup_password = request.data.get("supervisor_password")
             if not sup_username or not sup_password:
                 return Response(
-                    {'success': False, 'error': {
-                        'message': 'El reetiquetado requiere autenticación de un Jefe de Área o Supervisor.'}},
-                    status=status.HTTP_403_FORBIDDEN
+                    {
+                        "success": False,
+                        "error": {"message": "El reetiquetado requiere autenticación de un Jefe de Área o Supervisor."},
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
             authenticated_supervisor = authenticate(request, username=sup_username, password=sup_password)
             if not authenticated_supervisor:
                 return Response(
-                    {'success': False, 'error': {'message': 'Credenciales de supervisor inválidas.'}},
-                    status=status.HTTP_401_UNAUTHORIZED
+                    {"success": False, "error": {"message": "Credenciales de supervisor inválidas."}},
+                    status=status.HTTP_401_UNAUTHORIZED,
                 )
             if not es_supervisor(authenticated_supervisor):
                 return Response(
-                    {'success': False, 'error': {
-                        'message': 'El usuario ingresado no tiene rol de Jefe de Área o Supervisor.'}},
-                    status=status.HTTP_403_FORBIDDEN
+                    {
+                        "success": False,
+                        "error": {"message": "El usuario ingresado no tiene rol de Jefe de Área o Supervisor."},
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
             supervisor_user = authenticated_supervisor
 
-        motivo = request.data.get('motivo', '')
+        motivo = request.data.get("motivo", "")
         if not motivo:
             return Response(
-                {'success': False, 'error': {'message': 'Motivo requerido para reetiquetar.'}},
-                status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": {"message": "Motivo requerido para reetiquetar."}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         motivos_validos = dict(EventoEtiqueta.MOTIVO_CHOICES)
         if motivo not in motivos_validos:
             return Response(
-                {'success': False, 'error': {
-                    'message': f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."}},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "error": {"message": f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        cambios = request.data.get('cambios') or {}
+        cambios = request.data.get("cambios") or {}
         if not cambios:
             return Response(
-                {'success': False, 'error': {'message': 'Debe indicar al menos un cambio de datos.'}},
-                status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": {"message": "Debe indicar al menos un cambio de datos."}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         campos_invalidos = set(cambios.keys()) - self.CAMBIOS_REETIQUETADO_PERMITIDOS
         if campos_invalidos:
             return Response(
-                {'success': False, 'error': {
-                    'message': f"Campos no permitidos en reetiquetado: {', '.join(sorted(campos_invalidos))}"}},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "success": False,
+                    "error": {
+                        "message": f"Campos no permitidos en reetiquetado: {', '.join(sorted(campos_invalidos))}"
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        detalle_motivo = request.data.get('detalle_motivo', '')
-        formato = request.data.get('formato', 'ZPL')
+        detalle_motivo = request.data.get("detalle_motivo", "")
+        formato = request.data.get("formato", "ZPL")
 
         old_peso_neto = lote.peso_neto_producido
         serializer = self.get_serializer(lote, data=cambios, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_lote = serializer.save()
         LoteStockAdjustmentService.ajustar_por_cambio_peso(
-            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, request.user)
+            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, request.user
+        )
 
         evento = EventoEtiquetaService.registrar_reetiquetado(
             updated_lote, supervisor_user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
         )
 
         data = self._build_zpl_payload(updated_lote)
-        data['motivo'] = motivo
-        data['tipo_evento'] = evento.tipo_evento
-        data['version'] = evento.version
-        data['usuario'] = supervisor_user.username
-        data['reimpreso'] = False
+        data["motivo"] = motivo
+        data["tipo_evento"] = evento.tipo_evento
+        data["version"] = evento.version
+        data["usuario"] = supervisor_user.username
+        data["reimpreso"] = False
 
         sello = f"REETIQUETADO v{evento.version}"
         zpl, _ = self._generar_zpl_completo(data, sello=sello)
 
         logger.info(
             "Reetiquetado de lote",
-            extra={'sd': {
-                'entity': 'EventoEtiqueta',
-                'action': 'REETIQUETADO',
-                'lote_codigo': updated_lote.codigo_lote,
-                'version': evento.version,
-                'secuencia': evento.secuencia,
-                'motivo': motivo,
-                'cambios': list(cambios.keys()),
-                'user': request.user.username,
-            }}
+            extra={
+                "sd": {
+                    "entity": "EventoEtiqueta",
+                    "action": "REETIQUETADO",
+                    "lote_codigo": updated_lote.codigo_lote,
+                    "version": evento.version,
+                    "secuencia": evento.secuencia,
+                    "motivo": motivo,
+                    "cambios": list(cambios.keys()),
+                    "user": request.user.username,
+                }
+            },
         )
 
-        return Response({
-            "zpl": zpl,
-            "lote": LoteProduccionSerializer(updated_lote).data,
-            "evento": {
-                "id": evento.id,
-                "tipo_evento": evento.tipo_evento,
-                "secuencia": evento.secuencia,
-                "version": evento.version,
-                "anula_a": evento.anula_a_id,
+        return Response(
+            {
+                "zpl": zpl,
+                "lote": LoteProduccionSerializer(updated_lote).data,
+                "evento": {
+                    "id": evento.id,
+                    "tipo_evento": evento.tipo_evento,
+                    "secuencia": evento.secuencia,
+                    "version": evento.version,
+                    "anula_a": evento.anula_a_id,
+                },
             },
-        }, status=status.HTTP_200_OK)
+            status=status.HTTP_200_OK,
+        )
 
 
 class TrazabilidadPorCodigoLoteView(APIView):
@@ -706,18 +751,19 @@ class TrazabilidadPorCodigoLoteView(APIView):
     orden_produccion), así que ante una colisión entre órdenes distintas se
     resuelve con el lote más reciente por hora_final.
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request, codigo_lote):
         lote = (
             filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user)
             .filter(codigo_lote=codigo_lote)
-            .select_related('orden_produccion')
-            .order_by('-hora_final')
+            .select_related("orden_produccion")
+            .order_by("-hora_final")
             .first()
         )
         if lote is None or lote.orden_produccion_id is None:
-            return Response({'detail': 'Lote no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Lote no encontrado."}, status=status.HTTP_404_NOT_FOUND)
         return Response(TrazabilidadService.construir(lote.orden_produccion))
 
 
@@ -725,6 +771,7 @@ class RegistrarLoteProduccionView(APIView):
     """
     API View to register a production lot and handle all related inventory movements.
     """
+
     permission_classes = [IsRegistroLoteRole]
 
     def post(self, request, orden_id, *args, **kwargs):
@@ -733,75 +780,72 @@ class RegistrarLoteProduccionView(APIView):
         orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), user), id=orden_id)
 
         # Jefe de Área: solo su área. Operario: su área o la orden que tiene asignada.
-        if (user.groups.filter(name__in=['jefe_area', 'operario']).exists()
-                and not ve_todas_las_sedes(user)):
+        if user.groups.filter(name__in=["jefe_area", "operario"]).exists() and not ve_todas_las_sedes(user):
             es_de_su_area = bool(user.area_id) and user.area_id == orden.area_id
-            es_su_orden = (orden.operario_asignado_id == user.id
-                           and user.groups.filter(name='operario').exists())
+            es_su_orden = orden.operario_asignado_id == user.id and user.groups.filter(name="operario").exists()
             if not (es_de_su_area or es_su_orden):
-                return Response({"detail": "No tienes permiso para registrar lotes en esta área."},
-                                status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"detail": "No tienes permiso para registrar lotes en esta área."}, status=status.HTTP_403_FORBIDDEN
+                )
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
             logger.warning(
                 "Fallo al validar lote de producción",
-                extra={
-                    "sd": {
-                        "entity": "LoteProduccion",
-                        "field": "serializer",
-                        "reason": str(
-                            serializer.errors)}})
+                extra={"sd": {"entity": "LoteProduccion", "field": "serializer", "reason": str(serializer.errors)}},
+            )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         lote_data = serializer.validated_data
-        completar_orden = lote_data.pop('completar_orden', False)
+        completar_orden = lote_data.pop("completar_orden", False)
 
         # RegistroLoteService toma las bodegas de la máquina: una máquina de otra
         # sede movería stock ajeno. El operario acreditado también es de la sede.
-        maquina = lote_data.get('maquina')
+        maquina = lote_data.get("maquina")
         if maquina is not None and not (maquina.area_id and maquina.area.sede_id == orden.sede_id):
-            return Response({'maquina': ['La máquina no pertenece a la sede de la orden.']},
-                            status=status.HTTP_400_BAD_REQUEST)
-        operario_id = lote_data.get('operario')
+            return Response(
+                {"maquina": ["La máquina no pertenece a la sede de la orden."]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        operario_id = lote_data.get("operario")
         if operario_id and not CustomUser.objects.filter(pk=operario_id, sede_id=orden.sede_id).exists():
-            return Response({'operario': ['El operario no pertenece a la sede de la orden.']},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"operario": ["El operario no pertenece a la sede de la orden."]}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             lote = RegistroLoteService.registrar_lote(
-                orden=orden,
-                lote_data=lote_data,
-                user=user,
-                completar_orden=completar_orden
+                orden=orden, lote_data=lote_data, user=user, completar_orden=completar_orden
             )
             return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
             logger.warning(
-                'Validation error registering lote for orden %s: %s',
+                "Validation error registering lote for orden %s: %s",
                 orden.id,
                 e.detail,
             )
-            return Response({"detail": str(e.detail) if isinstance(e.detail, (list, dict))
-                            else e.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": str(e.detail) if isinstance(e.detail, (list, dict)) else e.detail},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except DjangoValidationError as e:
-            msg = e.messages[0] if hasattr(e, 'messages') and e.messages else str(e)
+            msg = e.messages[0] if hasattr(e, "messages") and e.messages else str(e)
             logger.warning(
-                'Django validation error registering lote for orden %s: %s',
+                "Django validation error registering lote for orden %s: %s",
                 orden.id,
                 msg,
             )
             return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
-            logger.exception("IntegrityError registering lote for orden %s: %s",
-                orden.id,
-                e)
-            return Response({"detail": "Código de lote duplicado. Intenta nuevamente."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("IntegrityError registering lote for orden %s: %s", orden.id, e)
+            return Response(
+                {"detail": "Código de lote duplicado. Intenta nuevamente."}, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             logger.exception(
-                'Unexpected error registering lote: %s',
+                "Unexpected error registering lote: %s",
                 e,
             )
-            return Response({"detail": "Error al registrar el lote. Contacta al administrador."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "Error al registrar el lote. Contacta al administrador."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

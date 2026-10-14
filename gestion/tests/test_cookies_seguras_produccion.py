@@ -11,6 +11,7 @@ settings en un proceso aparte con el ``DEBUG`` deseado.
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): producción (``DEBUG=0``) / desarrollo (``DEBUG=1``).
 """
+
 import json
 import os
 import subprocess
@@ -32,7 +33,11 @@ def _cookies_secure(debug: str) -> dict:
     entorno.pop("DJANGO_SETTINGS_MODULE", None)
     salida = subprocess.run(  # noqa: S603 — intérprete y argumentos propios, sin entrada externa
         [sys.executable, "-c", _LEER_SETTINGS],
-        cwd=settings.BASE_DIR, env=entorno, capture_output=True, text=True, check=False,
+        cwd=settings.BASE_DIR,
+        env=entorno,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if salida.returncode:
         raise AssertionError(salida.stderr[-2000:])

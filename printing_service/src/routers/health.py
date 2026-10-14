@@ -1,4 +1,5 @@
 """Health check del printing_service."""
+
 import pathlib
 
 from fastapi import APIRouter, HTTPException

@@ -3,6 +3,7 @@ Tests de integración del endpoint /validate y /health.
 Usa app.dependency_overrides para inyectar servicios mock — sin sys.modules hacks.
 Aplica ISTQB: EP (clases válida/inválida) + BVA (strings vacíos/espacios).
 """
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -45,6 +46,7 @@ def _mock_service(response: ValidateResponse) -> MagicMock:
 # Fixtures: cada uno instala/limpia su dependency_override
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def client_lote_valido():
     mock_svc = _mock_service(ValidateResponse(valid=True, lote=_lote_info()))
@@ -63,9 +65,7 @@ def client_lote_no_encontrado():
 
 @pytest.fixture
 def client_sin_stock():
-    mock_svc = _mock_service(
-        ValidateResponse(valid=False, reason="Lote existe pero no tiene stock disponible (0 kg)")
-    )
+    mock_svc = _mock_service(ValidateResponse(valid=False, reason="Lote existe pero no tiene stock disponible (0 kg)"))
     app.dependency_overrides[get_validation_service] = lambda: mock_svc
     yield TestClient(app), mock_svc
     app.dependency_overrides.clear()
@@ -75,8 +75,8 @@ def client_sin_stock():
 # Tests EP Clase Válida: lote con stock
 # ---------------------------------------------------------------------------
 
-class TestValidateEndpoint_LoteValido:
 
+class TestValidateEndpoint_LoteValido:
     def test_validate_dado_lote_con_stock_cuando_post_entonces_200_y_valid_true(self, client_lote_valido):
         tc, _ = client_lote_valido
         response = tc.post("/validate", json={"code": "LOTE-00001"})
@@ -104,8 +104,8 @@ class TestValidateEndpoint_LoteValido:
 # Tests EP Clase Inválida: lote no encontrado
 # ---------------------------------------------------------------------------
 
-class TestValidateEndpoint_LoteNoEncontrado:
 
+class TestValidateEndpoint_LoteNoEncontrado:
     def test_validate_dado_codigo_inexistente_cuando_post_entonces_200_y_valid_false(self, client_lote_no_encontrado):
         tc, _ = client_lote_no_encontrado
         data = tc.post("/validate", json={"code": "LOTE-FAKE"}).json()
@@ -122,8 +122,8 @@ class TestValidateEndpoint_LoteNoEncontrado:
 # Tests EP: lote sin stock
 # ---------------------------------------------------------------------------
 
-class TestValidateEndpoint_SinStock:
 
+class TestValidateEndpoint_SinStock:
     def test_validate_dado_lote_sin_stock_cuando_post_entonces_200_y_valid_false(self, client_sin_stock):
         tc, _ = client_sin_stock
         data = tc.post("/validate", json={"code": "LOTE-SIN-STOCK"}).json()
@@ -135,8 +135,8 @@ class TestValidateEndpoint_SinStock:
 # Tests BVA: validación Pydantic (sin override, Pydantic actúa antes del servicio)
 # ---------------------------------------------------------------------------
 
-class TestValidateEndpoint_ValidacionPydantic:
 
+class TestValidateEndpoint_ValidacionPydantic:
     def test_validate_dado_payload_sin_code_cuando_post_entonces_422(self):
         response = TestClient(app).post("/validate", json={})
         assert response.status_code == 422
@@ -160,8 +160,8 @@ class TestValidateEndpoint_ValidacionPydantic:
 # worker sin bloquear el loop — el patrón oficial de FastAPI para esto.
 # ---------------------------------------------------------------------------
 
-class TestValidateRouter_NoBloqueaEventLoop:
 
+class TestValidateRouter_NoBloqueaEventLoop:
     def test_validate_lote_dado_request_cuando_procesa_entonces_delega_a_threadpool(self):
         mock_svc = MagicMock()
         mock_svc.validate.return_value = ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
@@ -183,11 +183,12 @@ class TestValidateRouter_NoBloqueaEventLoop:
 # Tests del endpoint /health
 # ---------------------------------------------------------------------------
 
-class TestHealthEndpoint:
 
+class TestHealthEndpoint:
     def test_health_dado_django_api_accesible_cuando_get_entonces_200(self):
         from unittest.mock import MagicMock as MM
         from unittest.mock import patch
+
         mock_resp = MM()
         mock_resp.status_code = 200
         with patch("src.routers.health._health_client") as mock_client:

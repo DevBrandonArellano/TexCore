@@ -16,7 +16,7 @@ from gestion.services_formula import calcular_dosificacion_de_orden
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
-logger = logging.getLogger('gestion.services.descarga_quimicos')
+logger = logging.getLogger("gestion.services.descarga_quimicos")
 
 
 class DescargaQuimicosService:
@@ -52,7 +52,7 @@ class DescargaQuimicosService:
             resultado = calcular_dosificacion_de_orden(orden)
         except Exception as e:
             logger.exception(
-                'Error calculando dosificación para OP %s: %s',
+                "Error calculando dosificación para OP %s: %s",
                 orden.codigo,
                 str(e),
             )
@@ -67,11 +67,11 @@ class DescargaQuimicosService:
                     StockBodega,
                     bodega=orden.bodega_quimicos,
                     producto=insumo.producto_id,  # Se pasa el ID al campo ForeignKey
-                    lote=None
+                    lote=None,
                 )
 
                 # Descuento del stock (3 decimales — precisión estándar del sistema, P1-008)
-                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal('0.001'))
+                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal("0.001"))
 
                 # P0-006: validar disponibilidad ANTES de descontar — el stock
                 # jamás debe quedar negativo. transaction.atomic revierte los
@@ -93,27 +93,27 @@ class DescargaQuimicosService:
                 # tránsito (el protocolo 3-fase aplica a TRANSFERENCIAS vía
                 # TransicionBodegaService).
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='CONSUMO',
+                    tipo_movimiento="CONSUMO",
                     producto_id=insumo.producto_id,
                     bodega_origen=orden.bodega_quimicos,
                     bodega_destino=None,
                     cantidad=cantidad_descontar,
                     usuario=usuario,
-                    documento_ref=f'OP-{orden.codigo}',
-                    estado_movimiento='completado',
-                    saldo_resultante=stock.cantidad
+                    documento_ref=f"OP-{orden.codigo}",
+                    estado_movimiento="completado",
+                    saldo_resultante=stock.cantidad,
                 )
 
                 # Registro de descarga química (auditoría)
                 registro = DescargaQuimicoOP.objects.create(
                     orden_produccion=orden,
                     producto_id=insumo.producto_id,
-                    fase=insumo.fase_id if hasattr(insumo, 'fase_id') else None,
+                    fase=insumo.fase_id if hasattr(insumo, "fase_id") else None,
                     bodega=orden.bodega_quimicos,
                     tipo_calculo=insumo.tipo_calculo,
                     cantidad_calculada_kg=insumo.cantidad_kg,
-                    estado='aplicada',
-                    descargado_por=usuario
+                    estado="aplicada",
+                    descargado_por=usuario,
                 )
                 registros.append(registro)
 
@@ -122,7 +122,7 @@ class DescargaQuimicosService:
                     bodega=orden.bodega_quimicos,
                     producto_descripcion=insumo.producto_descripcion,
                     stock_minimo=insumo.stock_minimo,
-                    saldo=stock.cantidad
+                    saldo=stock.cantidad,
                 )
 
             except ValidationError:
@@ -130,7 +130,7 @@ class DescargaQuimicosService:
                 raise
             except Exception as e:
                 logger.exception(
-                    'Error descargando %s en OP %s: %s',
+                    "Error descargando %s en OP %s: %s",
                     insumo.producto_descripcion,
                     orden.codigo,
                     str(e),
@@ -139,10 +139,10 @@ class DescargaQuimicosService:
 
         # Marcar orden como con inventario descontado
         orden.inventario_descontado = True
-        orden.save(update_fields=['inventario_descontado'])
+        orden.save(update_fields=["inventario_descontado"])
 
         logger.info(
-            'Descarga exitosa OP-%s: %s químicos descargados',
+            "Descarga exitosa OP-%s: %s químicos descargados",
             orden.codigo,
             len(registros),
         )
@@ -163,44 +163,41 @@ class DescargaQuimicosService:
         if not justificacion:
             raise ValidationError("Justificación obligatoria para revertir descarga de químicos.")
 
-        descargas = orden.descargas_quimicos.filter(estado='aplicada').select_related('producto', 'bodega')
+        descargas = orden.descargas_quimicos.filter(estado="aplicada").select_related("producto", "bodega")
 
         for descarga in descargas:
             try:
                 # Recuperar stock de forma thread-safe
                 stock, _ = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=descarga.bodega,
-                    producto=descarga.producto_id,
-                    lote=None
+                    StockBodega, bodega=descarga.bodega, producto=descarga.producto_id, lote=None
                 )
 
                 # Devolución al stock (3 decimales — precisión estándar del sistema, P1-008)
-                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.001'))
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal("0.001"))
                 stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = justificacion
                 stock.save()
 
                 # Registro de movimiento de devolución
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='DEVOLUCION',
+                    tipo_movimiento="DEVOLUCION",
                     producto_id=descarga.producto_id,
                     bodega_origen=None,
                     bodega_destino=descarga.bodega,
                     cantidad=cantidad_revertir,
                     usuario=usuario,
-                    documento_ref=f'REVERT-OP-{orden.codigo}',
-                    saldo_resultante=stock.cantidad
+                    documento_ref=f"REVERT-OP-{orden.codigo}",
+                    saldo_resultante=stock.cantidad,
                 )
 
                 # Marcar descarga como revertida
-                descarga.estado = 'revertida'
+                descarga.estado = "revertida"
                 descarga.justificacion = justificacion
-                descarga.save(update_fields=['estado', 'justificacion'])
+                descarga.save(update_fields=["estado", "justificacion"])
 
             except Exception as e:
                 logger.exception(
-                    'Error revirtiendo descarga %s de OP %s: %s',
+                    "Error revirtiendo descarga %s de OP %s: %s",
                     descarga.id,
                     orden.codigo,
                     str(e),
@@ -209,10 +206,10 @@ class DescargaQuimicosService:
 
         # Marcar orden como sin inventario descontado
         orden.inventario_descontado = False
-        orden.save(update_fields=['inventario_descontado'])
+        orden.save(update_fields=["inventario_descontado"])
 
         logger.info(
-            'Reversión exitosa OP-%s: %s químicos revertidos',
+            "Reversión exitosa OP-%s: %s químicos revertidos",
             orden.codigo,
             descargas.count(),
         )
@@ -239,7 +236,7 @@ class DescargaQuimicosService:
         DescargaQuimicosService.descargar_para_op(orden, usuario)
 
         logger.info(
-            'Ajuste exitoso OP-%s: reversión + nueva descarga',
+            "Ajuste exitoso OP-%s: reversión + nueva descarga",
             orden.codigo,
         )
 

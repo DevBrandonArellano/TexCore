@@ -107,39 +107,45 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         WHEN: Se registra una operación con 100 kg consumo, 95 kg salida y 5 kg merma
         THEN: Descuenta stock de origen, incrementa stock de destino, crea movimientos y arista DAG
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-            'costo_unitario': Decimal("2.500"),
-        }]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("95.000"),
-            'codigo_lote': "LOT-HIL-001",
-            'clasificacion_calidad': "primera",
-            'peso_bruto': Decimal("96.000"),
-            'tara': Decimal("1.000"),
-            'unidades_empaque': 15,
-        }]
-        mermas = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-            'es_subproducto_vendible': False,
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+                "costo_unitario": Decimal("2.500"),
+            }
+        ]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("95.000"),
+                "codigo_lote": "LOT-HIL-001",
+                "clasificacion_calidad": "primera",
+                "peso_bruto": Decimal("96.000"),
+                "tara": Decimal("1.000"),
+                "unidades_empaque": 15,
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+                "es_subproducto_vendible": False,
+            }
+        ]
 
         operacion = EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
             user=self.operario,
         )
 
-        self.assertEqual(operacion.estado, 'completada')
+        self.assertEqual(operacion.estado, "completada")
         self.assertEqual(operacion.numero_secuencia, 1)
 
         # Verificar saldo origen (500 - 100 = 400)
@@ -155,16 +161,16 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         self.assertEqual(stock_dest.cantidad, Decimal("95.000"))
 
         # Verificar movimientos Kardex
-        mov_consumo = MovimientoInventario.objects.filter(tipo_movimiento='CONSUMO').first()
+        mov_consumo = MovimientoInventario.objects.filter(tipo_movimiento="CONSUMO").first()
         self.assertIsNotNone(mov_consumo)
         self.assertEqual(mov_consumo.cantidad, Decimal("100.000"))
         self.assertEqual(mov_consumo.saldo_resultante, Decimal("400.000"))
 
-        mov_prod = MovimientoInventario.objects.filter(tipo_movimiento='PRODUCCION').first()
+        mov_prod = MovimientoInventario.objects.filter(tipo_movimiento="PRODUCCION").first()
         self.assertIsNotNone(mov_prod)
         self.assertEqual(mov_prod.cantidad, Decimal("95.000"))
 
-        mov_merma = MovimientoInventario.objects.filter(tipo_movimiento='MERMA').first()
+        mov_merma = MovimientoInventario.objects.filter(tipo_movimiento="MERMA").first()
         self.assertIsNotNone(mov_merma)
         self.assertEqual(mov_merma.cantidad, Decimal("5.000"))
 
@@ -182,27 +188,33 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         WHEN: Salida + Merma suman 85 kg (desbalance de 15 kg > tolerancia 0.050 kg)
         THEN: Se lanza ValidationError y el stock queda intacto
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("80.000"),
-            'codigo_lote': "LOT-DESBAL-01",
-        }]
-        mermas = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("80.000"),
+                "codigo_lote": "LOT-DESBAL-01",
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         with self.assertRaises(ValidationError) as ctx:
             EjecucionProduccionService.registrar_operacion(
                 corrida=self.corrida,
-                operacion_data={'maquina': self.maquina, 'operario': self.operario},
+                operacion_data={"maquina": self.maquina, "operario": self.operario},
                 consumos_data=consumos,
                 salidas_data=salidas,
                 mermas_data=mermas,
@@ -220,23 +232,27 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         WHEN: Se intenta consumir 600 kg
         THEN: Lanza ValidationError indicando stock insuficiente
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("600.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("600.000"),
-            'codigo_lote': "LOT-FAIL-01",
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("600.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("600.000"),
+                "codigo_lote": "LOT-FAIL-01",
+            }
+        ]
 
         with self.assertRaises(ValidationError) as ctx:
             EjecucionProduccionService.registrar_operacion(
                 corrida=self.corrida,
-                operacion_data={'maquina': self.maquina, 'operario': self.operario},
+                operacion_data={"maquina": self.maquina, "operario": self.operario},
                 consumos_data=consumos,
                 salidas_data=salidas,
                 user=self.operario,
@@ -250,29 +266,35 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         WHEN: Se registra la operación con es_subproducto_vendible=True
         THEN: Ingresa stock de subproducto en Bodega Desperdicios con MovimientoInventario PRODUCCION
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("85.000"),
-            'codigo_lote': "LOT-HIL-SUB-01",
-        }]
-        mermas = [{
-            'peso_merma': Decimal("15.000"),
-            'tipo_merma': "maquina",
-            'es_subproducto_vendible': True,
-            'producto_subproducto': self.producto_borra,
-            'bodega_subproducto': self.bodega_subproducto,
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("85.000"),
+                "codigo_lote": "LOT-HIL-SUB-01",
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("15.000"),
+                "tipo_merma": "maquina",
+                "es_subproducto_vendible": True,
+                "producto_subproducto": self.producto_borra,
+                "bodega_subproducto": self.bodega_subproducto,
+            }
+        ]
 
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
@@ -288,7 +310,7 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         mov_sub = MovimientoInventario.objects.filter(
             producto=self.producto_borra,
             bodega_destino=self.bodega_subproducto,
-            tipo_movimiento='PRODUCCION',
+            tipo_movimiento="PRODUCCION",
         ).first()
         self.assertIsNotNone(mov_sub)
         self.assertEqual(mov_sub.cantidad, Decimal("15.000"))
@@ -318,32 +340,36 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
 
         consumos = [
             {
-                'producto': self.producto_fibra,
-                'bodega_origen': self.bodega_origen,
-                'cantidad_consumida': Decimal("60.000"),
-                'lote_origen': self.lote_entrada,
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("60.000"),
+                "lote_origen": self.lote_entrada,
             },
             {
-                'producto': self.producto_fibra,
-                'bodega_origen': self.bodega_origen,
-                'cantidad_consumida': Decimal("40.000"),
-                'lote_origen': lote_b,
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("40.000"),
+                "lote_origen": lote_b,
             },
         ]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("98.000"),
-            'codigo_lote': "LOT-HIL-MEZCLA-01",
-        }]
-        mermas = [{
-            'peso_merma': Decimal("2.000"),
-            'tipo_merma': "maquina",
-        }]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("98.000"),
+                "codigo_lote": "LOT-HIL-MEZCLA-01",
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("2.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
@@ -365,36 +391,40 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         WHEN: Se divide en Lote C1 (50 kg primera) y Lote C2 (45 kg segunda) + 5 kg merma
         THEN: El lote padre queda conectado a ambos lotes hijos en GenealogiaLote proporcionalmente
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
         salidas = [
             {
-                'producto': self.producto_hilo,
-                'bodega_destino': self.bodega_destino,
-                'cantidad_neta': Decimal("50.000"),
-                'codigo_lote': "LOT-SPLIT-C1",
-                'clasificacion_calidad': "primera",
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("50.000"),
+                "codigo_lote": "LOT-SPLIT-C1",
+                "clasificacion_calidad": "primera",
             },
             {
-                'producto': self.producto_hilo,
-                'bodega_destino': self.bodega_destino,
-                'cantidad_neta': Decimal("45.000"),
-                'codigo_lote': "LOT-SPLIT-C2",
-                'clasificacion_calidad': "segunda",
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("45.000"),
+                "codigo_lote": "LOT-SPLIT-C2",
+                "clasificacion_calidad": "segunda",
             },
         ]
-        mermas = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-        }]
+        mermas = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
@@ -413,26 +443,32 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         THEN: Restaura los 100 kg a bodega de origen, descuenta los 95 kg de destino, emite contrasientos
               y marca 'revertida'
         """
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("95.000"),
-            'codigo_lote': "LOT-REV-01",
-        }]
-        mermas = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("95.000"),
+                "codigo_lote": "LOT-REV-01",
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         operacion = EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
@@ -446,7 +482,7 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
             justificacion="Error de calibración en celda de pesaje",
         )
 
-        self.assertEqual(op_revertida.estado, 'revertida')
+        self.assertEqual(op_revertida.estado, "revertida")
         self.assertEqual(op_revertida.motivo_reversion, "Error de calibración en celda de pesaje")
 
         # Saldos restaurados
@@ -461,11 +497,11 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         self.assertEqual(stock_dest.cantidad, Decimal("0.000"))
 
         # Contrasientos Kardex
-        mov_dev = MovimientoInventario.objects.filter(tipo_movimiento='DEVOLUCION').first()
+        mov_dev = MovimientoInventario.objects.filter(tipo_movimiento="DEVOLUCION").first()
         self.assertIsNotNone(mov_dev)
         self.assertEqual(mov_dev.cantidad, Decimal("100.000"))
 
-        mov_ajuste = MovimientoInventario.objects.filter(tipo_movimiento='AJUSTE').first()
+        mov_ajuste = MovimientoInventario.objects.filter(tipo_movimiento="AJUSTE").first()
         self.assertIsNotNone(mov_ajuste)
         self.assertEqual(mov_ajuste.cantidad, Decimal("95.000"))
 
@@ -479,26 +515,32 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         THEN: Lanza ValidationError impidiendo romper la integridad histórica del grafo
         """
         # Op 1: Fibra -> Hilo (LOT-X)
-        consumos_1 = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas_1 = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("95.000"),
-            'codigo_lote': "LOT-X-INTERMEDIO",
-        }]
-        mermas_1 = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos_1 = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas_1 = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("95.000"),
+                "codigo_lote": "LOT-X-INTERMEDIO",
+            }
+        ]
+        mermas_1 = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         op_1 = EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos_1,
             salidas_data=salidas_1,
             mermas_data=mermas_1,
@@ -507,26 +549,32 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         lote_x = LoteProduccion.objects.get(codigo_lote="LOT-X-INTERMEDIO")
 
         # Op 2: Hilo (LOT-X) -> Hilo Retorcido (LOT-Y)
-        consumos_2 = [{
-            'producto': self.producto_hilo,
-            'bodega_origen': self.bodega_destino,
-            'cantidad_consumida': Decimal("95.000"),
-            'lote_origen': lote_x,
-        }]
-        salidas_2 = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("93.000"),
-            'codigo_lote': "LOT-Y-FINAL",
-        }]
-        mermas_2 = [{
-            'peso_merma': Decimal("2.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos_2 = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_origen": self.bodega_destino,
+                "cantidad_consumida": Decimal("95.000"),
+                "lote_origen": lote_x,
+            }
+        ]
+        salidas_2 = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("93.000"),
+                "codigo_lote": "LOT-Y-FINAL",
+            }
+        ]
+        mermas_2 = [
+            {
+                "peso_merma": Decimal("2.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
 
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos_2,
             salidas_data=salidas_2,
             mermas_data=mermas_2,
@@ -565,25 +613,31 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         self.lote_entrada.save()
 
         # Op 1: Fibra -> Hilo
-        consumos_1 = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas_1 = [{
-            'producto': self.producto_hilo,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("95.000"),
-            'codigo_lote': "LOT-HIL-TRACE",
-        }]
-        mermas_1 = [{
-            'peso_merma': Decimal("5.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos_1 = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas_1 = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("95.000"),
+                "codigo_lote": "LOT-HIL-TRACE",
+            }
+        ]
+        mermas_1 = [
+            {
+                "peso_merma": Decimal("5.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos_1,
             salidas_data=salidas_1,
             mermas_data=mermas_1,
@@ -593,25 +647,31 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
 
         # Op 2: Hilo -> Tela
         producto_tela = ProductoFactory(codigo="TEL-PIQUE", tipo="tela", sede=self.sede)
-        consumos_2 = [{
-            'producto': self.producto_hilo,
-            'bodega_origen': self.bodega_destino,
-            'cantidad_consumida': Decimal("95.000"),
-            'lote_origen': lote_hilo,
-        }]
-        salidas_2 = [{
-            'producto': producto_tela,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("92.000"),
-            'codigo_lote': "LOT-TELA-TRACE",
-        }]
-        mermas_2 = [{
-            'peso_merma': Decimal("3.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos_2 = [
+            {
+                "producto": self.producto_hilo,
+                "bodega_origen": self.bodega_destino,
+                "cantidad_consumida": Decimal("95.000"),
+                "lote_origen": lote_hilo,
+            }
+        ]
+        salidas_2 = [
+            {
+                "producto": producto_tela,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("92.000"),
+                "codigo_lote": "LOT-TELA-TRACE",
+            }
+        ]
+        mermas_2 = [
+            {
+                "peso_merma": Decimal("3.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos_2,
             salidas_data=salidas_2,
             mermas_data=mermas_2,
@@ -622,17 +682,17 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         # Consulta Trace-Back
         trazabilidad = GenealogiaService.obtener_trazabilidad_hacia_atras(lote_tela)
 
-        self.assertEqual(trazabilidad['nodo_raiz']['codigo_lote'], "LOT-TELA-TRACE")
-        self.assertEqual(trazabilidad['total_ancestros'], 2)
-        codigos_ancestros = [a['codigo_lote'] for a in trazabilidad['ancestros']]
+        self.assertEqual(trazabilidad["nodo_raiz"]["codigo_lote"], "LOT-TELA-TRACE")
+        self.assertEqual(trazabilidad["total_ancestros"], 2)
+        codigos_ancestros = [a["codigo_lote"] for a in trazabilidad["ancestros"]]
         self.assertIn("LOT-HIL-TRACE", codigos_ancestros)
         self.assertIn("LOT-FIBRA-ORIGEN-01", codigos_ancestros)
 
-        self.assertEqual(trazabilidad['total_materias_primas'], 1)
-        mp_info = trazabilidad['materias_primas_origen'][0]
-        self.assertEqual(mp_info['lote_proveedor'], "PROV-FIB-999")
-        self.assertEqual(mp_info['proveedor_nombre'], "Fibras del Pacífico")
-        self.assertEqual(mp_info['numero_documento_entrada'], "GUIA-00123")
+        self.assertEqual(trazabilidad["total_materias_primas"], 1)
+        mp_info = trazabilidad["materias_primas_origen"][0]
+        self.assertEqual(mp_info["lote_proveedor"], "PROV-FIB-999")
+        self.assertEqual(mp_info["proveedor_nombre"], "Fibras del Pacífico")
+        self.assertEqual(mp_info["numero_documento_entrada"], "GUIA-00123")
 
     def test_genealogia_dado_lote_despachado_cuando_consulta_adelante_entonces_retorna_descendientes_y_clientes(self):
         """
@@ -642,25 +702,31 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         """
         # Producción de Tela desde Hilo
         producto_tela = ProductoFactory(codigo="TEL-JERSEY", tipo="tela", sede=self.sede)
-        consumos = [{
-            'producto': self.producto_fibra,
-            'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal("100.000"),
-            'lote_origen': self.lote_entrada,
-        }]
-        salidas = [{
-            'producto': producto_tela,
-            'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("96.000"),
-            'codigo_lote': "LOT-TEL-DESPACHO-01",
-        }]
-        mermas = [{
-            'peso_merma': Decimal("4.000"),
-            'tipo_merma': "maquina",
-        }]
+        consumos = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal("100.000"),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
+        salidas = [
+            {
+                "producto": producto_tela,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("96.000"),
+                "codigo_lote": "LOT-TEL-DESPACHO-01",
+            }
+        ]
+        mermas = [
+            {
+                "peso_merma": Decimal("4.000"),
+                "tipo_merma": "maquina",
+            }
+        ]
         EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
-            operacion_data={'maquina': self.maquina, 'operario': self.operario},
+            operacion_data={"maquina": self.maquina, "operario": self.operario},
             consumos_data=consumos,
             salidas_data=salidas,
             mermas_data=mermas,
@@ -670,13 +736,15 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
 
         # Simular Despacho a Cliente
         cliente = ClienteFactory(
-            sede=self.sede, nombre_razon_social="Confecciones Andinas SA", ruc_cedula="1799999999001")
+            sede=self.sede, nombre_razon_social="Confecciones Andinas SA", ruc_cedula="1799999999001"
+        )
         from gestion.models import PedidoVenta
+
         pedido = PedidoVenta.objects.create(
             cliente=cliente,
             sede=self.sede,
             guia_remision="GUIA-PED-001",
-            estado='despachado',
+            estado="despachado",
         )
         historial = HistorialDespacho.objects.create(
             usuario=self.supervisor,
@@ -698,14 +766,14 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         # Consulta Trace-Forward Recall desde el lote original de fibra
         recall = GenealogiaService.obtener_trazabilidad_hacia_adelante(self.lote_entrada)
 
-        self.assertEqual(recall['total_descendientes'], 1)
-        self.assertEqual(recall['descendientes'][0]['codigo_lote'], "LOT-TEL-DESPACHO-01")
+        self.assertEqual(recall["total_descendientes"], 1)
+        self.assertEqual(recall["descendientes"][0]["codigo_lote"], "LOT-TEL-DESPACHO-01")
 
-        self.assertEqual(recall['total_clientes_afectados'], 1)
-        despacho_info = recall['despachos_clientes'][0]
-        self.assertEqual(despacho_info['cliente_nombre'], "Confecciones Andinas SA")
-        self.assertEqual(despacho_info['cliente_ruc'], "1799999999001")
-        self.assertEqual(despacho_info['peso_despachado'], "96.000")
+        self.assertEqual(recall["total_clientes_afectados"], 1)
+        despacho_info = recall["despachos_clientes"][0]
+        self.assertEqual(despacho_info["cliente_nombre"], "Confecciones Andinas SA")
+        self.assertEqual(despacho_info["cliente_ruc"], "1799999999001")
+        self.assertEqual(despacho_info["peso_despachado"], "96.000")
 
 
 class EjecucionProduccionValidacionesTestCase(_EscenarioMES):
@@ -715,23 +783,30 @@ class EjecucionProduccionValidacionesTestCase(_EscenarioMES):
     aristas del DAG."""
 
     def _consumo(self, cantidad="10.000"):
-        return [{
-            'producto': self.producto_fibra, 'bodega_origen': self.bodega_origen,
-            'cantidad_consumida': Decimal(cantidad), 'lote_origen': self.lote_entrada,
-        }]
+        return [
+            {
+                "producto": self.producto_fibra,
+                "bodega_origen": self.bodega_origen,
+                "cantidad_consumida": Decimal(cantidad),
+                "lote_origen": self.lote_entrada,
+            }
+        ]
 
     def _registrar(self, **kwargs):
         datos = {
-            'corrida': self.corrida, 'operacion_data': {}, 'consumos_data': [], 'salidas_data': [],
-            'user': self.operario,
+            "corrida": self.corrida,
+            "operacion_data": {},
+            "consumos_data": [],
+            "salidas_data": [],
+            "user": self.operario,
         }
         datos.update(kwargs)
         return EjecucionProduccionService.registrar_operacion(**datos)
 
     def test_operacion_dado_corrida_sin_guardar_o_cerrada_cuando_se_registra_entonces_rechaza(self):
-        with self.assertRaisesMessage(ValidationError, 'corrida de producción válida'):
+        with self.assertRaisesMessage(ValidationError, "corrida de producción válida"):
             self._registrar(corrida=None)
-        for estado in ('finalizada', 'anulada'):
+        for estado in ("finalizada", "anulada"):
             with self.subTest(estado=estado):
                 self.corrida.estado = estado
                 self.corrida.save()
@@ -741,40 +816,47 @@ class EjecucionProduccionValidacionesTestCase(_EscenarioMES):
     def test_operacion_dado_sin_maquina_ni_operario_cuando_se_registra_entonces_rechaza(self):
         self.corrida.maquina_principal = None
         self.corrida.save()
-        with self.assertRaisesMessage(ValidationError, 'Se requiere una máquina'):
+        with self.assertRaisesMessage(ValidationError, "Se requiere una máquina"):
             self._registrar()
-        with self.assertRaisesMessage(ValidationError, 'operario responsable'):
-            self._registrar(operacion_data={'maquina': self.maquina.pk}, user=None)
+        with self.assertRaisesMessage(ValidationError, "operario responsable"):
+            self._registrar(operacion_data={"maquina": self.maquina.pk}, user=None)
 
     def test_operacion_dado_ids_inexistentes_cuando_se_registra_entonces_mensaje_por_recurso(self):
         casos = {
-            'maquina': 'La máquina con ID 999999 no existe.',
-            'operario': 'El usuario operario con ID 999999 no existe.',
-            'proceso': 'El proceso con ID 999999 no existe.',
+            "maquina": "La máquina con ID 999999 no existe.",
+            "operario": "El usuario operario con ID 999999 no existe.",
+            "proceso": "El proceso con ID 999999 no existe.",
         }
         for campo, mensaje in casos.items():
             with self.subTest(campo=campo), self.assertRaisesMessage(ValidationError, mensaje):
                 self._registrar(operacion_data={campo: 999999})
 
     def test_operacion_dado_numero_secuencia_explicito_cuando_se_registra_entonces_lo_respeta(self):
-        operacion = self._registrar(operacion_data={'numero_secuencia': 7})
+        operacion = self._registrar(operacion_data={"numero_secuencia": 7})
         self.assertEqual(operacion.numero_secuencia, 7)
 
     def test_operacion_dado_merma_en_cero_cuando_se_registra_entonces_no_crea_merma(self):
         operacion = self._registrar(
-            consumos_data=self._consumo(), mermas_data=[{'peso_merma': '0'}], validar_balance_masa=False)
+            consumos_data=self._consumo(), mermas_data=[{"peso_merma": "0"}], validar_balance_masa=False
+        )
         self.assertFalse(operacion.mermas.exists())
 
     def test_operacion_dado_merma_vendible_sin_destino_cuando_se_registra_entonces_rechaza(self):
         with self.assertRaisesMessage(ValidationError, "'producto_subproducto' y 'bodega_subproducto'"):
             self._registrar(
-                consumos_data=self._consumo(), validar_balance_masa=False,
-                mermas_data=[{'peso_merma': '1', 'es_subproducto_vendible': True}])
+                consumos_data=self._consumo(),
+                validar_balance_masa=False,
+                mermas_data=[{"peso_merma": "1", "es_subproducto_vendible": True}],
+            )
 
     def test_operacion_dado_salida_al_mismo_lote_consumido_cuando_se_registra_entonces_no_crea_arista_reflexiva(self):
-        salida = [{
-            'producto': self.producto_fibra, 'bodega_destino': self.bodega_destino,
-            'cantidad_neta': Decimal("10.000"), 'lote_generado': self.lote_entrada,
-        }]
+        salida = [
+            {
+                "producto": self.producto_fibra,
+                "bodega_destino": self.bodega_destino,
+                "cantidad_neta": Decimal("10.000"),
+                "lote_generado": self.lote_entrada,
+            }
+        ]
         operacion = self._registrar(consumos_data=self._consumo(), salidas_data=salida)
         self.assertFalse(GenealogiaLote.objects.filter(operacion=operacion).exists())

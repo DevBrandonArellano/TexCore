@@ -4,6 +4,7 @@ Pruebas unitarias para vistas de generación de PDFs de producción en internal_
   - BalanceMasasPdfView
   - Permiso IsInternalServiceOrUser (ServicePrincipal y Usuario Jefe de Planta/Área)
 """
+
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -32,7 +33,6 @@ User = get_user_model()
 
 
 class TestPdfProduccionViews(APITestCase):
-
     def setUp(self):
         self.sede = Sede.objects.create(nombre="Sede Central")
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
@@ -107,11 +107,12 @@ class TestPdfProduccionViews(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn("attachment; filename=\"reporte_avance_", response["Content-Disposition"])
+        self.assertIn('attachment; filename="reporte_avance_', response["Content-Disposition"])
 
     @patch("httpx.Client.post")
     def test_reporte_avance_dado_llamada_exitosa_cuando_llama_a_printing_service_entonces_firma_jwt_bearer(
-        self, mock_httpx_post,
+        self,
+        mock_httpx_post,
     ):
         """
         printing_service exige JWT Bearer RS256 en todo endpoint salvo /health
@@ -167,9 +168,7 @@ class TestPdfProduccionViews(APITestCase):
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal error in printing service"
-        mock_httpx_post.side_effect = httpx.HTTPStatusError(
-            "Server error", request=MagicMock(), response=mock_response
-        )
+        mock_httpx_post.side_effect = httpx.HTTPStatusError("Server error", request=MagicMock(), response=mock_response)
 
         self.client.force_authenticate(user=self.user_jefe)
         response = self.client.post(self.url_avance, {}, format="json")
@@ -195,9 +194,7 @@ class TestPdfProduccionViews(APITestCase):
     # -------------------------------------------------------------------
 
     @patch("httpx.Client.post")
-    def test_reporte_avance_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing(
-        self, mock_httpx_post
-    ):
+    def test_reporte_avance_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = b"%PDF-1.4"
@@ -211,9 +208,7 @@ class TestPdfProduccionViews(APITestCase):
 
     @override_settings(PRINTING_SERVICE_URL="http://staging-printing:9001")
     @patch("httpx.Client.post")
-    def test_reporte_balance_dado_setting_override_cuando_llama_entonces_usa_ese_dominio(
-        self, mock_httpx_post
-    ):
+    def test_reporte_balance_dado_setting_override_cuando_llama_entonces_usa_ese_dominio(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = b"%PDF-1.4"
@@ -241,14 +236,18 @@ class TestPdfProduccionViews(APITestCase):
         otra_sede = Sede.objects.create(nombre="Sede Norte")
         group_ejecutivo, _ = Group.objects.get_or_create(name="ejecutivo")
         ejecutivo = User.objects.create_user(
-            username="ejecutivo_user", email="ejecutivo@texcore.com",
-            password="Password123!", sede=self.sede,
+            username="ejecutivo_user",
+            email="ejecutivo@texcore.com",
+            password="Password123!",
+            sede=self.sede,
         )
         ejecutivo.groups.add(group_ejecutivo)
 
         self.client.force_authenticate(user=ejecutivo)
         response = self.client.post(
-            self.url_avance, {"sede_id": otra_sede.id}, format="json",
+            self.url_avance,
+            {"sede_id": otra_sede.id},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -256,7 +255,9 @@ class TestPdfProduccionViews(APITestCase):
         otra_sede = Sede.objects.create(nombre="Sede Sur")
         self.client.force_authenticate(user=self.user_jefe)
         response = self.client.post(
-            self.url_avance, {"sede_id": otra_sede.id}, format="json",
+            self.url_avance,
+            {"sede_id": otra_sede.id},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("otra sede", response.data["detail"])
@@ -264,8 +265,10 @@ class TestPdfProduccionViews(APITestCase):
     def test_reporte_balance_dado_usuario_sin_sede_asignada_cuando_post_entonces_403(self):
         group_jefe_area, _ = Group.objects.get_or_create(name="jefe_area")
         jefe_sin_sede = User.objects.create_user(
-            username="jefe_sin_sede", email="jefe_sin_sede@texcore.com",
-            password="Password123!", sede=None,
+            username="jefe_sin_sede",
+            email="jefe_sin_sede@texcore.com",
+            password="Password123!",
+            sede=None,
         )
         jefe_sin_sede.groups.add(group_jefe_area)
 
@@ -279,10 +282,14 @@ class TestPdfProduccionViews(APITestCase):
 
     def test_reporte_avance_dado_service_principal_sin_scope_reports_read_cuando_post_entonces_403(self):
         token_sin_scope = JWTServiceAuthentication.generate_token(
-            service_name="otro-service", scopes=["otro:scope"],
+            service_name="otro-service",
+            scopes=["otro:scope"],
         )
         response = self.client.post(
-            self.url_avance, {}, HTTP_AUTHORIZATION=f"Bearer {token_sin_scope}", format="json",
+            self.url_avance,
+            {},
+            HTTP_AUTHORIZATION=f"Bearer {token_sin_scope}",
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -294,7 +301,8 @@ class TestPdfProduccionViews(APITestCase):
 
     @patch("httpx.Client.post")
     def test_reporte_avance_dado_filtros_completos_y_lotes_cuando_post_entonces_incluye_detalle_en_payload(
-        self, mock_httpx_post,
+        self,
+        mock_httpx_post,
     ):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -306,8 +314,11 @@ class TestPdfProduccionViews(APITestCase):
         producto = ProductoFactory(sede=self.sede)
         orden = OrdenProduccionFactory(sede=self.sede, area=area, producto_salida=producto)
         LoteProduccionFactory(
-            orden_produccion=orden, maquina=maquina, operario=self.user_jefe,
-            peso_neto_producido=90, hora_inicio="2026-01-01T08:00:00Z",
+            orden_produccion=orden,
+            maquina=maquina,
+            operario=self.user_jefe,
+            peso_neto_producido=90,
+            hora_inicio="2026-01-01T08:00:00Z",
             hora_final="2026-01-01T16:00:00Z",
         )
 
@@ -315,8 +326,10 @@ class TestPdfProduccionViews(APITestCase):
         response = self.client.post(
             self.url_avance,
             {
-                "fecha_desde": "2026-01-01", "fecha_hasta": "2026-01-01",
-                "sede_id": self.sede.id, "maquina_id": maquina.id,
+                "fecha_desde": "2026-01-01",
+                "fecha_hasta": "2026-01-01",
+                "sede_id": self.sede.id,
+                "maquina_id": maquina.id,
                 "operario_id": self.user_jefe.id,
             },
             format="json",
@@ -336,24 +349,44 @@ class BuildReporteAvancePayloadTestCase(APITestCase):
     """
 
     def test_build_payload_dado_peso_requerido_positivo_cuando_mapea_entonces_calcula_porcentaje(self):
-        registros = [{
-            "op_codigo": "OP-1", "producto_descripcion": "Tela Azul",
-            "codigo_lote": "L1", "maquina_nombre": "M1", "operario_nombre": "op1",
-            "peso_neto_producido": 50, "orden_peso_requerido": 100, "op_estado": "en_proceso",
-        }]
+        registros = [
+            {
+                "op_codigo": "OP-1",
+                "producto_descripcion": "Tela Azul",
+                "codigo_lote": "L1",
+                "maquina_nombre": "M1",
+                "operario_nombre": "op1",
+                "peso_neto_producido": 50,
+                "orden_peso_requerido": 100,
+                "op_estado": "en_proceso",
+            }
+        ]
         payload = _build_reporte_avance_payload(
-            registros, "TexCore", "Sede Central", "2026-01-01", "2026-01-31", None, None,
+            registros,
+            "TexCore",
+            "Sede Central",
+            "2026-01-01",
+            "2026-01-31",
+            None,
+            None,
         )
         self.assertEqual(payload["detalles"][0]["porcentaje_avance"], 50.0)
         self.assertEqual(payload["detalles"][0]["kilos"], 50.0)
 
     def test_build_payload_dado_peso_requerido_cero_cuando_mapea_entonces_porcentaje_cero_sin_dividir(self):
         # BVA: borde peso_requerido == 0 -> evita ZeroDivisionError.
-        registros = [{
-            "op_codigo": "OP-2", "producto_descripcion": None,
-            "codigo_lote": None, "maquina_nombre": None, "operario_nombre": None,
-            "peso_neto_producido": 10, "orden_peso_requerido": 0, "op_estado": None,
-        }]
+        registros = [
+            {
+                "op_codigo": "OP-2",
+                "producto_descripcion": None,
+                "codigo_lote": None,
+                "maquina_nombre": None,
+                "operario_nombre": None,
+                "peso_neto_producido": 10,
+                "orden_peso_requerido": 0,
+                "op_estado": None,
+            }
+        ]
         payload = _build_reporte_avance_payload(registros, "TexCore", "Sede", None, None, None, None)
         self.assertEqual(payload["detalles"][0]["porcentaje_avance"], 0.0)
         self.assertEqual(payload["detalles"][0]["producto"], "—")

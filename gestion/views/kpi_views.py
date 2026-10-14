@@ -19,7 +19,7 @@ from inventory.services.executive_kpi_service import ExecutiveKPIService
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
 class KPIAreaView(APIView):
@@ -27,28 +27,32 @@ class KPIAreaView(APIView):
 
     def get(self, request):
         user = request.user
-        is_admin = user.is_superuser or user.groups.filter(
-            name__in=['admin_sistemas', 'ejecutivo', 'jefe_planta']).exists()
+        is_admin = (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo", "jefe_planta"]).exists()
+        )
 
-        area_id = request.query_params.get('area')
+        area_id = request.query_params.get("area")
 
         if not is_admin:
             # Non-admins (Jefe de Área) strictly see their own area
-            if hasattr(user, 'area') and user.area:
+            if hasattr(user, "area") and user.area:
                 area = user.area
             else:
-                return Response({"error": "No tienes un área asignada para ver KPIs."},
-                                status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"error": "No tienes un área asignada para ver KPIs."}, status=status.HTTP_403_FORBIDDEN
+                )
         else:
             # Admins can specify an area or use their own if available
             if area_id:
                 # jefe_planta elige área, pero solo de su sede (otra sede → 404).
                 area = get_object_or_404(filtrar_por_sede(Area.objects.all(), user), id=area_id)
-            elif hasattr(user, 'area') and user.area:
+            elif hasattr(user, "area") and user.area:
                 area = user.area
             else:
-                return Response({"error": "Área no especificada o el usuario no tiene un área asignada."},
-                                status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": "Área no especificada o el usuario no tiene un área asignada."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # KPIs
         # 1. Output (Producción Total)
@@ -62,18 +66,18 @@ class KPIAreaView(APIView):
         # (componente "Calidad" de OEE). La segunda/saldo implican retrabajo o
         # degradación de valor, por eso se separan del FPY.
         agregados = lotes_area.aggregate(
-            total_neto=Sum('peso_neto_producido'),
-            total_merma=Sum('peso_merma'),
-            neto_primera=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='primera')),
-            neto_segunda=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='segunda')),
-            neto_saldo=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='saldo')),
+            total_neto=Sum("peso_neto_producido"),
+            total_merma=Sum("peso_merma"),
+            neto_primera=Sum("peso_neto_producido", filter=Q(clasificacion_calidad="primera")),
+            neto_segunda=Sum("peso_neto_producido", filter=Q(clasificacion_calidad="segunda")),
+            neto_saldo=Sum("peso_neto_producido", filter=Q(clasificacion_calidad="saldo")),
         )
 
-        total_output = agregados['total_neto'] or 0
-        total_merma = agregados['total_merma'] or 0
-        neto_primera = agregados['neto_primera'] or 0
-        neto_segunda = agregados['neto_segunda'] or 0
-        neto_saldo = agregados['neto_saldo'] or 0
+        total_output = agregados["total_neto"] or 0
+        total_merma = agregados["total_merma"] or 0
+        neto_primera = agregados["neto_primera"] or 0
+        neto_segunda = agregados["neto_segunda"] or 0
+        neto_saldo = agregados["neto_saldo"] or 0
 
         entrada = float(total_output) + float(total_merma)
         rendimiento_yield = (float(total_output) / entrada) if entrada > 0 else 0.0
@@ -82,8 +86,8 @@ class KPIAreaView(APIView):
         # 3. Avg Time per Operator
         # time = hora_final - hora_inicio
         avg_duration = lotes_area.annotate(
-            duration=ExpressionWrapper(F('hora_final') - F('hora_inicio'), output_field=DurationField())
-        ).aggregate(Avg('duration'))['duration__avg']
+            duration=ExpressionWrapper(F("hora_final") - F("hora_inicio"), output_field=DurationField())
+        ).aggregate(Avg("duration"))["duration__avg"]
 
         # Format duration to hours/minutes
         avg_minutes = 0
@@ -95,20 +99,22 @@ class KPIAreaView(APIView):
         # completo del área, no una ventana de tiempo).
         oee = OeeService.calcular_oee_area(area)
 
-        return Response({
-            "area": area.nombre,
-            "total_produccion_kg": total_output,
-            "total_merma_kg": total_merma,
-            "rendimiento_yield": round(rendimiento_yield, 4),
-            "first_pass_yield": round(first_pass_yield, 4),
-            "distribucion_calidad": {
-                "primera": neto_primera,
-                "segunda": neto_segunda,
-                "saldo": neto_saldo,
-            },
-            "tiempo_promedio_lote_min": round(avg_minutes, 2),
-            "oee": oee,
-        })
+        return Response(
+            {
+                "area": area.nombre,
+                "total_produccion_kg": total_output,
+                "total_merma_kg": total_merma,
+                "rendimiento_yield": round(rendimiento_yield, 4),
+                "first_pass_yield": round(first_pass_yield, 4),
+                "distribucion_calidad": {
+                    "primera": neto_primera,
+                    "segunda": neto_segunda,
+                    "saldo": neto_saldo,
+                },
+                "tiempo_promedio_lote_min": round(avg_minutes, 2),
+                "oee": oee,
+            }
+        )
 
 
 class PlantaPulsoDiarioView(APIView):
@@ -127,6 +133,7 @@ class PlantaPulsoDiarioView(APIView):
         sede vía ?sede_id, o todas si se omite (vista gerencial global).
       - jefe_planta / admin_sede → forzados a SU sede; un sede_id ajeno → 403.
     """
+
     permission_classes = [IsAuthenticated, IsJefePlantaOrAdmin]
 
     def _resolver_sede(self, request):
@@ -137,7 +144,7 @@ class PlantaPulsoDiarioView(APIView):
         """
         user = request.user
         is_global = ve_todas_las_sedes(user)
-        sede_param = request.query_params.get('sede_id')
+        sede_param = request.query_params.get("sede_id")
 
         if is_global:
             # Puede filtrar por una sede específica o ver todas (None).
@@ -152,7 +159,7 @@ class PlantaPulsoDiarioView(APIView):
             return None, None
 
         # No-global (jefe_planta / admin_sede): forzado a su propia sede.
-        user_sede_id = getattr(user, 'sede_id', None)
+        user_sede_id = getattr(user, "sede_id", None)
         if not user_sede_id:
             return None, Response(
                 {"detail": "No tienes una sede asignada para ver el pulso de planta."},
@@ -162,12 +169,14 @@ class PlantaPulsoDiarioView(APIView):
         if sede_param and str(sede_param) != str(user_sede_id):
             logger.warning(
                 "Intento de acceso a pulso de otra sede",
-                extra={"sd": {
-                    "entity": "PlantaPulsoDiario",
-                    "user": user.username,
-                    "sede_usuario": user_sede_id,
-                    "sede_solicitada": sede_param,
-                }},
+                extra={
+                    "sd": {
+                        "entity": "PlantaPulsoDiario",
+                        "user": user.username,
+                        "sede_usuario": user_sede_id,
+                        "sede_solicitada": sede_param,
+                    }
+                },
             )
             return None, Response(
                 {"detail": "No tienes permiso para ver el pulso de otra sede."},
@@ -186,8 +195,7 @@ class PlantaPulsoDiarioView(APIView):
         qs_ordenes = OrdenProduccion.objects.filter(fecha_fin_planificada=hoy)
         if sede_id:
             qs_ordenes = qs_ordenes.filter(area__sede_id=sede_id)
-        kg_planificados_hoy = qs_ordenes.aggregate(
-            total=Sum("peso_neto_requerido"))["total"] or 0.0
+        kg_planificados_hoy = qs_ordenes.aggregate(total=Sum("peso_neto_requerido"))["total"] or 0.0
 
         # 2-3. kg producidos y merma hoy (lotes cerrados hoy)
         qs_lotes = LoteProduccion.objects.filter(hora_final__date=hoy)
@@ -203,20 +211,19 @@ class PlantaPulsoDiarioView(APIView):
         # 4. WIP estancado: kilos transferidos cuyo destino sigue pendiente de
         # recibir. Se mide por la sede de DESTINO (donde el material está
         # esperando ser procesado), no por la de origen.
-        qs_transferencias = TransferenciaInterarea.objects.filter(
-            orden_area_destino__estado="pendiente")
+        qs_transferencias = TransferenciaInterarea.objects.filter(orden_area_destino__estado="pendiente")
         if sede_id:
-            qs_transferencias = qs_transferencias.filter(
-                bodega_destino__sede_id=sede_id)
-        wip_estancado = qs_transferencias.aggregate(
-            total=Sum("cantidad_transferida"))["total"] or 0.0
+            qs_transferencias = qs_transferencias.filter(bodega_destino__sede_id=sede_id)
+        wip_estancado = qs_transferencias.aggregate(total=Sum("cantidad_transferida"))["total"] or 0.0
 
-        return Response({
-            "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
-            "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
-            "kg_merma_hoy": round(float(kg_merma_hoy), 2),
-            "wip_estancado": round(float(wip_estancado), 2),
-        })
+        return Response(
+            {
+                "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
+                "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
+                "kg_merma_hoy": round(float(kg_merma_hoy), 2),
+                "wip_estancado": round(float(wip_estancado), 2),
+            }
+        )
 
 
 # =============================================================================
@@ -239,6 +246,7 @@ class KpiEjecutivoView(APIView):
 
     RUP — Caso de Uso: CU-EJ-01 Ver Resumen Ejecutivo
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -251,31 +259,33 @@ class KpiEjecutivoView(APIView):
 
         kpis_exec = exec_service.obtener_kpis()
 
-        return Response({
-            "produccion": {
-                "ops_pendiente": kpis_prod.ops_estado.pendiente,
-                "ops_en_proceso": kpis_prod.ops_estado.en_proceso,
-                "ops_finalizada": kpis_prod.ops_estado.finalizada,
-                "kg_hoy": kpis_prod.kg_hoy,
-                "kg_semana": kpis_prod.kg_semana,
-                "kg_mes": kpis_prod.kg_mes,
-                "tiempo_promedio_lote_min": kpis_prod.tiempo_promedio_lote_min,
-            },
-            "mrp": {
-                "sugerencias_compra": kpis_exec.mrp.sugerencias_compra,
-                "productos_a_producir": kpis_exec.mrp.productos_a_producir,
-                "ultima_ejecucion": kpis_exec.mrp.ultima_ejecucion,
-            },
-            "stock": {
-                "productos_bajo_minimo": kpis_exec.stock.productos_bajo_minimo,
-            },
-            "cartera": {
-                "cuentas_por_cobrar": kpis_exec.cartera.cuentas_por_cobrar,
-                "cartera_vencida": kpis_exec.cartera.cartera_vencida,
-                "pedidos_pendientes": kpis_exec.cartera.pedidos_pendientes,
-                "pedidos_despachados": kpis_exec.cartera.pedidos_despachados,
-            },
-        })
+        return Response(
+            {
+                "produccion": {
+                    "ops_pendiente": kpis_prod.ops_estado.pendiente,
+                    "ops_en_proceso": kpis_prod.ops_estado.en_proceso,
+                    "ops_finalizada": kpis_prod.ops_estado.finalizada,
+                    "kg_hoy": kpis_prod.kg_hoy,
+                    "kg_semana": kpis_prod.kg_semana,
+                    "kg_mes": kpis_prod.kg_mes,
+                    "tiempo_promedio_lote_min": kpis_prod.tiempo_promedio_lote_min,
+                },
+                "mrp": {
+                    "sugerencias_compra": kpis_exec.mrp.sugerencias_compra,
+                    "productos_a_producir": kpis_exec.mrp.productos_a_producir,
+                    "ultima_ejecucion": kpis_exec.mrp.ultima_ejecucion,
+                },
+                "stock": {
+                    "productos_bajo_minimo": kpis_exec.stock.productos_bajo_minimo,
+                },
+                "cartera": {
+                    "cuentas_por_cobrar": kpis_exec.cartera.cuentas_por_cobrar,
+                    "cartera_vencida": kpis_exec.cartera.cartera_vencida,
+                    "pedidos_pendientes": kpis_exec.cartera.pedidos_pendientes,
+                    "pedidos_despachados": kpis_exec.cartera.pedidos_despachados,
+                },
+            }
+        )
 
     @staticmethod
     def _parsear_sede(request) -> int | None:
@@ -297,6 +307,7 @@ class ProduccionResumenView(APIView):
 
     RUP — Caso de Uso: CU-EJ-02 Ver Resumen de Producción
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -310,13 +321,15 @@ class ProduccionResumenView(APIView):
             {"estado": "Finalizada", "value": kpis.ops_estado.finalizada, "fill": "#22c55e"},
         ]
 
-        return Response({
-            "ops_por_estado": ops_grafico,
-            "kg_hoy": kpis.kg_hoy,
-            "kg_semana": kpis.kg_semana,
-            "kg_mes": kpis.kg_mes,
-            "tiempo_promedio_lote_min": kpis.tiempo_promedio_lote_min,
-        })
+        return Response(
+            {
+                "ops_por_estado": ops_grafico,
+                "kg_hoy": kpis.kg_hoy,
+                "kg_semana": kpis.kg_semana,
+                "kg_mes": kpis.kg_mes,
+                "tiempo_promedio_lote_min": kpis.tiempo_promedio_lote_min,
+            }
+        )
 
 
 class ProduccionTendenciaView(APIView):
@@ -328,6 +341,7 @@ class ProduccionTendenciaView(APIView):
 
     RUP — Caso de Uso: CU-EJ-03 Ver Tendencia de Producción
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -335,10 +349,7 @@ class ProduccionTendenciaView(APIView):
         service = ProduccionKPIService(sede_id=sede_id)
         tendencia = service.obtener_tendencia()
 
-        return Response([
-            {"fecha": punto.fecha, "kg": punto.kg}
-            for punto in tendencia
-        ])
+        return Response([{"fecha": punto.fecha, "kg": punto.kg} for punto in tendencia])
 
 
 def _parsear_rango_fechas(request):
@@ -356,14 +367,22 @@ def _parsear_rango_fechas(request):
         fecha_inicio = date.fromisoformat(raw_inicio) if raw_inicio else hoy
         fecha_fin = date.fromisoformat(raw_fin) if raw_fin else hoy
     except ValueError:
-        return None, None, Response(
-            {"detail": "fecha_inicio/fecha_fin deben tener formato YYYY-MM-DD."},
-            status=status.HTTP_400_BAD_REQUEST,
+        return (
+            None,
+            None,
+            Response(
+                {"detail": "fecha_inicio/fecha_fin deben tener formato YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            ),
         )
     if fecha_inicio > fecha_fin:
-        return None, None, Response(
-            {"detail": "fecha_inicio no puede ser posterior a fecha_fin."},
-            status=status.HTTP_400_BAD_REQUEST,
+        return (
+            None,
+            None,
+            Response(
+                {"detail": "fecha_inicio no puede ser posterior a fecha_fin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            ),
         )
     return fecha_inicio, fecha_fin, None
 
@@ -377,6 +396,7 @@ class ProduccionPorProductoView(APIView):
 
     RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -388,16 +408,18 @@ class ProduccionPorProductoView(APIView):
         service = ProduccionKPIService(sede_id=sede_id)
         items = service.obtener_produccion_por_producto(fecha_inicio, fecha_fin)
 
-        return Response([
-            {
-                "producto_id": item.producto_id,
-                "producto_codigo": item.producto_codigo,
-                "producto_nombre": item.producto_nombre,
-                "kg_total": item.kg_total,
-                "num_lotes": item.num_lotes,
-            }
-            for item in items
-        ])
+        return Response(
+            [
+                {
+                    "producto_id": item.producto_id,
+                    "producto_codigo": item.producto_codigo,
+                    "producto_nombre": item.producto_nombre,
+                    "kg_total": item.kg_total,
+                    "num_lotes": item.num_lotes,
+                }
+                for item in items
+            ]
+        )
 
 
 class ProduccionHistorialProductoView(APIView):
@@ -408,6 +430,7 @@ class ProduccionHistorialProductoView(APIView):
 
     RUP — Caso de Uso: CU-EJ-09 Ver Historial de Producción de un Producto
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -427,10 +450,7 @@ class ProduccionHistorialProductoView(APIView):
         service = ProduccionKPIService(sede_id=sede_id)
         historial = service.obtener_historial_producto(producto_id, fecha_inicio, fecha_fin)
 
-        return Response([
-            {"fecha": punto.fecha, "kg": punto.kg}
-            for punto in historial
-        ])
+        return Response([{"fecha": punto.fecha, "kg": punto.kg} for punto in historial])
 
 
 class ProduccionPorProductoImprimirView(APIView):
@@ -442,6 +462,7 @@ class ProduccionPorProductoImprimirView(APIView):
 
     RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto (impresión)
     """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -453,7 +474,7 @@ class ProduccionPorProductoImprimirView(APIView):
         service = ProduccionKPIService(sede_id=sede_id)
         items = service.obtener_produccion_por_producto(fecha_inicio, fecha_fin)
 
-        sede_usuario = getattr(request.user, 'sede', None)
+        sede_usuario = getattr(request.user, "sede", None)
         data = {
             "empresa_nombre": sede_usuario.nombre if sede_usuario else "TexCore",
             "sede_nombre": sede_usuario.nombre if sede_usuario else "Todas las sedes",
@@ -477,6 +498,6 @@ class ProduccionPorProductoImprimirView(APIView):
                 {"detail": "El servicio de impresión no está disponible temporalmente."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        response['Content-Disposition'] = 'inline; filename="produccion_por_producto.pdf"'
+        response = HttpResponse(pdf_content, content_type="application/pdf")
+        response["Content-Disposition"] = 'inline; filename="produccion_por_producto.pdf"'
         return response

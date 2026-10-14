@@ -3,6 +3,7 @@ JWTTokenManager: gestiona ciclo de vida del JWT de servicio.
 SRP: única responsabilidad — obtener y renovar el token.
 ISO 27001 A.10: token almacenado solo en memoria, nunca en disco.
 """
+
 import logging
 import time
 
@@ -66,9 +67,7 @@ class JWTTokenManager:
                 extra={"sd": {"severity": 5, "service": self._service_name}},
             )
             return data["access_token"]
-        raise RuntimeError(
-            f"Error obteniendo token para {self._service_name}: HTTP {response.status_code}"
-        )
+        raise RuntimeError(f"Error obteniendo token para {self._service_name}: HTTP {response.status_code}")
 
     def _is_expiring(self, token: str) -> bool:
         """True si el token expira en los próximos REFRESH_BUFFER_SECONDS."""

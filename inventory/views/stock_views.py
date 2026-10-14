@@ -19,15 +19,15 @@ def stock_con_existencias(user, params):
     # operación, son decenas de miles de filas vacías (prueba de carga 2026-10-06).
     queryset = StockBodega.objects.exclude(cantidad=0, stock_comprometido=0)
     for param, campo in (
-        ('sede_id', 'bodega__sede_id'),
-        ('bodega_id', 'bodega_id'),
-        ('producto_id', 'producto_id'),
-        ('lote_id', 'lote_id'),
+        ("sede_id", "bodega__sede_id"),
+        ("bodega_id", "bodega_id"),
+        ("producto_id", "producto_id"),
+        ("lote_id", "lote_id"),
     ):
         valor = parse_int_param(params.get(param), param)
         if valor is not None:
             queryset = queryset.filter(**{campo: valor})
-    texto = (params.get('search') or '').strip()
+    texto = (params.get("search") or "").strip()
     if texto:
         queryset = queryset.filter(
             Q(producto__codigo__icontains=texto)
@@ -39,13 +39,14 @@ def stock_con_existencias(user, params):
     visibles = bodegas_visibles(user)
     if visibles is None:
         return queryset
-    return queryset.filter(bodega_id__in=visibles.values('id'))
+    return queryset.filter(bodega_id__in=visibles.values("id"))
 
 
 class StockBodegaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     API para ver el stock actual en todas las bodegas.
     """
+
     serializer_class = StockBodegaSerializer
     permission_classes = [IsInventoryStaffOrAdmin]
     # Paginado como kárdex y materia prima: sin tope, el administrador recibía 28 799
@@ -59,8 +60,8 @@ class StockBodegaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         # una consulta por su sede (N+1, auditoría de performance 2026-08-31).
         return (
             stock_con_existencias(self.request.user, self.request.query_params)
-            .select_related('bodega__sede', 'producto', 'lote')
-            .order_by('bodega__nombre', 'producto__descripcion', 'lote_id', 'id')
+            .select_related("bodega__sede", "producto", "lote")
+            .order_by("bodega__nombre", "producto__descripcion", "lote_id", "id")
         )
 
 
@@ -69,37 +70,40 @@ class StockResumenAPIView(APIView):
     Totales de stock por bodega, calculados en la base: alimenta los gráficos y KPI de
     los dashboards sin traer las filas por lote. Acepta los mismos filtros que el listado.
     """
+
     permission_classes = [IsInventoryStaffOrAdmin]
 
     def get(self, request, *args, **kwargs):
         queryset = stock_con_existencias(request.user, request.query_params)
         por_bodega = [
             {
-                'bodega_id': fila['bodega_id'],
-                'bodega': fila['bodega__nombre'],
-                'cantidad': fila['cantidad'],
-                'filas': fila['filas'],
+                "bodega_id": fila["bodega_id"],
+                "bodega": fila["bodega__nombre"],
+                "cantidad": fila["cantidad"],
+                "filas": fila["filas"],
             }
-            for fila in queryset.values('bodega_id', 'bodega__nombre')
-            .annotate(cantidad=Sum('cantidad'), filas=Count('id'))
-            .order_by('-cantidad', 'bodega__nombre')
+            for fila in queryset.values("bodega_id", "bodega__nombre")
+            .annotate(cantidad=Sum("cantidad"), filas=Count("id"))
+            .order_by("-cantidad", "bodega__nombre")
         ]
         totales = queryset.aggregate(
-            total_cantidad=Sum('cantidad'),
-            productos=Count('producto_id', distinct=True),
+            total_cantidad=Sum("cantidad"),
+            productos=Count("producto_id", distinct=True),
         )
-        return Response({
-            'total_cantidad': totales['total_cantidad'] or 0,
-            'productos': totales['productos'],
-            'bodegas': len(por_bodega),
-            'por_bodega': por_bodega,
-        })
+        return Response(
+            {
+                "total_cantidad": totales["total_cantidad"] or 0,
+                "productos": totales["productos"],
+                "bodegas": len(por_bodega),
+                "por_bodega": por_bodega,
+            }
+        )
 
 
 def _estado_stock(stock_actual, stock_minimo):
     if stock_minimo <= 0:
-        return 'sin_minimo'
-    return 'bajo' if stock_actual < stock_minimo else 'ok'
+        return "sin_minimo"
+    return "bajo" if stock_actual < stock_minimo else "ok"
 
 
 class AlertasStockAPIView(APIView):
@@ -114,56 +118,54 @@ class AlertasStockAPIView(APIView):
     producto). Con search se devuelven todos los productos que coinciden, con su
     estado (bajo, ok o sin_minimo), para verificar uno que no esté en alerta.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         user = request.user
         queryset = StockBodega.objects.all()
 
-        for param, campo in (('sede_id', 'bodega__sede_id'), ('bodega_id', 'bodega_id')):
+        for param, campo in (("sede_id", "bodega__sede_id"), ("bodega_id", "bodega_id")):
             valor = parse_int_param(request.query_params.get(param), param)
             if valor is not None:
                 queryset = queryset.filter(**{campo: valor})
 
-        texto = (request.query_params.get('search') or '').strip()
+        texto = (request.query_params.get("search") or "").strip()
         if texto:
-            queryset = queryset.filter(
-                Q(producto__codigo__icontains=texto) | Q(producto__descripcion__icontains=texto)
-            )
+            queryset = queryset.filter(Q(producto__codigo__icontains=texto) | Q(producto__descripcion__icontains=texto))
 
         visibles = bodegas_visibles(user)
         if visibles is not None:
-            queryset = queryset.filter(bodega_id__in=visibles.values('id'))
+            queryset = queryset.filter(bodega_id__in=visibles.values("id"))
 
         # Agrupación por bodega y producto sumando todos los lotes
         filas = (
-            queryset
-            .values(
-                'bodega_id',
-                'bodega__nombre',
-                'producto__codigo',
-                'producto__descripcion',
-                'producto__stock_minimo',
+            queryset.values(
+                "bodega_id",
+                "bodega__nombre",
+                "producto__codigo",
+                "producto__descripcion",
+                "producto__stock_minimo",
             )
-            .annotate(stock_actual=models.Sum('cantidad'))
-            .order_by('bodega__nombre', 'producto__descripcion')
+            .annotate(stock_actual=models.Sum("cantidad"))
+            .order_by("bodega__nombre", "producto__descripcion")
         )
         if not texto:
             filas = filas.filter(
                 producto__stock_minimo__gt=0,
-                stock_actual__lt=models.F('producto__stock_minimo'),
+                stock_actual__lt=models.F("producto__stock_minimo"),
             )
 
         resultado = [
             {
-                "bodega_id": item['bodega_id'],
-                "bodega": item['bodega__nombre'],
-                "producto": item['producto__descripcion'],
-                "producto_codigo": item['producto__codigo'],
-                "stock_actual": item['stock_actual'],
-                "stock_minimo": item['producto__stock_minimo'],
-                "faltante": max(item['producto__stock_minimo'] - item['stock_actual'], 0),
-                "estado": _estado_stock(item['stock_actual'], item['producto__stock_minimo']),
+                "bodega_id": item["bodega_id"],
+                "bodega": item["bodega__nombre"],
+                "producto": item["producto__descripcion"],
+                "producto_codigo": item["producto__codigo"],
+                "stock_actual": item["stock_actual"],
+                "stock_minimo": item["producto__stock_minimo"],
+                "faltante": max(item["producto__stock_minimo"] - item["stock_actual"], 0),
+                "estado": _estado_stock(item["stock_actual"], item["producto__stock_minimo"]),
             }
             for item in filas
         ]

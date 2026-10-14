@@ -15,6 +15,7 @@ Técnicas ISTQB aplicadas:
 - Caja blanca: rama 'baño' / 'funda' / 'cono' de LoteProduccion.clean(); no
   sobreescribe unidades_empaque si ya viene explícito (> 0).
 """
+
 import importlib
 
 from django.apps import apps
@@ -32,8 +33,7 @@ from gestion.tests.factories import (
 class ConfiguracionEmpaqueSedeModelTestCase(TestCase):
     def test_configuracion_empaque_dado_fundas_y_conos_cuando_conos_por_bano_entonces_multiplica(self):
         sede = SedeFactory()
-        config = ConfiguracionEmpaqueSede.objects.create(
-            sede=sede, fundas_por_bano=10, conos_por_funda=20)
+        config = ConfiguracionEmpaqueSede.objects.create(sede=sede, fundas_por_bano=10, conos_por_funda=20)
         self.assertEqual(config.conos_por_bano, 200)
 
     def test_configuracion_empaque_dado_equivalencia_cero_cuando_guarda_entonces_rechaza(self):
@@ -61,61 +61,59 @@ class LoteProduccionPresentacionEmpaqueTestCase(TestCase):
 
     def test_lote_dado_presentacion_bano_sin_configuracion_cuando_guarda_entonces_avisa_sin_usar_constante(self):
         with self.assertRaises(ValidationError) as ctx:
-            LoteProduccionFactory(orden_produccion=self.orden, presentacion='baño', unidades_empaque=0)
-        self.assertIn('presentacion', ctx.exception.message_dict)
-        self.assertIn('no tiene configuradas las equivalencias de empaque',
-                      ctx.exception.message_dict['presentacion'][0])
+            LoteProduccionFactory(orden_produccion=self.orden, presentacion="baño", unidades_empaque=0)
+        self.assertIn("presentacion", ctx.exception.message_dict)
+        self.assertIn(
+            "no tiene configuradas las equivalencias de empaque", ctx.exception.message_dict["presentacion"][0]
+        )
 
     def test_lote_dado_presentacion_funda_sin_configuracion_cuando_guarda_entonces_avisa(self):
         with self.assertRaises(ValidationError):
-            LoteProduccionFactory(orden_produccion=self.orden, presentacion='funda', unidades_empaque=0)
+            LoteProduccionFactory(orden_produccion=self.orden, presentacion="funda", unidades_empaque=0)
 
     def test_lote_dado_presentacion_cono_sin_configuracion_cuando_guarda_entonces_siempre_usa_1(self):
         # Caja blanca: la rama 'cono' no consulta ConfiguracionEmpaqueSede.
-        lote = LoteProduccionFactory(
-            orden_produccion=self.orden, presentacion='cono', unidades_empaque=0)
+        lote = LoteProduccionFactory(orden_produccion=self.orden, presentacion="cono", unidades_empaque=0)
         self.assertEqual(lote.unidades_empaque, 1)
 
     def test_lote_dado_presentacion_bano_con_configuracion_cuando_guarda_entonces_usa_valor_configurado(self):
         ConfiguracionEmpaqueSede.objects.create(
-            sede=self.sede, fundas_por_bano=10, conos_por_funda=20)  # 200 conos/baño
-        lote = LoteProduccionFactory(
-            orden_produccion=self.orden, presentacion='baño', unidades_empaque=0)
+            sede=self.sede, fundas_por_bano=10, conos_por_funda=20
+        )  # 200 conos/baño
+        lote = LoteProduccionFactory(orden_produccion=self.orden, presentacion="baño", unidades_empaque=0)
         self.assertEqual(lote.unidades_empaque, 200)
 
     def test_lote_dado_presentacion_funda_con_configuracion_cuando_guarda_entonces_usa_valor_configurado(self):
-        ConfiguracionEmpaqueSede.objects.create(
-            sede=self.sede, fundas_por_bano=10, conos_por_funda=20)
-        lote = LoteProduccionFactory(
-            orden_produccion=self.orden, presentacion='funda', unidades_empaque=0)
+        ConfiguracionEmpaqueSede.objects.create(sede=self.sede, fundas_por_bano=10, conos_por_funda=20)
+        lote = LoteProduccionFactory(orden_produccion=self.orden, presentacion="funda", unidades_empaque=0)
         self.assertEqual(lote.unidades_empaque, 20)
 
     def test_lote_dado_dos_sedes_con_equivalencias_distintas_cuando_guardan_entonces_cada_una_usa_la_suya(self):
         otra_sede = SedeFactory()
         ConfiguracionEmpaqueSede.objects.create(sede=self.sede, fundas_por_bano=10, conos_por_funda=20)
         ConfiguracionEmpaqueSede.objects.create(sede=otra_sede, fundas_por_bano=12, conos_por_funda=12)
-        lote_a = LoteProduccionFactory(orden_produccion=self.orden, presentacion='baño', unidades_empaque=0)
-        lote_b = LoteProduccionFactory(orden_produccion=OrdenProduccionFactory(sede=otra_sede),
-                                       presentacion='baño', unidades_empaque=0)
+        lote_a = LoteProduccionFactory(orden_produccion=self.orden, presentacion="baño", unidades_empaque=0)
+        lote_b = LoteProduccionFactory(
+            orden_produccion=OrdenProduccionFactory(sede=otra_sede), presentacion="baño", unidades_empaque=0
+        )
         self.assertEqual((lote_a.unidades_empaque, lote_b.unidades_empaque), (200, 144))
 
     def test_lote_dado_unidades_empaque_explicito_cuando_guarda_entonces_no_consulta_ni_sobreescribe(self):
         # Regla de negocio preexistente: solo se autocompleta si viene vacío/<=0.
-        lote = LoteProduccionFactory(
-            orden_produccion=self.orden, presentacion='baño', unidades_empaque=999)
+        lote = LoteProduccionFactory(orden_produccion=self.orden, presentacion="baño", unidades_empaque=999)
         self.assertEqual(lote.unidades_empaque, 999)
 
     def test_lote_dado_sin_orden_ni_sede_cuando_guarda_bano_entonces_avisa(self):
         # Caja blanca: sin orden ni sede del producto no hay equivalencia que aplicar.
         with self.assertRaises(ValidationError):
-            LoteProduccionFactory(orden_produccion=None, producto=None, presentacion='baño', unidades_empaque=0)
+            LoteProduccionFactory(orden_produccion=None, producto=None, presentacion="baño", unidades_empaque=0)
 
 
 class RellenoConfiguracionEmpaqueTestCase(TestCase):
     """Caja blanca del RunPython de la migración 0006 (localmente se corre --nomigrations)."""
 
     def test_relleno_dado_sedes_existentes_cuando_corre_entonces_crea_15_15_sin_pisar_las_configuradas(self):
-        migracion = importlib.import_module('gestion.migrations.0006_configuracion_empaque_explicita')
+        migracion = importlib.import_module("gestion.migrations.0006_configuracion_empaque_explicita")
         sin_config = SedeFactory()
         configurada = SedeFactory()
         ConfiguracionEmpaqueSede.objects.create(sede=configurada, fundas_por_bano=10, conos_por_funda=10)

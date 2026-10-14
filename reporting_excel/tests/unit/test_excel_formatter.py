@@ -1,4 +1,5 @@
 """Tests unitarios del ExcelFormatter. Sin BD, sin HTTP."""
+
 import zipfile
 from io import BytesIO
 

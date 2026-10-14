@@ -18,6 +18,7 @@ entorno de test. Si el event loop estuviera bloqueado, paralelo tardaría ~=
 serie; con I/O verdaderamente async, paralelo debe ser sustancialmente
 más rápido.
 """
+
 import asyncio
 import time
 from unittest.mock import patch
@@ -56,9 +57,7 @@ async def test_export_dado_peticiones_concurrentes_cuando_formateo_es_lento_ento
             serial_elapsed = time.monotonic() - start
 
             start = time.monotonic()
-            responses = await asyncio.gather(
-                *[client.post("/generate", json=body) for _ in range(_N_REQUESTS)]
-            )
+            responses = await asyncio.gather(*[client.post("/generate", json=body) for _ in range(_N_REQUESTS)])
             concurrent_elapsed = time.monotonic() - start
 
     assert all(r.status_code == 200 for r in responses)

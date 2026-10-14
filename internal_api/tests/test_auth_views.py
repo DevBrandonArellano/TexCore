@@ -1,4 +1,5 @@
 """Tests para endpoints de autenticación de servicios. EP + STT."""
+
 import jwt
 from django.conf import settings
 from django.core.cache import cache

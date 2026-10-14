@@ -3,6 +3,7 @@ Formateador de salida Excel.
 Extrae la lógica de excel_generator.py y la encapsula en el patrón Strategy.
 SRP: solo responsable de convertir DataFrames a archivos Excel descargables.
 """
+
 import re
 from io import BytesIO
 
@@ -59,10 +60,16 @@ class ExcelFormatter:
             df.to_excel(writer, sheet_name=self._sheet_name, index=False)
             workbook = writer.book
             worksheet = writer.sheets[self._sheet_name]
-            header_fmt = workbook.add_format({
-                "bold": True, "bg_color": "#333333", "font_color": "white",
-                "align": "center", "valign": "vcenter", "border": 1,
-            })
+            header_fmt = workbook.add_format(
+                {
+                    "bold": True,
+                    "bg_color": "#333333",
+                    "font_color": "white",
+                    "align": "center",
+                    "valign": "vcenter",
+                    "border": 1,
+                }
+            )
             for col_idx in range(len(df.columns)):
                 worksheet.write(0, col_idx, str(df.columns[col_idx]), header_fmt)
             for col_idx, col_name in enumerate(df.columns):

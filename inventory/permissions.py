@@ -11,10 +11,10 @@ def bodegas_visibles(user):
     """
     from gestion.models import Bodega
 
-    grupos = set(user.groups.values_list('name', flat=True))  # una sola consulta
+    grupos = set(user.groups.values_list("name", flat=True))  # una sola consulta
     if user.is_superuser or grupos & set(GRUPOS_TODAS_LAS_SEDES):
         return None
-    if 'admin_sede' in grupos:
+    if "admin_sede" in grupos:
         return Bodega.objects.filter(sede_id=user.sede_id) if user.sede_id else Bodega.objects.none()
     return user.bodegas_asignadas.all()
 
@@ -30,7 +30,7 @@ def validar_bodega_operable(user, bodega, campo):
 def validar_traslado(user, origen, destino, campo_destino):
     """Transferencias y transformaciones: el origen es operable por el usuario y
     el destino es de la sede del origen (no necesita estar asignado)."""
-    validar_bodega_operable(user, origen, 'bodega_origen')
+    validar_bodega_operable(user, origen, "bodega_origen")
     validar_misma_sede(origen.sede_id, **{campo_destino: destino})
 
 
@@ -45,7 +45,7 @@ class IsDespachoReader(permissions.BasePermission):
             return False
         if request.user.is_superuser or request.user.is_staff:
             return True
-        allowed_groups = ['admin_sistemas', 'admin_sede', 'despacho', 'ejecutivo']
+        allowed_groups = ["admin_sistemas", "admin_sede", "despacho", "ejecutivo"]
         return request.user.groups.filter(name__in=allowed_groups).exists()
 
 
@@ -61,7 +61,7 @@ class IsDespachoWriter(permissions.BasePermission):
             return False
         if request.user.is_superuser or request.user.is_staff:
             return True
-        allowed_groups = ['admin_sistemas', 'admin_sede', 'despacho']
+        allowed_groups = ["admin_sistemas", "admin_sede", "despacho"]
         return request.user.groups.filter(name__in=allowed_groups).exists()
 
 
@@ -76,7 +76,7 @@ class IsInventoryWriterOrAdmin(permissions.BasePermission):
             return False
         if request.user.is_superuser or request.user.is_staff:
             return True
-        allowed_groups = ['bodeguero', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        allowed_groups = ["bodeguero", "jefe_area", "jefe_planta", "admin_sede", "admin_sistemas"]
         return request.user.groups.filter(name__in=allowed_groups).exists()
 
 
@@ -94,5 +94,5 @@ class IsInventoryStaffOrAdmin(permissions.BasePermission):
             return True
 
         # Denegamos explícitamente a operarios rasos si no tienen otros roles
-        groups = request.user.groups.values_list('name', flat=True)
-        return not ('operario' in groups and len(groups) == 1)
+        groups = request.user.groups.values_list("name", flat=True)
+        return not ("operario" in groups and len(groups) == 1)

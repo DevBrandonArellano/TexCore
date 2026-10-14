@@ -15,32 +15,51 @@ class ClienteManager(models.Manager):
         # Subconsulta para el total de pedidos
         from .ventas import PagoCliente, PedidoVenta
 
-        pedidos_sq = PedidoVenta.objects.filter(cliente=OuterRef('pk'),
-                                                anulado=False,).values('cliente').annotate(
-            total=Sum('detalles__total_con_iva', output_field=DecimalField())
-            - Sum('valor_retencion', output_field=DecimalField())).values('total')
+        pedidos_sq = (
+            PedidoVenta.objects.filter(
+                cliente=OuterRef("pk"),
+                anulado=False,
+            )
+            .values("cliente")
+            .annotate(
+                total=Sum("detalles__total_con_iva", output_field=DecimalField())
+                - Sum("valor_retencion", output_field=DecimalField())
+            )
+            .values("total")
+        )
 
         # Subconsulta para el total de pagos
-        pagos_sq = PagoCliente.objects.filter(
-            cliente=OuterRef('pk')
-        ).values('cliente').annotate(
-            total=Sum('monto', output_field=DecimalField())
-        ).values('total')
+        pagos_sq = (
+            PagoCliente.objects.filter(cliente=OuterRef("pk"))
+            .values("cliente")
+            .annotate(total=Sum("monto", output_field=DecimalField()))
+            .values("total")
+        )
 
         # Subconsulta para Cartera Vencida (deuda vencida ayer o antes)
         from django.utils import timezone
 
-        cartera_vencida_sq = PedidoVenta.objects.filter(
-            cliente=OuterRef('pk'),
-            anulado=False, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()).values('cliente').annotate(
-            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField())
-            - Sum('valor_retencion', output_field=DecimalField())).values('total_vencido')
+        cartera_vencida_sq = (
+            PedidoVenta.objects.filter(
+                cliente=OuterRef("pk"), anulado=False, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()
+            )
+            .values("cliente")
+            .annotate(
+                total_vencido=Sum("detalles__total_con_iva", output_field=DecimalField())
+                - Sum("valor_retencion", output_field=DecimalField())
+            )
+            .values("total_vencido")
+        )
 
         # Anotación a nivel de base de datos
-        return super().get_queryset().annotate(
-            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.000'), output_field=DecimalField())
-            - Coalesce(Subquery(pagos_sq), Decimal('0.000'), output_field=DecimalField()),
-            cartera_vencida=Coalesce(Subquery(cartera_vencida_sq), Decimal('0.000'), output_field=DecimalField())
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal("0.000"), output_field=DecimalField())
+                - Coalesce(Subquery(pagos_sq), Decimal("0.000"), output_field=DecimalField()),
+                cartera_vencida=Coalesce(Subquery(cartera_vencida_sq), Decimal("0.000"), output_field=DecimalField()),
+            )
         )
 
 
@@ -48,9 +67,9 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
     # Lo agrega el manager por defecto (annotate): saldo de la cartera del cliente.
     saldo_calculado: Decimal
 
-    campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
+    campos_auditables = ["limite_credito", "plazo_credito_dias", "nivel_precio", "is_active"]
     requiere_justificacion_auditoria = True
-    NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
+    NIVEL_PRECIO_CHOICES = [("mayorista", "Mayorista"), ("normal", "Normal")]
     ruc_cedula = models.CharField(max_length=20)
     nombre_razon_social = models.CharField(max_length=255)
     direccion_envio = models.CharField(max_length=500)
@@ -60,23 +79,19 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
     limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     plazo_credito_dias = models.IntegerField(default=0, help_text="Días de crédito (0=Contado)")
     vendedor_asignado = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='clientes_asignados')
-    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes')
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="clientes_asignados"
+    )
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name="clientes")
 
     objects = ClienteManager()
 
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(limite_credito__gte=0),
-                name='gestion_cliente_limite_credito_positivo'
+                condition=models.Q(limite_credito__gte=0), name="gestion_cliente_limite_credito_positivo"
             )
         ]
-        unique_together = ('ruc_cedula', 'sede')
+        unique_together = ("ruc_cedula", "sede")
 
     def __str__(self):
         return self.nombre_razon_social
@@ -87,23 +102,22 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
 class PagoCliente(models.Model):
     METODO_CHOICES = [
-        ('efectivo', 'Efectivo'),
-        ('transferencia', 'Transferencia'),
-        ('cheque', 'Cheque'),
-        ('otro', 'Otro')
+        ("efectivo", "Efectivo"),
+        ("transferencia", "Transferencia"),
+        ("cheque", "Cheque"),
+        ("otro", "Otro"),
     ]
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='pagos')
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="pagos")
     fecha = models.DateTimeField(auto_now_add=True)
     monto = models.DecimalField(max_digits=12, decimal_places=3)
-    metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
-    comprobante = models.CharField(max_length=100, blank=True, default='')
-    notas = models.CharField(max_length=500, blank=True, default='')
+    metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default="transferencia")
+    comprobante = models.CharField(max_length=100, blank=True, default="")
+    notas = models.CharField(max_length=500, blank=True, default="")
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
     # P1-002: marca explícita de anticipo — permite que el monto exceda la
     # deuda actual; el excedente queda como saldo a favor del cliente
     es_anticipo = models.BooleanField(
-        default=False,
-        help_text='Pago por adelantado: el excedente sobre la deuda queda como saldo a favor'
+        default=False, help_text="Pago por adelantado: el excedente sobre la deuda queda como saldo a favor"
     )
 
     def __str__(self):
@@ -111,19 +125,19 @@ class PagoCliente(models.Model):
 
 
 class PedidoVenta(SedeResolvableMixin, AuditableModelMixin, models.Model):
-    campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']
+    campos_auditables = ["cliente", "guia_remision", "estado", "esta_pagado", "valor_retencion", "anulado"]
     ESTADO_CHOICES = [
-        ('pendiente', 'Pendiente'),
-        ('despachado_parcial', 'Despachado Parcialmente'),
-        ('despachado', 'Despachado'),
-        ('facturado', 'Facturado'),
+        ("pendiente", "Pendiente"),
+        ("despachado_parcial", "Despachado Parcialmente"),
+        ("despachado", "Despachado"),
+        ("facturado", "Facturado"),
     ]
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
     guia_remision = models.CharField(max_length=100)
     fecha_pedido = models.DateTimeField(auto_now_add=True)
     fecha_despacho = models.DateField(null=True, blank=True)
     fecha_vencimiento = models.DateField(null=True, blank=True)
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
     esta_pagado = models.BooleanField(default=False)
     # P1-003: monto aplicado vía reconciliación FIFO — visibiliza pagos
     # parciales que el booleano esta_pagado no puede representar
@@ -131,18 +145,14 @@ class PedidoVenta(SedeResolvableMixin, AuditableModelMixin, models.Model):
     valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='pedidos_creados')
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_creados"
+    )
 
     # Anulación
     anulado = models.BooleanField(default=False, db_index=True)
-    motivo_anulacion = models.TextField(blank=True, default='')
+    motivo_anulacion = models.TextField(blank=True, default="")
     anulado_por = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='pedidos_anulados'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="pedidos_anulados"
     )
     fecha_anulacion = models.DateTimeField(null=True, blank=True)
 
@@ -158,11 +168,8 @@ class PedidoVenta(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
 class DetallePedido(models.Model):
     pedido_venta = models.ForeignKey(
-        PedidoVenta,
-        on_delete=models.CASCADE,
-        related_name='detalles',
-        null=True,
-        blank=True)
+        PedidoVenta, on_delete=models.CASCADE, related_name="detalles", null=True, blank=True
+    )
 
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
 
@@ -188,32 +195,28 @@ class DetallePedido(models.Model):
         max_digits=12,
         decimal_places=3,
         default=0.000,
-        verbose_name='Cantidad Fabricada',
-        help_text='Cantidad completada en planta para este ítem de pedido',
+        verbose_name="Cantidad Fabricada",
+        help_text="Cantidad completada en planta para este ítem de pedido",
     )
 
     estado_fabricacion = models.CharField(
         max_length=20,
         choices=[
-            ('pendiente', 'Pendiente'),
-            ('en_proceso', 'En Proceso'),
-            ('fabricado', 'Fabricado'),
+            ("pendiente", "Pendiente"),
+            ("en_proceso", "En Proceso"),
+            ("fabricado", "Fabricado"),
         ],
-        default='pendiente',
+        default="pendiente",
         db_index=True,
-        verbose_name='Estado de Fabricación',
+        verbose_name="Estado de Fabricación",
     )
 
     class Meta:
         constraints = [
+            models.CheckConstraint(condition=models.Q(cantidad__gte=0), name="gestion_detallepedido_cantidad_positiva"),
             models.CheckConstraint(
-                condition=models.Q(cantidad__gte=0),
-                name='gestion_detallepedido_cantidad_positiva'
+                condition=models.Q(precio_unitario__gte=0), name="gestion_detallepedido_precio_unitario_positivo"
             ),
-            models.CheckConstraint(
-                condition=models.Q(precio_unitario__gte=0),
-                name='gestion_detallepedido_precio_unitario_positivo'
-            )
         ]
 
     def __str__(self):
@@ -221,12 +224,14 @@ class DetallePedido(models.Model):
 
     def save(self, *args, **kwargs):
         from decimal import Decimal
+
         subt = Decimal(str(self.peso)) * Decimal(str(self.precio_unitario))
         self.subtotal = subt
-        self.total_con_iva = subt * Decimal('1.15') if self.incluye_iva else subt
+        self.total_con_iva = subt * Decimal("1.15") if self.incluye_iva else subt
         super().save(*args, **kwargs)
 
     @property
     def saldo_pendiente_fabricacion(self):
         from decimal import Decimal
-        return max(Decimal('0.000'), (self.peso or Decimal('0.000')) - (self.cantidad_fabricada or Decimal('0.000')))
+
+        return max(Decimal("0.000"), (self.peso or Decimal("0.000")) - (self.cantidad_fabricada or Decimal("0.000")))

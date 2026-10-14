@@ -19,7 +19,7 @@ from gestion.models import ConsumoMateriaPrima, LoteProduccion, MateriaPrimaLote
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
-logger = logging.getLogger('gestion.services.materia_prima')
+logger = logging.getLogger("gestion.services.materia_prima")
 
 
 class MateriaPrimaService:
@@ -38,21 +38,21 @@ class MateriaPrimaService:
         usuario,
         certificado=None,
         numero_documento=None,
-        pais='',
-        calidad='',
+        pais="",
+        calidad="",
     ) -> MateriaPrimaLote:
         """Registra la recepción de un lote de materia prima del proveedor.
 
         Crea el MateriaPrimaLote, suma el stock en la bodega de recepción y
         registra el MovimientoInventario tipo COMPRA — todo atómico.
         """
-        cantidad_kg = Decimal(str(cantidad_kg)).quantize(Decimal('0.001'))
-        costo_unitario = Decimal(str(costo_unitario)).quantize(Decimal('0.001'))
+        cantidad_kg = Decimal(str(cantidad_kg)).quantize(Decimal("0.001"))
+        costo_unitario = Decimal(str(costo_unitario)).quantize(Decimal("0.001"))
 
         if cantidad_kg <= 0:
-            raise ValidationError('La cantidad recibida debe ser mayor a cero.')
+            raise ValidationError("La cantidad recibida debe ser mayor a cero.")
         if costo_unitario < 0:
-            raise ValidationError('El costo unitario no puede ser negativo.')
+            raise ValidationError("El costo unitario no puede ser negativo.")
 
         mp_lote = MateriaPrimaLote(
             producto=producto,
@@ -63,10 +63,10 @@ class MateriaPrimaService:
             bodega_recepcion=bodega_recepcion,
             fecha_recepcion=fecha_recepcion,
             certificado_calidad=certificado,
-            numero_documento_entrada=numero_documento or '',
+            numero_documento_entrada=numero_documento or "",
             sede=bodega_recepcion.sede,
         )
-        mp_lote._justificacion_auditoria = f'Recepción de MP {lote_proveedor} de {proveedor.nombre}'
+        mp_lote._justificacion_auditoria = f"Recepción de MP {lote_proveedor} de {proveedor.nombre}"
         mp_lote.save()
 
         # Stock en bodega de recepción (thread-safe)
@@ -77,37 +77,39 @@ class MateriaPrimaService:
             lote=None,
         )
         stock.cantidad += cantidad_kg
-        stock._justificacion_auditoria = f'Entrada MP-{lote_proveedor}'
+        stock._justificacion_auditoria = f"Entrada MP-{lote_proveedor}"
         stock.save()
 
         # Kardex: movimiento COMPRA con referencia al lote del proveedor
         MovimientoInventario.objects.create(
-            tipo_movimiento='COMPRA',
+            tipo_movimiento="COMPRA",
             producto=producto,
             bodega_origen=None,
             bodega_destino=bodega_recepcion,
             cantidad=cantidad_kg,
             usuario=usuario,
-            documento_ref=f'MP-{lote_proveedor}',
+            documento_ref=f"MP-{lote_proveedor}",
             proveedor=proveedor,
             saldo_resultante=stock.cantidad,
             materia_prima_lote=mp_lote,
-            pais=pais or '',
-            calidad=calidad or '',
+            pais=pais or "",
+            calidad=calidad or "",
         )
 
         logger.info(
-            'MateriaPrimaLote %s registrada: %s (%s kg)',
+            "MateriaPrimaLote %s registrada: %s (%s kg)",
             mp_lote.id,
             lote_proveedor,
             cantidad_kg,
-            extra={'sd': {
-                'entity': 'MateriaPrimaLote',
-                'action': 'CREATE',
-                'proveedor': proveedor.nombre,
-                'lote_proveedor': lote_proveedor,
-                'user': getattr(usuario, 'username', 'sistema'),
-            }},
+            extra={
+                "sd": {
+                    "entity": "MateriaPrimaLote",
+                    "action": "CREATE",
+                    "proveedor": proveedor.nombre,
+                    "lote_proveedor": lote_proveedor,
+                    "user": getattr(usuario, "username", "sistema"),
+                }
+            },
         )
         return mp_lote
 
@@ -123,26 +125,24 @@ class MateriaPrimaService:
         consumos_creados = []
 
         for consumo in consumos_data:
-            mp_lote = MateriaPrimaLote.objects.select_for_update().get(
-                id=consumo['materia_prima_lote_id']
-            )
-            cantidad = Decimal(str(consumo['cantidad_kg'])).quantize(Decimal('0.001'))
+            mp_lote = MateriaPrimaLote.objects.select_for_update().get(id=consumo["materia_prima_lote_id"])
+            cantidad = Decimal(str(consumo["cantidad_kg"])).quantize(Decimal("0.001"))
 
             if cantidad <= 0:
-                raise ValidationError('La cantidad a consumir debe ser mayor a cero.')
+                raise ValidationError("La cantidad a consumir debe ser mayor a cero.")
 
             if mp_lote.cantidad_disponible < cantidad:
                 raise ValidationError(
-                    f'Stock insuficiente del lote de MP {mp_lote.lote_proveedor}. '
-                    f'Disponible: {mp_lote.cantidad_disponible} kg, '
-                    f'Requerido: {cantidad} kg.'
+                    f"Stock insuficiente del lote de MP {mp_lote.lote_proveedor}. "
+                    f"Disponible: {mp_lote.cantidad_disponible} kg, "
+                    f"Requerido: {cantidad} kg."
                 )
 
             registro = ConsumoMateriaPrima.objects.create(
                 lote_produccion=lote_produccion,
                 materia_prima_lote=mp_lote,
                 cantidad_kg=cantidad,
-                porcentaje_utilizado=(cantidad / mp_lote.cantidad_kg * 100).quantize(Decimal('0.01')),
+                porcentaje_utilizado=(cantidad / mp_lote.cantidad_kg * 100).quantize(Decimal("0.01")),
                 usuario=usuario,
             )
             consumos_creados.append(registro)
@@ -150,11 +150,11 @@ class MateriaPrimaService:
             mp_lote.cantidad_consumida += cantidad
             if mp_lote.cantidad_consumida >= mp_lote.cantidad_kg:
                 mp_lote.completamente_consumida = True
-            mp_lote._justificacion_auditoria = f'Consumo en lote {lote_produccion.codigo_lote}'
+            mp_lote._justificacion_auditoria = f"Consumo en lote {lote_produccion.codigo_lote}"
             mp_lote.save()
 
             logger.info(
-                'Consumo MP registrado: %s - %s kg en %s',
+                "Consumo MP registrado: %s - %s kg en %s",
                 mp_lote.lote_proveedor,
                 cantidad,
                 lote_produccion.codigo_lote,
@@ -170,8 +170,9 @@ class MateriaPrimaService:
         mp_lote = MateriaPrimaLote.objects.select_for_update().get(pk=mp_lote_id)
         if nueva_cantidad < mp_lote.cantidad_consumida:
             raise ValidationError(
-                f'La cantidad recibida no puede ser menor a lo ya consumido '
-                f'({mp_lote.cantidad_consumida} kg) del lote {mp_lote.lote_proveedor}.')
+                f"La cantidad recibida no puede ser menor a lo ya consumido "
+                f"({mp_lote.cantidad_consumida} kg) del lote {mp_lote.lote_proveedor}."
+            )
         mp_lote.cantidad_kg = nueva_cantidad
         mp_lote.completamente_consumida = mp_lote.cantidad_consumida >= nueva_cantidad
         mp_lote._justificacion_auditoria = justificacion
@@ -186,8 +187,9 @@ class MateriaPrimaService:
         mp_lote = MateriaPrimaLote.objects.select_for_update().get(pk=mp_lote_id)
         if mp_lote.cantidad_consumida > 0 or mp_lote.consumos.exists():
             raise ValidationError(
-                f'El lote {mp_lote.lote_proveedor} ya se consumió en producción; '
-                f'corrija la cantidad en lugar de eliminar la recepción.')
+                f"El lote {mp_lote.lote_proveedor} ya se consumió en producción; "
+                f"corrija la cantidad en lugar de eliminar la recepción."
+            )
         mp_lote._justificacion_auditoria = justificacion
         mp_lote.delete()
 
@@ -197,40 +199,42 @@ class TraceabilityService:
 
     @staticmethod
     def obtener_cadena_completa(lote_produccion: LoteProduccion) -> dict:
-        consumos = ConsumoMateriaPrima.objects.filter(
-            lote_produccion=lote_produccion
-        ).select_related('materia_prima_lote__proveedor', 'materia_prima_lote__producto')
+        consumos = ConsumoMateriaPrima.objects.filter(lote_produccion=lote_produccion).select_related(
+            "materia_prima_lote__proveedor", "materia_prima_lote__producto"
+        )
 
         componentes = []
-        costo_total = Decimal('0.000')
+        costo_total = Decimal("0.000")
 
         for consumo in consumos:
             mp = consumo.materia_prima_lote
             costo_consumo = mp.costo_unitario * consumo.cantidad_kg
             costo_total += costo_consumo
 
-            componentes.append({
-                'materia_prima_lote': mp.lote_proveedor,
-                'producto': mp.producto.descripcion,
-                'proveedor': mp.proveedor.nombre,
-                'cantidad_kg': float(consumo.cantidad_kg),
-                'costo_unitario': float(mp.costo_unitario),
-                'costo_total': float(costo_consumo),
-                'certificado': mp.certificado_calidad.url if mp.certificado_calidad else None,
-                'numero_documento': mp.numero_documento_entrada,
-                'fecha_recepcion': mp.fecha_recepcion.isoformat(),
-                'porcentaje_utilizado': float(consumo.porcentaje_utilizado or 0),
-            })
+            componentes.append(
+                {
+                    "materia_prima_lote": mp.lote_proveedor,
+                    "producto": mp.producto.descripcion,
+                    "proveedor": mp.proveedor.nombre,
+                    "cantidad_kg": float(consumo.cantidad_kg),
+                    "costo_unitario": float(mp.costo_unitario),
+                    "costo_total": float(costo_consumo),
+                    "certificado": mp.certificado_calidad.url if mp.certificado_calidad else None,
+                    "numero_documento": mp.numero_documento_entrada,
+                    "fecha_recepcion": mp.fecha_recepcion.isoformat(),
+                    "porcentaje_utilizado": float(consumo.porcentaje_utilizado or 0),
+                }
+            )
 
         orden = lote_produccion.orden_produccion
         producto_final = (orden.producto_salida or orden.producto_entrada) if orden else None
 
         return {
-            'lote_final': lote_produccion.codigo_lote,
-            'producto_final': producto_final.descripcion if producto_final else None,
-            'cantidad_producida': float(lote_produccion.peso_neto_producido),
-            'componentes': componentes,
-            'costo_total_materias_primas': float(costo_total),
-            'fecha_produccion': lote_produccion.hora_final.isoformat() if lote_produccion.hora_final else None,
-            'clasificacion_calidad': lote_produccion.clasificacion_calidad,
+            "lote_final": lote_produccion.codigo_lote,
+            "producto_final": producto_final.descripcion if producto_final else None,
+            "cantidad_producida": float(lote_produccion.peso_neto_producido),
+            "componentes": componentes,
+            "costo_total_materias_primas": float(costo_total),
+            "fecha_produccion": lote_produccion.hora_final.isoformat() if lote_produccion.hora_final else None,
+            "clasificacion_calidad": lote_produccion.clasificacion_calidad,
         }

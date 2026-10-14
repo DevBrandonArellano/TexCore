@@ -21,27 +21,30 @@ from inventory.services.transicion_bodega_service import TransicionBodegaService
 
 
 class TransicionTresFasesTestCase(TestCase):
-
     def setUp(self):
-        self.sede = Sede.objects.create(nombre='Sede 3F', location='Quito')
-        self.usuario = CustomUser.objects.create_user(username='bodeguero_3f', password='pass')
+        self.sede = Sede.objects.create(nombre="Sede 3F", location="Quito")
+        self.usuario = CustomUser.objects.create_user(username="bodeguero_3f", password="pass")
         self.producto = Producto.objects.create(
-            codigo='Q-3F', descripcion='Químico 3F', tipo='quimico',
-            unidad_medida='kg', precio_base=Decimal('5.00'), sede=self.sede,
+            codigo="Q-3F",
+            descripcion="Químico 3F",
+            tipo="quimico",
+            unidad_medida="kg",
+            precio_base=Decimal("5.00"),
+            sede=self.sede,
         )
-        self.bodega_a = Bodega.objects.create(nombre='Bodega A', sede=self.sede)
-        self.bodega_transito = Bodega.objects.create(nombre='Bodega Tránsito', sede=self.sede)
-        self.bodega_b = Bodega.objects.create(nombre='Bodega B', sede=self.sede)
+        self.bodega_a = Bodega.objects.create(nombre="Bodega A", sede=self.sede)
+        self.bodega_transito = Bodega.objects.create(nombre="Bodega Tránsito", sede=self.sede)
+        self.bodega_b = Bodega.objects.create(nombre="Bodega B", sede=self.sede)
 
-        stock = StockBodega(bodega=self.bodega_a, producto=self.producto, cantidad=Decimal('100.000'))
-        stock._justificacion_auditoria = 'Stock inicial test 3-fase'
+        stock = StockBodega(bodega=self.bodega_a, producto=self.producto, cantidad=Decimal("100.000"))
+        stock._justificacion_auditoria = "Stock inicial test 3-fase"
         stock.save()
 
     def _stock(self, bodega):
         item = StockBodega.objects.filter(bodega=bodega, producto=self.producto).first()
-        return item.cantidad if item else Decimal('0.000')
+        return item.cantidad if item else Decimal("0.000")
 
-    def _iniciar(self, cantidad='30.000'):
+    def _iniciar(self, cantidad="30.000"):
         return TransicionBodegaService.iniciar_transicion(
             producto=self.producto,
             bodega_origen=self.bodega_a,
@@ -49,25 +52,25 @@ class TransicionTresFasesTestCase(TestCase):
             bodega_transicion=self.bodega_transito,
             cantidad=Decimal(cantidad),
             usuario=self.usuario,
-            documento_ref='TEST-3F',
+            documento_ref="TEST-3F",
         )
 
     def test_transicion_dado_stock_suficiente_cuando_inicia_entonces_pasa_de_origen_a_transito(self):
         """FASE 1+2: origen 100→70, tránsito 0→30, estado en_transito."""
         mov = self._iniciar()
 
-        self.assertEqual(mov.estado_movimiento, 'en_transito')
+        self.assertEqual(mov.estado_movimiento, "en_transito")
         self.assertEqual(mov.bodega_transicion, self.bodega_transito)
-        self.assertEqual(self._stock(self.bodega_a), Decimal('70.000'))
-        self.assertEqual(self._stock(self.bodega_transito), Decimal('30.000'))
-        self.assertEqual(self._stock(self.bodega_b), Decimal('0.000'))
+        self.assertEqual(self._stock(self.bodega_a), Decimal("70.000"))
+        self.assertEqual(self._stock(self.bodega_transito), Decimal("30.000"))
+        self.assertEqual(self._stock(self.bodega_b), Decimal("0.000"))
 
     def test_transicion_dado_stock_insuficiente_cuando_inicia_entonces_falla_sin_cambios(self):
         """EP insuficiente: 150 > 100 disponibles → error, nada cambia."""
         with self.assertRaises(ValidationError):
-            self._iniciar(cantidad='150.000')
-        self.assertEqual(self._stock(self.bodega_a), Decimal('100.000'))
-        self.assertEqual(self._stock(self.bodega_transito), Decimal('0.000'))
+            self._iniciar(cantidad="150.000")
+        self.assertEqual(self._stock(self.bodega_a), Decimal("100.000"))
+        self.assertEqual(self._stock(self.bodega_transito), Decimal("0.000"))
 
     def test_transicion_dado_en_transito_cuando_completa_entonces_pasa_a_destino(self):
         """FASE 3: tránsito 30→0, destino 0→30, estado completado (sin duplicar)."""
@@ -75,13 +78,14 @@ class TransicionTresFasesTestCase(TestCase):
         TransicionBodegaService.completar_transicion(mov, self.usuario)
 
         mov.refresh_from_db()
-        self.assertEqual(mov.estado_movimiento, 'completado')
-        self.assertEqual(self._stock(self.bodega_transito), Decimal('0.000'),
-                         'El material NO debe quedar duplicado en tránsito')
-        self.assertEqual(self._stock(self.bodega_b), Decimal('30.000'))
+        self.assertEqual(mov.estado_movimiento, "completado")
+        self.assertEqual(
+            self._stock(self.bodega_transito), Decimal("0.000"), "El material NO debe quedar duplicado en tránsito"
+        )
+        self.assertEqual(self._stock(self.bodega_b), Decimal("30.000"))
         # Balance total del sistema se conserva: 70 + 0 + 30 = 100
         total = self._stock(self.bodega_a) + self._stock(self.bodega_transito) + self._stock(self.bodega_b)
-        self.assertEqual(total, Decimal('100.000'))
+        self.assertEqual(total, Decimal("100.000"))
 
     def test_transicion_dado_ya_completada_cuando_completa_otra_vez_entonces_falla(self):
         """EP estado inválido: completar dos veces → ValidationError."""
@@ -94,31 +98,29 @@ class TransicionTresFasesTestCase(TestCase):
     def test_transicion_dado_en_transito_cuando_revierte_entonces_restaura_origen(self):
         """STT reversión: origen vuelve a 100, tránsito a 0, estado revertido."""
         mov = self._iniciar()
-        TransicionBodegaService.revertir_transicion(
-            mov, self.usuario, justificacion='Falla en tintorería'
-        )
+        TransicionBodegaService.revertir_transicion(mov, self.usuario, justificacion="Falla en tintorería")
 
         mov.refresh_from_db()
-        self.assertEqual(mov.estado_movimiento, 'revertido')
-        self.assertEqual(self._stock(self.bodega_a), Decimal('100.000'))
-        self.assertEqual(self._stock(self.bodega_transito), Decimal('0.000'))
-        self.assertEqual(self._stock(self.bodega_b), Decimal('0.000'))
+        self.assertEqual(mov.estado_movimiento, "revertido")
+        self.assertEqual(self._stock(self.bodega_a), Decimal("100.000"))
+        self.assertEqual(self._stock(self.bodega_transito), Decimal("0.000"))
+        self.assertEqual(self._stock(self.bodega_b), Decimal("0.000"))
 
     def test_transicion_dado_sin_justificacion_cuando_revierte_entonces_falla(self):
         """EP justificación vacía → ValidationError (auditoría obligatoria)."""
         mov = self._iniciar()
         with self.assertRaises(ValidationError):
-            TransicionBodegaService.revertir_transicion(mov, self.usuario, justificacion='')
+            TransicionBodegaService.revertir_transicion(mov, self.usuario, justificacion="")
 
     def test_movimiento_dado_creado_sin_protocolo_cuando_guarda_entonces_queda_completado(self):
         """Compatibilidad: un movimiento creado sin protocolo queda 'completado'."""
         mov = MovimientoInventario.objects.create(
-            tipo_movimiento='COMPRA',
+            tipo_movimiento="COMPRA",
             producto=self.producto,
             bodega_destino=self.bodega_a,
-            cantidad=Decimal('10.000'),
+            cantidad=Decimal("10.000"),
             usuario=self.usuario,
-            documento_ref='LEGACY',
-            saldo_resultante=Decimal('110.000'),
+            documento_ref="LEGACY",
+            saldo_resultante=Decimal("110.000"),
         )
-        self.assertEqual(mov.estado_movimiento, 'completado')
+        self.assertEqual(mov.estado_movimiento, "completado")

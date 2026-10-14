@@ -4,6 +4,7 @@ ISO 27001 A.12.4 — Registro de eventos.
 RFC 5424: niveles de severidad en logs estructurados.
 SRP: única responsabilidad — registrar eventos de audit.
 """
+
 import logging
 
 logger = logging.getLogger("internal_api.audit")

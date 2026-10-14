@@ -6,6 +6,7 @@ src/main.py llama _get_required_env() a nivel de módulo, lo que lanza RuntimeEr
 si las variables no existen. setdefault no sobreescribe valores ya definidos en el
 entorno (ej: CI con variables reales o test_validate_endpoint.py que importa src.main).
 """
+
 import os
 
 os.environ.setdefault("DJANGO_INTERNAL_URL", "http://mock-django:8000")

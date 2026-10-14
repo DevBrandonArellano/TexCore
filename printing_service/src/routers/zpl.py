@@ -3,6 +3,7 @@ Router para generación de etiquetas ZPL.
 DIP: get_zpl_strategy y get_audit_repo crean dependencias; el router no las construye.
 ISO 27001 A.12.4: cada generación de etiqueta genera un registro de auditoría persistido en SQLite.
 """
+
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException

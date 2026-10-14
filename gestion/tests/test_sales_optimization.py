@@ -16,13 +16,14 @@ class PedidoVentaOptimizationTest(TestCase):
     Asegura que el listado de Pedidos no genere problemas N+1 queries al cargar detalles,
     maximizando la eficiencia en base de datos.
     """
+
     def setUp(self):
         self.client = APIClient()
         self.sede = Sede.objects.create(nombre="Sede Principal", location="Quito")
         self.user = User.objects.create_user(username="test_admin", password="password")
         self.user.sede = self.sede
         self.user.save()
-        grupo_admin, _ = Group.objects.get_or_create(name='admin_sistemas')
+        grupo_admin, _ = Group.objects.get_or_create(name="admin_sistemas")
         self.user.groups.add(grupo_admin)
 
         self.cliente = Cliente.objects.create(
@@ -30,14 +31,10 @@ class PedidoVentaOptimizationTest(TestCase):
             nombre_razon_social="Cliente Test",
             direccion_envio="Av Siempre Viva",
             nivel_precio="normal",
-            sede=self.sede
+            sede=self.sede,
         )
         self.producto = Producto.objects.create(
-            codigo="PROD1",
-            descripcion="Hilo de Algodon",
-            tipo="hilo",
-            unidad_medida="kg",
-            precio_base=10.0
+            codigo="PROD1", descripcion="Hilo de Algodon", tipo="hilo", unidad_medida="kg", precio_base=10.0
         )
 
         # Crear 10 pedidos con 5 detalles cada uno
@@ -47,7 +44,7 @@ class PedidoVentaOptimizationTest(TestCase):
                 sede=self.sede,
                 vendedor_asignado=self.user,
                 guia_remision=f"GR-{i:04d}",
-                estado='pendiente'
+                estado="pendiente",
             )
             for _ in range(5):
                 DetallePedido.objects.create(
@@ -55,8 +52,8 @@ class PedidoVentaOptimizationTest(TestCase):
                     producto=self.producto,
                     cantidad=1,
                     piezas=1,
-                    peso=Decimal('10.00'),
-                    precio_unitario=Decimal('10.00')
+                    peso=Decimal("10.00"),
+                    precio_unitario=Decimal("10.00"),
                 )
 
         self.client.force_authenticate(user=self.user)
@@ -68,7 +65,7 @@ class PedidoVentaOptimizationTest(TestCase):
         en el número de consultas independientemente de la cantidad de registros (prefetch_related).
         """
         # La primera query inicializa caches y auth, por lo que primero hacemos una request warmup
-        self.client.get('/api/pedidos-venta/?limit=5', HTTP_ACCEPT='application/json')
+        self.client.get("/api/pedidos-venta/?limit=5", HTTP_ACCEPT="application/json")
 
         # Ahora probamos con assertNumQueries
         # Consultas esperadas (aprox):
@@ -78,9 +75,9 @@ class PedidoVentaOptimizationTest(TestCase):
         # 1 para prefetch de Detalles
         # TOTAL esperado: < 15 queries, NO ~50 queries.
         with self.assertNumQueriesLessThan(20):
-            response = self.client.get('/api/pedidos-venta/?limit=10', HTTP_ACCEPT='application/json')
+            response = self.client.get("/api/pedidos-venta/?limit=10", HTTP_ACCEPT="application/json")
             self.assertEqual(response.status_code, 200)
-            self.assertEqual(len(response.data['results']), 10)
+            self.assertEqual(len(response.data["results"]), 10)
 
     def assertNumQueriesLessThan(self, num):
         from django.db import connection
@@ -93,9 +90,7 @@ class PedidoVentaOptimizationTest(TestCase):
                     return
                 executed = len(self)
                 if executed >= num:
-                    self.test_case.fail(
-                        f"{executed} queries executed, {num} or more expected to not be exceeded."
-                    )
+                    self.test_case.fail(f"{executed} queries executed, {num} or more expected to not be exceeded.")
 
         context = LessThanQueriesContext(connection)
         context.test_case = self
@@ -106,35 +101,38 @@ class PedidoVentaOptimizationTest(TestCase):
         Prueba ISTQB: Cobertura de filtros por vendedor_id, vendedor_username, sede_id y limit inválido.
         """
         res_vendedor_id = self.client.get(
-            f'/api/pedidos-venta/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
+            f"/api/pedidos-venta/?vendedor_id={self.user.id}", HTTP_ACCEPT="application/json"
+        )
         self.assertEqual(res_vendedor_id.status_code, 200)
 
-        res_vendedor_inv = self.client.get('/api/pedidos-venta/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
+        res_vendedor_inv = self.client.get("/api/pedidos-venta/?vendedor_id=invalido", HTTP_ACCEPT="application/json")
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
         res_vendedor_user = self.client.get(
-            f'/api/pedidos-venta/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+            f"/api/pedidos-venta/?vendedor_username={self.user.username}", HTTP_ACCEPT="application/json"
+        )
         self.assertEqual(res_vendedor_user.status_code, 200)
 
-        res_sede = self.client.get(f'/api/pedidos-venta/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
+        res_sede = self.client.get(f"/api/pedidos-venta/?sede_id={self.sede.id}", HTTP_ACCEPT="application/json")
         self.assertEqual(res_sede.status_code, 200)
 
-        res_limit_inv = self.client.get('/api/pedidos-venta/?limit=invalido', HTTP_ACCEPT='application/json')
+        res_limit_inv = self.client.get("/api/pedidos-venta/?limit=invalido", HTTP_ACCEPT="application/json")
         self.assertEqual(res_limit_inv.status_code, 200)
 
     def test_clientes_dado_filtros_de_vendedor_cuando_lista_entonces_los_aplica(self):
         """
         Prueba ISTQB: Cobertura de filtros de clientes por vendedor_id, vendedor_username y valores inválidos.
         """
-        res_vendedor_id = self.client.get(f'/api/clientes/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
+        res_vendedor_id = self.client.get(f"/api/clientes/?vendedor_id={self.user.id}", HTTP_ACCEPT="application/json")
         self.assertEqual(res_vendedor_id.status_code, 200)
 
-        res_vendedor_inv = self.client.get('/api/clientes/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
+        res_vendedor_inv = self.client.get("/api/clientes/?vendedor_id=invalido", HTTP_ACCEPT="application/json")
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
         res_vendedor_user = self.client.get(
-            f'/api/clientes/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+            f"/api/clientes/?vendedor_username={self.user.username}", HTTP_ACCEPT="application/json"
+        )
         self.assertEqual(res_vendedor_user.status_code, 200)
 
-        res_sede = self.client.get(f'/api/clientes/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
+        res_sede = self.client.get(f"/api/clientes/?sede_id={self.sede.id}", HTTP_ACCEPT="application/json")
         self.assertEqual(res_sede.status_code, 200)

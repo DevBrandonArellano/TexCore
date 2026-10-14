@@ -4,6 +4,7 @@ No requieren BD, HTTP ni FastAPI: solo dependen del Protocol ILoteRepository.
 LoteValidationService recibe un mock que implementa ILoteRepository — sin sys.modules hacks.
 Convención ISTQB: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 """
+
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -62,8 +63,8 @@ def _make_repo(lote=None, stock=None) -> MagicMock:
 # EP Clase Inválida: lote no encontrado
 # ---------------------------------------------------------------------------
 
-class TestLoteValidationService_LoteNoEncontrado:
 
+class TestLoteValidationService_LoteNoEncontrado:
     def test_validate_dado_codigo_inexistente_cuando_validar_entonces_retorna_invalido(self):
         service = LoteValidationService(_make_repo(lote=None))
         result = service.validate("LOTE-INEXISTENTE")
@@ -85,8 +86,8 @@ class TestLoteValidationService_LoteNoEncontrado:
 # EP Clase Inválida: lote sin orden de producción
 # ---------------------------------------------------------------------------
 
-class TestLoteValidationService_LoteSinOrden:
 
+class TestLoteValidationService_LoteSinOrden:
     def test_validate_dado_lote_sin_orden_cuando_validar_entonces_retorna_invalido(self):
         lote = _make_lote()
         lote.orden_produccion = None
@@ -113,8 +114,8 @@ class TestLoteValidationService_LoteSinOrden:
 # EP Clase Inválida: lote sin stock
 # ---------------------------------------------------------------------------
 
-class TestLoteValidationService_LoteSinStock:
 
+class TestLoteValidationService_LoteSinStock:
     def test_validate_dado_lote_sin_stock_cuando_validar_entonces_retorna_invalido(self):
         lote = _make_lote()
         result = LoteValidationService(_make_repo(lote=lote, stock=None)).validate("LOTE-00001")
@@ -133,8 +134,8 @@ class TestLoteValidationService_LoteSinStock:
 # EP Clase Válida: lote con stock disponible
 # ---------------------------------------------------------------------------
 
-class TestLoteValidationService_LoteValido:
 
+class TestLoteValidationService_LoteValido:
     def test_validate_dado_lote_con_stock_cuando_validar_entonces_retorna_valido(self):
         lote = _make_lote("LOTE-00001")
         stock = _make_stock(cantidad=25)
@@ -150,9 +151,7 @@ class TestLoteValidationService_LoteValido:
     def test_validate_dado_lote_valido_cuando_validar_entonces_retorna_nombre_bodega_correcto(self):
         bodega = _make_bodega(id=10, nombre="Bodega Sur")
         lote = _make_lote()
-        result = LoteValidationService(
-            _make_repo(lote=lote, stock=_make_stock(bodega=bodega))
-        ).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock(bodega=bodega))).validate("LOTE-00001")
         assert result.lote.bodega_nombre == "Bodega Sur"
         assert result.lote.bodega_id == 10
 
@@ -160,25 +159,19 @@ class TestLoteValidationService_LoteValido:
         producto = _make_producto(id=5, descripcion="Hilo Texturizado")
         orden = _make_orden(producto=producto)
         lote = _make_lote(orden=orden)
-        result = LoteValidationService(
-            _make_repo(lote=lote, stock=_make_stock())
-        ).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001")
         assert result.lote.producto_id == 5
         assert result.lote.producto_nombre == "Hilo Texturizado"
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_peso_es_string_de_cantidad(self):
         stock = _make_stock(cantidad=37.5)
         lote = _make_lote()
-        result = LoteValidationService(
-            _make_repo(lote=lote, stock=stock)
-        ).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=stock)).validate("LOTE-00001")
         assert result.lote.peso == "37.5"
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_lote_sin_razon(self):
         lote = _make_lote()
-        result = LoteValidationService(
-            _make_repo(lote=lote, stock=_make_stock())
-        ).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001")
         assert result.reason is None
 
 
@@ -195,6 +188,7 @@ class TestLoteValidationService_LoteValido:
 # producción para todo lote que sí existía.
 # ---------------------------------------------------------------------------
 
+
 class _RealDomainRepo:
     """Fake de ILoteRepository que retorna dataclasses reales de domain.models."""
 
@@ -210,7 +204,6 @@ class _RealDomainRepo:
 
 
 class TestLoteValidationService_ConDominioReal:
-
     def test_validate_dado_lote_real_con_stock_cuando_valida_entonces_retorna_valido(self):
         producto = Producto(id=5, descripcion="Hilo Nylon 40/1")
         orden = OrdenProduccion(id=1, estado="finalizada", producto_salida=producto)
@@ -239,7 +232,8 @@ class TestLoteValidationService_ProductosDelLote:
         cono = Producto(id=6, descripcion="Cono")
         central = Bodega(id=10, nombre="Bodega Central")
         lote = LoteProduccion(
-            id=1, codigo_lote="LOTE-00001",
+            id=1,
+            codigo_lote="LOTE-00001",
             orden_produccion=OrdenProduccion(id=1, estado="finalizada", producto_salida=hilo),
             productos=[
                 LineaStock(producto=hilo, cantidad=Decimal("25.500"), bodega=central),
@@ -259,8 +253,9 @@ class TestLoteValidationService_ProductosDelLote:
 
     def test_validate_dado_lote_sin_detalle_de_productos_cuando_valida_entonces_campos_nuevos_vacios(self):
         producto = Producto(id=5, descripcion="Hilo")
-        lote = LoteProduccion(id=1, codigo_lote="L-1",
-                              orden_produccion=OrdenProduccion(id=1, estado="x", producto_salida=producto))
+        lote = LoteProduccion(
+            id=1, codigo_lote="L-1", orden_produccion=OrdenProduccion(id=1, estado="x", producto_salida=producto)
+        )
         stock = StockBodega(id=1, cantidad=Decimal("1.000"), bodega=Bodega(id=1, nombre="B"))
 
         result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("L-1")

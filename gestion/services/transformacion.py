@@ -14,6 +14,7 @@ Concurrencia (ISO 27001 A.12 / integridad):
 
 RFC 5424: cada registro emite un log estructurado con extra={'sd': {...}}.
 """
+
 import logging
 from decimal import Decimal
 from typing import Any, cast
@@ -49,61 +50,59 @@ class TransformacionService:
         # En SQLite (tests) es no-op; en SQL Server (prod/CI) aplica el lock.
         orden = OrdenProduccion.objects.select_for_update().get(id=orden.id)
 
-        maquina = TransformacionService._resolver_maquina(data.get('maquina'))
+        maquina = TransformacionService._resolver_maquina(data.get("maquina"))
 
         # Aislamiento por área (multi-planta vía Sede): la máquina debe pertenecer
         # al área de la OP. Evita registrar en máquinas de otra área/sede.
         if orden.area_id and maquina.area_id != orden.area_id:
-            raise ValidationError({
-                'maquina': f'La máquina "{maquina.nombre}" no pertenece al área de la orden.'
-            })
+            raise ValidationError({"maquina": f'La máquina "{maquina.nombre}" no pertenece al área de la orden.'})
 
-        ultima = orden.transformaciones.order_by('-numero_secuencia').first()
+        ultima = orden.transformaciones.order_by("-numero_secuencia").first()
         numero_secuencia = (ultima.numero_secuencia + 1) if ultima else 1
 
-        producto_entrada = TransformacionService._derivar_producto_entrada(
-            orden, ultima, data.get('producto_entrada')
-        )
+        producto_entrada = TransformacionService._derivar_producto_entrada(orden, ultima, data.get("producto_entrada"))
         producto_salida = TransformacionService._resolver_producto(
-            data.get('producto_salida'), 'producto_salida', sede_id=orden.sede_id
+            data.get("producto_salida"), "producto_salida", sede_id=orden.sede_id
         )
-        operario = TransformacionService._resolver_operario(data.get('operario'), user)
+        operario = TransformacionService._resolver_operario(data.get("operario"), user)
 
         transformacion = TransformacionProducto(
             orden_produccion=orden,
-            etapa_id=data.get('etapa'),
+            etapa_id=data.get("etapa"),
             numero_secuencia=numero_secuencia,
             producto_entrada=producto_entrada,
             producto_salida=producto_salida,
             maquina=maquina,
             operario=operario,
-            peso_entrada=Decimal(str(data['peso_entrada'])),
-            peso_salida=Decimal(str(data['peso_salida'])),
-            cantidad_entrada=data.get('cantidad_entrada'),
-            cantidad_salida=data.get('cantidad_salida'),
+            peso_entrada=Decimal(str(data["peso_entrada"])),
+            peso_salida=Decimal(str(data["peso_salida"])),
+            cantidad_entrada=data.get("cantidad_entrada"),
+            cantidad_salida=data.get("cantidad_salida"),
             # Pueden faltar en el payload: full_clean() en save() las rechaza con 400.
-            fecha_inicio=cast(Any, data.get('fecha_inicio')),
-            fecha_fin=cast(Any, data.get('fecha_fin')),
-            estado=data.get('estado', 'completada'),
-            observaciones=data.get('observaciones', '') or '',
+            fecha_inicio=cast(Any, data.get("fecha_inicio")),
+            fecha_fin=cast(Any, data.get("fecha_fin")),
+            estado=data.get("estado", "completada"),
+            observaciones=data.get("observaciones", "") or "",
         )
         # AuditableModelMixin.save() ejecuta full_clean(): valida merma>=0,
         # coherencia de fechas y unicidad de secuencia, y emite el AuditLog.
         transformacion.save()
 
         logger.info(
-            'Transformación de producto registrada',
-            extra={'sd': {
-                'rfc5424_severity': 6,
-                'op': orden.codigo,
-                'transformacion_id': transformacion.id,
-                'numero_secuencia': transformacion.numero_secuencia,
-                'producto_entrada': producto_entrada.codigo,
-                'producto_salida': producto_salida.codigo,
-                'maquina': maquina.nombre,
-                'merma_kg': str(transformacion.merma),
-                'sede_id': orden.sede_id,
-            }},
+            "Transformación de producto registrada",
+            extra={
+                "sd": {
+                    "rfc5424_severity": 6,
+                    "op": orden.codigo,
+                    "transformacion_id": transformacion.id,
+                    "numero_secuencia": transformacion.numero_secuencia,
+                    "producto_entrada": producto_entrada.codigo,
+                    "producto_salida": producto_salida.codigo,
+                    "maquina": maquina.nombre,
+                    "merma_kg": str(transformacion.merma),
+                    "sede_id": orden.sede_id,
+                }
+            },
         )
         return transformacion
 
@@ -117,44 +116,43 @@ class TransformacionService:
         # Primera transformación: usar la entrada de la OP, o la indicada en data.
         if producto_entrada_ref:
             return TransformacionService._resolver_producto(
-                producto_entrada_ref, 'producto_entrada', sede_id=orden.sede_id
+                producto_entrada_ref, "producto_entrada", sede_id=orden.sede_id
             )
         if orden.producto_entrada is None:
-            raise ValidationError({
-                'producto_entrada': (
-                    'La orden no tiene producto de entrada definido; '
-                    'debe indicarlo en la primera transformación.'
-                )
-            })
+            raise ValidationError(
+                {
+                    "producto_entrada": (
+                        "La orden no tiene producto de entrada definido; debe indicarlo en la primera transformación."
+                    )
+                }
+            )
         return orden.producto_entrada
 
     @staticmethod
     def _resolver_maquina(ref):
         if ref is None:
-            raise ValidationError({'maquina': 'La máquina es obligatoria.'})
+            raise ValidationError({"maquina": "La máquina es obligatoria."})
         if isinstance(ref, Maquina):
             return ref
         try:
             return Maquina.objects.get(id=ref)
         except Maquina.DoesNotExist:
-            raise ValidationError({'maquina': f'La máquina con id={ref} no existe.'}) from None
+            raise ValidationError({"maquina": f"La máquina con id={ref} no existe."}) from None
 
     @staticmethod
     def _resolver_producto(ref, campo, sede_id=None):
         if ref is None:
-            raise ValidationError({campo: f'{campo} es obligatorio.'})
+            raise ValidationError({campo: f"{campo} es obligatorio."})
         producto = ref if isinstance(ref, Producto) else None
         if producto is None:
             try:
                 producto = Producto.objects.get(id=ref)
             except Producto.DoesNotExist:
-                raise ValidationError({campo: f'El producto con id={ref} no existe.'}) from None
+                raise ValidationError({campo: f"El producto con id={ref} no existe."}) from None
         # Aislamiento multi-sede: un producto con sede definida debe pertenecer a
         # la sede de la orden. Los productos globales (sede=None) se permiten.
         if sede_id is not None and producto.sede_id is not None and producto.sede_id != sede_id:
-            raise ValidationError({
-                campo: f'El producto "{producto.codigo}" pertenece a otra sede.'
-            })
+            raise ValidationError({campo: f'El producto "{producto.codigo}" pertenece a otra sede.'})
         return producto
 
     @staticmethod

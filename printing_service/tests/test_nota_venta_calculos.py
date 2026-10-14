@@ -9,6 +9,7 @@ Convención: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 Estos tests son puramente unitarios — no requieren red, base de datos
 ni WeasyPrint instalado.
 """
+
 import pytest
 
 from src.schemas.printing import DetallePedido, EtiquetaRequest, NotaVentaRequest
@@ -39,6 +40,7 @@ def _make_nota(detalles, valor_retencion: float = 0.0) -> NotaVentaRequest:
 # Cálculo de subtotal
 # ---------------------------------------------------------------------------
 
+
 class TestNotaVentaSubtotal:
     """ISTQB EP — clases de equivalencia para detalles con y sin IVA."""
 
@@ -54,9 +56,9 @@ class TestNotaVentaSubtotal:
 
     def test_nota_dado_multiples_detalles_cuando_calcular_subtotal_entonces_suma_todos(self):
         detalles = [
-            _make_detalle(peso=5.0, precio=10.0),   # 50
-            _make_detalle(peso=2.0, precio=20.0),   # 40
-            _make_detalle(peso=3.0, precio=5.0),    # 15
+            _make_detalle(peso=5.0, precio=10.0),  # 50
+            _make_detalle(peso=2.0, precio=20.0),  # 40
+            _make_detalle(peso=3.0, precio=5.0),  # 15
         ]
         nota = _make_nota(detalles)
         assert DocumentService.calcular_subtotal(nota.detalles) == pytest.approx(105.0)
@@ -70,6 +72,7 @@ class TestNotaVentaSubtotal:
 # ---------------------------------------------------------------------------
 # Cálculo de IVA
 # ---------------------------------------------------------------------------
+
 
 class TestNotaVentaIva:
     """ISTQB EP — solo los detalles con incluye_iva=True generan IVA (15%)."""
@@ -86,7 +89,7 @@ class TestNotaVentaIva:
     def test_nota_dado_mezcla_detalles_cuando_calcular_iva_entonces_solo_aplica_a_gravados(self):
         """EP — solo los detalles gravados contribuyen al IVA."""
         detalles = [
-            _make_detalle(peso=10.0, precio=5.0, incluye_iva=True),   # gravado: 50 * 0.15 = 7.5
+            _make_detalle(peso=10.0, precio=5.0, incluye_iva=True),  # gravado: 50 * 0.15 = 7.5
             _make_detalle(peso=10.0, precio=5.0, incluye_iva=False),  # exento
         ]
         nota = _make_nota(detalles)
@@ -96,6 +99,7 @@ class TestNotaVentaIva:
 # ---------------------------------------------------------------------------
 # Cálculo de total
 # ---------------------------------------------------------------------------
+
 
 class TestNotaVentaTotal:
     """ISTQB BVA — total = subtotal + iva - retención."""
@@ -129,6 +133,7 @@ class TestNotaVentaTotal:
 # ---------------------------------------------------------------------------
 # Validación de EtiquetaRequest
 # ---------------------------------------------------------------------------
+
 
 class TestEtiquetaRequestValidacion:
     """EP — campos requeridos vs. opcionales de EtiquetaRequest."""

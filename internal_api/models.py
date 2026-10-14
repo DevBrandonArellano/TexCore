@@ -3,6 +3,7 @@ ServiceCredential: identidad de un microservicio autorizado.
 ISO 27001 A.9.2 — Gestión de información de autenticación secreta.
 SRP: única responsabilidad — almacenar y verificar credenciales de servicio.
 """
+
 from django.contrib.auth.hashers import make_password
 from django.db import models
 
