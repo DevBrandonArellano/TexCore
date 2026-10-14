@@ -24,9 +24,10 @@ Las ramas de trabajo no llevan CI propio: se validan en su PR hacia `staging`.
 | Workflow | Archivo | Cuándo corre |
 |----------|---------|--------------|
 | TexCore CI | `ci.yml` | PRs hacia `staging` o `master`, push a `staging` |
-| TexCore CD | `cd.yml` | CI verde tras un **push** a `master` del propio repo. Hoy el CI no corre en push a `master`, así que el CD no se dispara solo; `release.yml` lo reemplaza en la Fase 3 del plan de CI/CD |
+| TexCore Release | `release.yml` | **Push** a `master` (el merge del PR `staging → master`): CI completo → build sin caché de las 6 imágenes → Trivy → staging efímero con pruebas de humo → aprobación del environment `production` → deploy desde el runner propio |
 | TexCore Rollback | `rollback.yml` | Manual — solo en emergencias |
 | TexCore Security Scan | `security.yml` | Lunes 06:00 UTC (solo si `master` es la rama por defecto) + push a `master` |
+| TexCore Gobierno | `gobierno.yml` | Lunes 07:00 UTC — OpenSSF Scorecard y métricas DORA |
 
 Cadena de suministro: todas las actions están fijadas por SHA de commit (`@<sha> # vX.Y.Z`) y Dependabot
 (`.github/dependabot.yml`) abre PRs semanales **hacia `staging`** para actualizarlas junto con pip, npm y las

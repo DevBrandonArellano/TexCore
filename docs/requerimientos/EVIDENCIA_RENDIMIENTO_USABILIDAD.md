@@ -1,6 +1,7 @@
 # Evidencia de rendimiento y usabilidad — TexCore
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Versión medida:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Vigencia:** revisada contra la versión actual de `MES` (migraciones hasta `gestion/0009`, 14-oct-2026). Lo añadido desde la medición no toca las rutas medidas; el §5 incluye el tiempo de la migración `0009`.
 > **Propósito:** respaldar el paso a producción, contrastando el sistema con los requisitos de la tesis.
 > **Requisitos contrastados:** RNF-03 (Tabla 8), RNF-05 (Tabla 10) y la DoD del Sprint 7 (Tabla 14).
 
@@ -86,6 +87,7 @@ La memoria de SQL Server queda reservada con `MSSQL_MEMORY_LIMIT_MB` igual al `m
 
 **Despliegue de esta versión sobre una base con años de datos:**
 - las migraciones `gestion/0004`–`0008` tardan **~52 s** en total, de las cuales el relleno de auditoría (`0005`) toma 37 s;
+- la migración `gestion/0009` (columna `origen` de `ParoMaquina`, con valor por omisión) tarda **1,3 s**;
 - se ejecutan con el respaldo previo de la base.
 
 ## 6. Archivos de respaldo

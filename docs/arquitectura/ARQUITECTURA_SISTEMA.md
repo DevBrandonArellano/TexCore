@@ -507,7 +507,7 @@ El compose de **producción no incluye Redis ni Celery**: `REPORTES_ASYNC_HABILI
 
 ### 3.8 Frontend (React SPA)
 
-**Tecnologia:** React 18 + TypeScript + Vite + TanStack Query + Tailwind CSS + shadcn/ui
+**Tecnologia:** React 18 + TypeScript + Vite + TanStack Query + Tailwind CSS 4 (CSS-first, plugin de Vite) + shadcn/ui
 
 **Compilado:** El build de produccion (`npm run build`) genera `dist/` que es copiado a Nginx en la imagen multi-stage.
 
@@ -888,7 +888,7 @@ ConfiguracionEmpaque
 | Planificacion | `PlanProduccion` (borrador, aprobado, en_ejecucion, cerrado, cancelado), `DetallePlanProduccion` |
 | MES | `CorridaProduccion` (CONTINUA, STOCK, PEDIDO), `OperacionProduccion`, `ConsumoMaterial`, `ProduccionSalida`, `MermaDesperdicio`, `GenealogiaLote` |
 | Trazabilidad y etiquetas | `MateriaPrimaLote`, `ConsumoMateriaPrima`, `ConsumoLoteDetalle`, `EventoEtiqueta` (original, reimpresion, reetiquetado) |
-| Planta | `ParoMaquina` (categorias OEE), `LineaProduccion`, `ProcessStep`, `AreaProcessStep`, `OrdenProduccionSubproceso`, `EtapaProduccion`, `TransferenciaInterarea`, `TransformacionProducto` |
+| Planta | `ParoMaquina` (categorias OEE y `origen` manual/estado, ADR-013), `LineaProduccion`, `ProcessStep`, `AreaProcessStep`, `OrdenProduccionSubproceso`, `EtapaProduccion`, `TransferenciaInterarea`, `TransformacionProducto` |
 | Costeo | `TarifaOperario`, `CostoHoraMaquina`, `CostoLoteProduccion` |
 | Ventas | `PagoCliente` |
 | Configuracion por sede | `ConfiguracionEmpaqueSede` (equivalencias de empaque, ADR-011) |
@@ -1081,7 +1081,10 @@ ServiceCredential (tabla: internal_service_credential)
 | `POST` | `/api/formula-colors/{id}/imprimir-dosificacion/` | PDF de la hoja de dosificacion (version oficial; sin oficial, la receta viva marcada «BORRADOR») |
 | `GET/POST` | `/api/procesos-tintoreria/` | Catalogo de procesos por sede (`?activo=true`) |
 | `GET` | `/api/maquinas/{id}/procesos/` | Procesos que ejecuta una maquina |
-| `GET/POST` | `/api/maquinas/` | Maquinaria |
+| `GET/POST` | `/api/maquinas/` | Maquinaria. El `PATCH` del `estado` abre o cierra el paro automatico (ADR-013) |
+| `GET/POST` | `/api/paros-maquina/` | Paros de maquina del area (downtime con reason code OEE) |
+| `GET` | `/api/paros-maquina/historial/` | Historial de mantenimiento y paros: resumen por maquina, totales y detalle paginado (`fecha_desde`, `fecha_hasta`, `maquina`, `categoria`, `planificado`) |
+| `POST` | `/api/paros-maquina/imprimir-historial/` | PDF del historial con el rango completo (A4 horizontal) |
 | `GET/POST` | `/api/bodegas/` | Bodegas |
 | `GET/POST` | `/api/sedes/` | Sedes |
 | `GET` | `/api/kpis/` | KPIs por rol |
@@ -1455,46 +1458,56 @@ docker-build-validation (solo en push o PR a master) ────────┘
 | actionlint + zizmor | Sintaxis y seguridad de los workflows | Si |
 | pip-audit 2.10.1 | CVEs en las dependencias de los 4 servicios (con SBOM) | Si (`security.yml`) |
 | `npm audit` | CVEs en dependencias JS: moderada+ en produccion, critica en desarrollo | Si (`security.yml`) |
-| Trivy | CVEs en las imagenes Docker | Si (`cd.yml`, `security.yml`) |
+| Trivy | CVEs en las 6 imagenes Docker | Si (`release.yml`, `security.yml`) |
 
-**Archivo `cd.yml` — Etapas:**
+**Archivo `release.yml` — Etapas** (reemplaza al `cd.yml`, eliminado el 13-oct-2026; se dispara en el push a `master`, es decir en el merge del PR `staging -> master`):
 
 ```
-ci-guard (verifica que CI paso en master)
+ci (ci.yml completo via workflow_call, sobre el commit de master)
     │
-build-images (construye y push a GHCR con SHA tag)
+build (6 imagenes sin cache y con bases actualizadas; push a GHCR;
+       attest-build-provenance + firma keyless con cosign)
     │
-scan-images (Trivy — CVEs en imagenes Docker)
+imagenes (fija la referencia por digest: imagenes.env, una linea por servicio)
     │
-deploy (SSH al servidor: git checkout, respaldo :backup, pull por SHA y
-        docker compose -p texcore-prod --env-file .env.prod up -d --no-build --wait)
+scan (Trivy en matriz sobre las 6 imagenes, SARIF a Security)
     │
-health-check (GET https://<host>/api/health/ hasta 15 intentos)
+staging (scripts/staging_efimero.sh: las 6 imagenes + SQL Server desechable,
+         base desde cero, siembra y scripts/smoke_test.py con los 11 roles)
+    │
+deploy (runner propio `texcore-prod`, environment `production` con aprobacion:
+        cosign verify -> scripts/desplegar_release.sh: respaldo :backup de las
+        6 imagenes, pull por digest, respaldo de la BD, preparar_bd.sh y
+        up -d --wait)
+    │
+health-check (GET https://<host>/api/health/ y /api/scanning/health, 15 intentos)
     │
 notify (webhook opcional Slack/Teams)
 ```
 
-**Archivo `rollback.yml`** (`workflow_dispatch`): vuelve a las imagenes de un SHA anterior o a las `:backup`. Exige escribir `ROLLBACK` y un motivo. Igual que el CD, no toca `.env.prod`: solo cambia `CI_REGISTRY_IMAGE`/`TAG` y espera a que los servicios esten sanos.
+Las imagenes se construyen **una sola vez**: la misma, por digest, es la que se escanea, se prueba en staging, se firma y se despliega. Las migraciones salieron del `entrypoint.sh` (`MIGRAR_AL_INICIAR=0` en produccion): corren una vez por despliegue, despues del respaldo.
+
+**Archivo `rollback.yml`** (`workflow_dispatch`): vuelve a las imagenes de un SHA anterior o a las `:backup`. Exige escribir `ROLLBACK` y un motivo. Corre en el mismo runner propio que el deploy (sin SSH), no toca `.env.prod` y espera a que los servicios esten sanos.
 
 **Archivo `security.yml`:** cada lunes y en cada push a `master`, pip-audit, npm audit, Trivy y Semgrep.
 
-**Secretos requeridos en GitHub** (los de la aplicacion no pasan por GitHub: viven en el `.env.prod` del servidor):
+**Archivo `gobierno.yml`:** cada lunes, OpenSSF Scorecard (SARIF a Security) y metricas DORA (`scripts/metricas_dora.py`) en el resumen del run.
+
+**Configuracion requerida en GitHub** (los secretos de la aplicacion no pasan por GitHub: viven en el `.env.prod` del servidor, y el deploy ya no usa SSH sino un runner propio):
 
 ```
-DEPLOY_SSH_HOST          # IP/hostname servidor produccion
-DEPLOY_SSH_USER          # Usuario SSH
-DEPLOY_SSH_KEY           # Clave privada SSH (PEM)
-DEPLOY_SSH_PORT          # Puerto SSH (default: 22)
-DEPLOY_PROJECT_PATH      # Ruta del proyecto en servidor
-ALLOWED_HOSTS            # Dominio produccion (health check)
-DEPLOY_NOTIFY_WEBHOOK    # (Opcional) webhook notificaciones
+vars.PRODUCCION_HOST       # Dominio o IP del servidor (URL del environment)
+vars.TEXCORE_DIR           # Directorio del servidor con .env.prod, nginx/certs y respaldos/
+secrets.DEPLOY_NOTIFY_WEBHOOK  # (Opcional) webhook de notificaciones
+environment `production`   # Con revisores obligatorios
+runner self-hosted         # Etiqueta `texcore-prod` (GUIA_DESPLIEGUE.md §5)
 ```
 
 ### 8.4 GitLab CI (retirado)
 
 El pipeline paralelo de GitLab (`.gitlab-ci.yml`) se eliminó el 5-oct-2026: el repositorio vive en GitHub y
 GitLab no se usaba, pero su configuración ya divergía (Node 20 frente a 24, escaneo de satélites solo en GitLab).
-GitHub Actions es la única fuente de verdad del CI/CD; ver `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`.
+GitHub Actions es la única fuente de verdad del CI/CD; ver el `CHANGELOG.md` del 5-oct, 13-oct y 14-oct-2026 (modernización del CI/CD, 7 fases).
 
 ### 8.5 Despliegue y operacion manual
 
@@ -1540,11 +1553,11 @@ Conteo del 13-oct-2026:
 
 | Suite | Framework | Pruebas | Cobertura minima (gate del CI) |
 |-------|-----------|---------|-------------------------------|
-| Backend (`gestion`, `inventory`, `internal_api`) | Django test runner sobre SQL Server 2022 | 1738 | 90 % de lineas y ramas (`.coveragerc`); medida: 92,4 % |
+| Backend (`gestion`, `inventory`, `internal_api`) | Django test runner sobre SQL Server 2022 | 1814 | 90 % de lineas y ramas (`.coveragerc`); medida: 92,2 % |
 | scanning_service | pytest + httpx | 58 | 90 % |
 | reporting_excel | pytest + httpx | 76 | 90 % |
-| printing_service | pytest + httpx | 99 | 95 % |
-| Frontend | Vitest + Testing Library | 1955 | lineas 95 %, funciones 91 %, ramas 89 %, sentencias 94 % |
+| printing_service | pytest + httpx | 107 | 95 % |
+| Frontend | Vitest + Testing Library | 1972 | lineas 95 %, funciones 91 %, ramas 89 %, sentencias 94 % |
 
 ### 9.2 Convencion de Nomenclatura (ISTQB CTFL v4.0)
 
@@ -1765,7 +1778,7 @@ ADR-001 a ADR-008 se registran en esta seccion; ADR-009 en adelante tienen archi
 
 ---
 
-### ADR-009 a ADR-012
+### ADR-009 a ADR-013
 
 Las decisiones posteriores tienen su propio documento en `docs/arquitectura/ADR/`:
 
@@ -1775,6 +1788,7 @@ Las decisiones posteriores tienen su propio documento en `docs/arquitectura/ADR/
 | [ADR-010](ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md) | Stock paginado y auditoria filtrable por indice |
 | [ADR-011](ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md) | Equivalencias de empaque por sede, sin constante del sistema |
 | [ADR-012](ADR/ADR_012_MRP_POR_SEDE.md) | MRP por sede: sugerencias de compra informativas y necesidad de produccion que alimenta el MTS |
+| [ADR-013](ADR/ADR_013_PARO_AUTOMATICO_POR_ESTADO.md) | El cambio de estado de la maquina abre y cierra el paro que registra su detencion (historial de mantenimiento y Disponibilidad del OEE) |
 
 ---
 

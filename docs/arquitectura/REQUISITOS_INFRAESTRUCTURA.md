@@ -1,6 +1,7 @@
 # Requisitos de infraestructura para producción
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Versión medida:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Vigencia:** revisada contra la versión actual de `MES` (migraciones hasta `gestion/0009`, 14-oct-2026); el dimensionamiento no cambia.
 > **Propósito:** dimensionar el servidor de producción para que cumpla el RNF-03 de la tesis.
 > **Evidencia de rendimiento:** `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
 

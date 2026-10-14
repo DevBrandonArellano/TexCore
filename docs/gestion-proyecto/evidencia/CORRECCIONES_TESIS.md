@@ -1,6 +1,6 @@
 # Correcciones al texto de la tesis
 
-> **Fecha:** 12-oct-2026 · **Rama:** `MES`
+> **Fecha:** 12-oct-2026, ampliada el 14-oct-2026 · **Rama:** `MES`
 > **Documentos revisados:**
 > - `docs/Anteproyecto_Capstone_Final_Version.pdf` (8-jul): las páginas citadas son las impresas;
 > - el documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`), con el capítulo 7, las Tablas 46 y 47 y la Figura 49.
@@ -15,7 +15,8 @@ Afirmaciones que no coinciden con el sistema entregado. El contraste completo, c
 | p. 46 y p. 78 | Pipeline de integración continua en GitLab CI | GitHub Actions | «GitHub Actions» |
 | §5.1, p. 65 (DoD) | «superación de los análisis estáticos (flake8, bandit, detect-secrets)» | Ruff (estilo y reglas de seguridad `S`), mypy, Semgrep y detect-secrets, todos bloqueantes | «superación de los análisis estáticos (Ruff, mypy, Semgrep y detect-secrets)» |
 | §5.3, p. 68–69 | «configurado a través de GitLab CI», «flake8», «bandit», «GitLab Container Registry» | GitHub Actions, Ruff y GitHub Container Registry | Reemplazar los cuatro términos |
-| §5.3, p. 69 | Umbral de cobertura del 75 % | El gate del backend es del 90 % (92,1 % medido) | Mantener el 75 % como mínimo comprometido y mencionar el gate real, o subir la cifra |
+| §5.3, p. 69 | Umbral de cobertura del 75 % | El gate del backend es del 90 % (92,2 % medido el 14-oct) | Mantener el 75 % como mínimo comprometido y mencionar el gate real, o subir la cifra |
+| p. 78 (marco de seguridad) | «cumpla formalmente con los principios de privacidad desde el diseño, respetando a cabalidad las normativas vigentes en la LOPDP» junto con los principios de la ISO/IEC 27001 | Hay control de acceso por rol, trazabilidad inmutable con justificación, cifrado en tránsito y respaldos; **no hay cifrado de los datos personales en reposo** (`Cliente.ruc_cedula` y la fecha de nacimiento del usuario están en claro) | Dos caminos, pendientes de decisión (riesgo **RS-19**): cifrar esos campos (o TDE en la base) antes de la puesta en marcha, o escribir solo lo que el sistema hace: «control de acceso, trazabilidad y cifrado en tránsito». Contraste en `docs/requerimientos/AUDITORIA_CALIDAD.md` §I.5 |
 | RNF-01, Tabla 6, p. 19 | «Datos sensibles encriptados» | Cifrado en tránsito obligatorio (HTTPS con HSTS; el puerto 80 redirige) y contraseñas con hash. La base no tiene cifrado en reposo (TDE) | Precisar el alcance: «datos cifrados en tránsito y credenciales con hash», o agregar TDE al plan de despliegue |
 
 ## 2. Documento corregido (6-oct)

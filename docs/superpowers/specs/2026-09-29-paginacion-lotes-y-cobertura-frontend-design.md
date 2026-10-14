@@ -76,7 +76,7 @@ Verificado contra el código y bajo carga:
 
 ## 7. Fase B — rutas sin consumidor frontend
 
-**Estado:** aprobada y completada el 1-oct-2026; plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. `scripts/auditar_rutas_frontend.py` devuelve 0 rutas. La clasificación de abajo es la propuesta original; el plan registra los cambios tras verificarla (p. ej., `process-steps/` no era código muerto y se construyó su pantalla).
+**Estado:** aprobada y completada el 1-oct-2026 (Fase B de rutas sin consumidor; `CHANGELOG.md`, 1-oct-2026). `scripts/auditar_rutas_frontend.py` devuelve 0 rutas. La clasificación de abajo es la propuesta original; el plan registra los cambios tras verificarla (p. ej., `process-steps/` no era código muerto y se construyó su pantalla).
 
 Quedan 41 de las 45: la Fase A integró las 4 siguientes.
 

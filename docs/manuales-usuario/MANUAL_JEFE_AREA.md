@@ -2,7 +2,7 @@
 
 ## 1. ¿Qué hace usted en TexCore?
 
-Usted supervisa la eficiencia y la calidad de una sección específica de producción: asigna las órdenes que crea el Jefe de Planta a máquina y operario, controla el estado de las máquinas de su área, registra paros y decide cuándo un lote no cumple la calidad esperada.
+Usted supervisa la eficiencia y la calidad de una sección específica de producción: asigna las órdenes que crea el Jefe de Planta a máquina y operario, controla el estado de las máquinas de su área, registra paros, consulta e imprime el historial de mantenimiento y decide cuándo un lote no cumple la calidad esperada.
 
 ## 2. Ingresar al sistema
 
@@ -16,7 +16,7 @@ En la parte superior se muestran las tarjetas de desempeño del área, calculada
 - **Rendimiento (Yield)** = peso neto producido / (peso neto + merma). Debajo se muestra el **FPY 1ª calidad** (First Pass Yield = kg de primera calidad / kg total): cuánto sale bien a la primera.
 - **Tiempo Promedio** por lote operado.
 - **Alertas Activas**: productos con stock bajo crítico.
-- **OEE (histórico)** = Disponibilidad × Desempeño × Calidad, con el desglose de los tres componentes. La Disponibilidad se calcula a partir de los paros de máquina registrados (vea la sección 5).
+- **OEE (histórico)** = Disponibilidad × Desempeño × Calidad, con el desglose de los tres componentes. La Disponibilidad se calcula a partir de los paros de máquina registrados (vea las secciones 5 y 5.1).
 
 ## 4. Asignar Órdenes de Producción
 
@@ -58,6 +58,42 @@ En **Gestión de Máquinas** se ven las máquinas del área (estado, capacidad y
 3. Indique **inicio** y, si ya terminó, la **hora de fin** (puede dejarse vacío si el paro sigue en curso).
 4. Marque la casilla **Planificado** si se trata de un paro programado (mantenimiento, cambio de turno) — los paros planificados **no penalizan** la Disponibilidad del OEE.
 5. Agregue una descripción y guarde.
+
+**El cambio de estado también registra el paro.** Cuando usted pone una máquina en **Mantenimiento** o
+**Inactiva**, el sistema abre un paro con la fecha y la hora de ese momento, y lo cierra cuando la
+devuelve a **Operativa**. Así el historial dice cuántos días estuvo detenida sin que usted tenga que
+registrarlo a mano. Esos paros aparecen marcados como **Automático**:
+- Mantenimiento → paro **Mantenimiento Planificado**, marcado como planificado (no penaliza el OEE);
+- Inactiva → paro **Otro**, no planificado (sí penaliza la Disponibilidad, porque la máquina está
+  parada sin mantenimiento programado).
+
+Los paros que usted registra a mano no se modifican nunca.
+
+## 5.1 Historial de Mantenimiento y Paros
+
+La sección **Historial de Mantenimiento y Paros** responde dos preguntas: qué mantenimientos hubo y
+qué días se detuvo cada máquina.
+
+**Filtros.** Por omisión muestra los **últimos 30 días**. Puede cambiar **Desde** y **Hasta**, elegir
+una **máquina** o una **categoría**, y usar los atajos **Solo mantenimiento**, **Solo averías** y
+**Últimos 30 días** (que devuelve todo a su estado inicial). El rango no puede superar un año.
+
+**Lo que ve.**
+- Arriba, los totales del rango: paros, horas detenidas, horas planificadas y paros en curso.
+- La tabla de **resumen por máquina**: paros, horas detenidas, horas planificadas, cuántos siguen en
+  curso y la fecha del **último mantenimiento** (planificado o avería). Las máquinas se ordenan de más
+  a menos horas detenidas, así que la primera fila es la que más le está costando.
+- La tabla de **detalle**: cada paro con inicio, fin, horas, categoría, quién lo registró y la
+  descripción. Un paro sin cerrar aparece como **En curso** y cuenta sus horas hasta ahora.
+
+**Las horas se cuentan dentro del rango.** Si un paro empezó antes de la fecha «Desde» y sigue
+abierto, aparece en la tabla, pero solo se suman las horas que caen dentro de las fechas consultadas:
+dos rangos seguidos nunca cuentan dos veces el mismo tiempo.
+
+**Imprimir.** El botón **Imprimir** genera un PDF horizontal con los totales, el resumen por máquina y
+el detalle completo del rango (no solo la página que está viendo), con los filtros aplicados y su
+nombre al pie. Se abre en una pestaña nueva. Si el servicio de impresión no está disponible, aparece
+el aviso «No se pudo generar el historial en PDF» y nada más cambia.
 
 ## 6. Gestionar Líneas de Producción
 

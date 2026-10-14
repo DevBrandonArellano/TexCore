@@ -2,7 +2,7 @@
 
 > Numeración continua con los ADR-001 a ADR-007 de `docs/arquitectura/ARQUITECTURA_SISTEMA.md` §10.
 **Tema:** Los campos de texto opcionales usan `''` como vacío y dejan de admitir `NULL`
-**Fecha:** 5-oct-2026 · **Estado:** Aceptada (decisión del usuario) · **Origen:** regla Ruff `DJ001`, Etapa 4 del plan `docs/superpowers/plans/2026-10-05-migracion-ruff.md`
+**Fecha:** 5-oct-2026 · **Estado:** Aceptada (decisión del usuario) · **Origen:** regla Ruff `DJ001`, etapa 4 de la migración a Ruff (`CHANGELOG.md`, 5-oct-2026)
 
 ## 1. Contexto
 

@@ -2,9 +2,9 @@
 
 ## Octubre 2026
 
-### Para continuar — Hoja de ruta (actualizada el 13-oct-2026)
+### Para continuar — Hoja de ruta (actualizada el 14-oct-2026)
 
-Estado: hasta el 12-oct todo está commiteado en `MES` (`73f099a`). Lo del 13-oct está **sin commitear** (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 12-oct.
+Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está **sin commitear**: mañana, Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD); tarde, el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct.
 
 #### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
@@ -28,27 +28,274 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 
 1. ✅ ~~Reescribir `CHECKLIST_EVIDENCIA_MANUAL.md` como contraste con la tesis~~ (12-oct). Las correcciones al texto quedan en `CORRECCIONES_TESIS.md`.
 2. ✅ ~~Reescribir `REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento del 8-oct~~ (12-oct).
-3. Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia.
+3. ✅ ~~Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia~~ (14-oct, tarde): evidencia por sprint regenerada, auditoría del backlog cerrada, `AUDITORIA_CALIDAD.md` con su contraste al día y **RS-19** abierto (datos personales sin cifrar, único ❌ del contraste).
 4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct) y ✅ ~~verificar RNF-01 en el stack~~ (13-oct).
 5. ✅ ~~Correr mypy y pip-audit~~ (13-oct, en la imagen `texcore-django-test`: ambos en 0).
 6. Usabilidad, a cargo del usuario:
    - grabar el registro de lote, el escaneo y el pesaje contando los pasos;
    - capturas del panel ejecutivo a 375, 768 y 1366 px.
 7. Cambiar la contraseña de `admin` (sigue en `admin` para la demo).
-8. Commit del usuario → captura del pipeline en GitHub Actions.
-9. Al final: CI/CD Fases 3 a 6, staging, TEX-54 y la corrección del texto de la tesis (`CORRECCIONES_TESIS.md`).
+8. ✅ ~~CI/CD Fases 3 a 6~~ (13-oct): `release.yml`, staging efímero con pruebas de humo, runner propio, contenedores endurecidos y `gobierno.yml`.
+9. **Acciones del usuario en GitHub**, sin las cuales el release no puede desplegar (§6 del plan de CI/CD): rama por defecto = `master` y borrar `main`; rulesets de `master` y `staging`; environment `production` con revisores; registrar el runner propio con la etiqueta `texcore-prod` (`docs/arquitectura/GUIA_DESPLIEGUE.md` §5). Después: PR borrador `MES → staging` → captura del pipeline en GitHub Actions.
+10. ✅ ~~Fase 2 del CI/CD: Ruff etapa 5 y Tailwind 4~~ (14-oct). El plan de CI/CD queda cerrado en el código.
+11. ✅ ~~Verificación visual de Tailwind 4 en el navegador~~ (14-oct, el usuario: «todo se ve bien»). **El plan de CI/CD queda cerrado en el código; solo faltan las acciones en GitHub (paso 9).**
+12. Verificación con React DevTools Profiler de la división de dashboards (único punto abierto de ese plan).
+13. ✅ ~~Historial de mantenimiento y paros de máquina para el Jefe de Área~~ (14-oct, tarde): paro automático por cambio de estado, `GET /api/paros-maquina/historial/`, PDF del printing_service y `HistorialMantenimientoPanel`. Pedido del usuario, cerrado con gates en verde y probado en el stack.
+14. Pegarle el SHA a `.git-blame-ignore-revs` cuando exista el commit del reformateo de Ruff (`git log -1 --format=%H`) y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+15. Al final: staging, TEX-54 y la corrección del texto de la tesis (`CORRECCIONES_TESIS.md`).
 
-#### Estado del entorno Linux (13-oct)
+#### Estado del entorno Linux (14-oct)
 
 - Stack `texcore-prod` **levantado** para las pruebas del usuario:
-  - imágenes `texcore-local/*:mes-1013`, construidas desde cero (`--no-cache --pull`) con el código del 13-oct;
+  - imágenes `texcore-local/*:mes-1016`, construidas con el código del 14-oct por la tarde (Tailwind 4 y el historial de mantenimiento). Las del 13-oct eran `mes-1013`, desde cero (`--no-cache --pull`);
   - recursos del `.env` (BD 3 CPU / 3 GB, backend 3 CPU / 3 GB, 20 workers) y nginx con la redirección 80 → 443;
-  - los 6 contenedores en `healthy`.
-- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1013 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d`.
+  - los 6 contenedores en `healthy`, `gestion.0009` aplicada y 0 migraciones pendientes;
+  - sobrevive al reinicio del equipo: tras el corte de luz del 14-oct los 6 contenedores volvieron a `healthy` por sí solos.
+- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1016 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
-- Respaldo de la base previo a las migraciones: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak`, en el volumen `texcore-prod_mssql_data`.
+- Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
-### 13 de Octubre de 2026 — Verificación total en el stack: imágenes desde cero, RNF-01 en vivo y tres defectos que solo aparecían con el sistema completo (sin commitear)
+### 14 de Octubre de 2026 — Cierre del plan de CI/CD: formateador de Ruff y Tailwind CSS 4 (sin commitear)
+
+Pedido del usuario: hacer los dos puntos que quedaban abiertos de la Fase 2 del plan de CI/CD.
+
+#### 1. Ruff etapa 5 — el formateador manda sobre el formato
+
+- `ruff format` sobre todo el repositorio: **389 archivos reformateados**, 158 ya conformes. Ningún cambio de comportamiento.
+- Gates nuevos: `ruff format --check --diff` en el job `backend-lint` del CI y hook `ruff-format` en el pre-commit.
+- `[tool.ruff.format]` declara `quote-style`, `indent-style` y `line-ending`, para no depender del valor por omisión de cada versión de Ruff.
+- Las **38 reglas de espaciado** de pycodestyle (E1, E2 y E3 en preview, más `E502` y `W391`), que la Etapa 1 había listado para igualar a flake8, salen del `select`: las garantiza el formateador y Ruff documenta que chocan con él. Verificado que no se perdió nada más: **415 reglas activas antes, 376 después**, con esas 38 como única diferencia y `RUF059` (preview) intacta.
+- **Markdown excluido del formateador.** Ruff 0.16 también formatea los bloques ```` ```python ```` de los documentos, y ahí los fragmentos son sueltos: una línea de `INSTALLED_APPS` se convirtió en una tupla y 19 documentos quedaron alterados. Se revirtieron y `exclude = ["**/*.md"]` evita que vuelva a pasar.
+- `.git-blame-ignore-revs` nuevo, para que `git blame` ignore el commit del reformateo. **Falta pegarle el SHA** cuando el commit exista (`git log -1 --format=%H`), y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+- La condición original («después del merge de `MES` a `staging`») ya no aplicaba: `MES` está al día y no hay otra rama con trabajo en curso, así que el reformateo no choca con nada. El PR `MES → staging` lo llevará como un commit propio.
+
+**De paso, los gates de Python quedaron de verdad en 0.** Los archivos nuevos del 13-oct nunca habían pasado por ellos:
+
+| Defecto | Hallazgo | Corrección |
+|---|---|---|
+| 56 | `ruff check` daba **9 hallazgos** en `smoke_test.py`, `metricas_dora.py`, `test_metricas_dora.py` y `test_despliegue_produccion.py` (S310, S603, S607, UP017 y 2 líneas largas) | S310: `smoke_test.py` **valida el esquema** de las URL que recibe (solo `http`/`https`; un `file://` leería un archivo del runner) y en `metricas_dora.py` la URL sale siempre de la constante `API`, con su `# noqa` y motivo. S603/S607: `/bin/sh` por ruta absoluta y argumentos fijos del repositorio. El resto, autofix y formato | `gestion/tests/test_smoke_test_script.py` (3 pruebas y 3 subcasos, en rojo antes del cambio) |
+| 57 | `mypy` daba **7 errores** en los mismos archivos: el `ModuleSpec` de `importlib` puede ser `None` y a un `set()` le faltaba anotación | `assert` del spec y de su loader al cargar un script por ruta, y `usados: set[str]` | Las mismas suites |
+
+#### 2. Tailwind CSS 4 — configuración CSS-first y 0 vulnerabilidades
+
+Motivo del plan: las 7 vulnerabilidades de `npm audit` del frontend venían **todas** de la cadena de Tailwind 3 (5 altas en `braces`, `micromatch` y `chokidar`; 2 moderadas en `postcss-selector-parser` y `postcss-nested`).
+
+- Migración con el codemod oficial (`@tailwindcss/upgrade`): 79 archivos de componentes y la configuración.
+- **`tailwind.config.js` y `postcss.config.js` eliminados.** El tema vive en `@theme inline` de `src/styles/globals.css` y Tailwind se integra como **plugin de Vite** (`@tailwindcss/vite`), sin PostCSS ni autoprefixer.
+- `tailwindcss-animate` (archivado) → **`tw-animate-css`**.
+- El codemod renombró `outline` → `outline-solid` también dentro de la prop `variant` de 12 componentes shadcn, que no es una clase CSS: se revirtieron (el `tsc` lo detectó).
+- `globals.css` consolidado: un solo bloque de tema (había dos, uno heredado de la plantilla), `:root` y `.dark` fuera de `@layer utilities`, y los comentarios de la plantilla retirados.
+- **Lo que puede verse distinto** (decisiones del usuario, para su verificación en el navegador):
+  - el bloque de tipografía base (`h1`–`h4`, `p`, `label`, `button`, `input`) **nunca se aplicaba** en Tailwind 3, porque usaba `var(--text-2xl)` y esas variables no existían; en la versión 4 sí existen. Se deja activo: afecta solo a los elementos sin clase `text-*` (5 encabezados del proyecto y los nativos), y cualquier clase de Tailwind lo sobrescribe porque el selector tiene especificidad 0;
+  - `bg-input-background` (checkbox, textarea, input-otp) y `bg-switch-background` (switch) **tampoco existían como clase**: las variables estaban en `:root` pero nunca se mapearon al tema. Ahora sí, así que esos controles recuperan su fondo gris;
+  - `--card-foreground` no estaba definida en modo claro (solo en `.dark`), así que `text-card-foreground` no tenía valor. Definida.
+- **Modo oscuro:** el bloque `.dark` tenía 12 de las 40 variables. Se completó para que sea coherente con `:root`. Hoy nada activa la clase `.dark` (no hay selector de tema), así que no cambia lo que se ve.
+- **Código muerto retirado:** las utilidades `sidebar-expanded`, `sidebar-collapsed`, `main-content-expanded`, `main-content-collapsed`, `scroll-area-thumb` y `scroll-area-viewport` no las usa ningún componente (en `scroll-area.tsx` son valores de `data-slot`, no clases), y con ellas se van `--spacing-4`, `--sidebar-width` y `--sidebar-width-icon` de `globals.css`; el sidebar de shadcn define sus propios anchos en línea.
+
+#### 3. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1771 aprobadas** (eran 1738 el 13-oct), 0 fallidas; cobertura 92,4 % (gate 90 %) |
+| `scanning_service` / `reporting_excel` / `printing_service` | 58 / 76 / 99 aprobadas; cobertura 94,4 / 99,2 / 98,8 % |
+| Frontend (Vitest) | 1955 aprobadas; cobertura 95,48 / 90,19 / 93,92 / 96,55 % (umbrales 94 / 89 / 91 / 95) |
+| `ruff check` · `ruff format --check` | 0 · 414 archivos conformes |
+| mypy (296 archivos) · Semgrep ERROR (94 reglas, 896 archivos) | 0 · 0 |
+| detect-secrets (hook y auditoría) | 0 y 0 — la línea base se realineó sola con las líneas nuevas: 41 hallazgos, todos auditados |
+| `pip-audit` (4 servicios) | 0 |
+| **`npm audit`** de producción y de desarrollo | **0 y 0** (eran 0 y 7) |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+| `npm run build` · imagen `nginx` de producción | build en 12 s; imagen construida y sirviendo la hoja de estilos de 151 kB |
+| actionlint (5 workflows) | 0 |
+
+**En el stack `texcore-prod`, con los 3 años de datos** (imágenes `mes-1014` con el código del 14-oct; los 6 contenedores `healthy`, 0 migraciones pendientes):
+
+- hoja de estilos servida por nginx: `/assets/index-PQ7-TOtS.css`, 151 kB, con `@layer theme` y las variables `--tw-*` de Tailwind 4, y con las clases que antes no existían (`bg-input-background`, `bg-switch-background`, `text-card-foreground`); las 6 utilidades retiradas ya no se emiten;
+- **pruebas de humo del release por HTTPS (`scripts/smoke_test.py`): 13 de 13 en verde** — redirección 301 del puerto 80, salud del backend y de scanning, y login más una consulta propia de cada uno de los 11 roles. Es además la primera corrida de esas pruebas contra un stack real, que es lo que hará el staging efímero del release;
+- **verificación visual del usuario: conforme.** Recorrido de los paneles por rol en el navegador, con atención a los tres cambios posibles del punto 2 (tipografía base de los 5 encabezados sin clase `text-*`, fondo gris de checkbox, switch, textarea e input-otp, y `text-card-foreground` en las tarjetas). Sin diferencias que corregir.
+
+#### 4. Documentos
+
+- Planes: `2026-10-05-migracion-ruff.md` **completo**; `2026-10-05-modernizacion-ci-cd.md` con las 7 fases hechas en el código y los puntos 6 y 8 de la Fase 2 cerrados.
+- `ESTANDARES_DESARROLLO.md`: el gate de formato y el pre-commit. `README.md`: Tailwind 4 y las cifras de pruebas al día. `ARQUITECTURA_SISTEMA.md`: versión de Tailwind.
+- Con la verificación visual conforme, **el plan de CI/CD queda cerrado en el código**: las 7 fases hechas. Lo único que queda son las acciones en GitHub de las Fases 1 y 4 (rama por defecto, rulesets, environment `production` y registro del runner `texcore-prod`), que no se pueden hacer desde el repositorio.
+
+### 14 de Octubre de 2026 (noche) — Repaso de los documentos que la tesis cita como evidencia (sin commitear)
+
+Paso 3 de la hoja de ruta: revisar con el criterio «la tesis manda» todo documento que respalde lo que la tesis afirma. Se revisó qué cita el anteproyecto (`docs/Anteproyecto_Capstone_Final_Version.pdf`): ISO/IEC 25010:2023 y la Tabla 11, COBIT 2019 e ITIL v4, NIST SP 800-207, OWASP Top 10 y API Security, ISO/IEC 27001 y la LOPDP. **ANSI/ISA-95, ISA-88 y VDI 5600 no los cita**, así que `docs/analisis_y_reportes/auditoria_cumplimiento_ANSI_ISA_VDI.md` queda fuera del alcance de la evidencia (se deja como análisis propio).
+
+#### 1. Evidencia por sprint, regenerada
+
+`scripts/evidencia/evidencia_sprints.py` sobre SQL Server 2022 (imagen desechable) y los 3 microservicios en entornos nuevos: **2348 pruebas citadas por el backlog, 0 fallidas** (antes: 8-oct, commit `dec016c`). Las diferencias por sprint vienen de que el commit `4e3ec1d` precisó las líneas de «Verificación» del backlog y reorganizó el MRP:
+
+- TEX-27 pasa a citar `test_mrp.py`, `test_mrp_views.py` y `test_run_mrp_command.py` (1 → **61** pruebas) y TEX-28, su archivo propio `test_requisitos_materiales_orden.py` (80 → 7, sin las 80 de `test_production_views.py` que contaba de más);
+- TEX-41 y TEX-43 bajan 3 y 4 pruebas: las 3 de `MRPEngineConfiguracionEmpaqueTestCase` se borraron en `4e3ec1d` porque probaban `inventory/services/mrp_engine.py`, reemplazado por el paquete `inventory/services/mrp/` (**ADR-012**). Verificado que no quedó hueco: la propiedad `conos_por_bano` sigue cubierta y el MRP ya no la usa (los pedidos se miden en kg);
+- el frontend suma el panel nuevo del historial de mantenimiento y el diálogo de requisitos de materiales.
+
+#### 2. `AUDITORIA_CALIDAD.md` — dos partes
+
+El documento era de marzo-abril de 2026 y afirmaba cosas que hoy son falsas. Queda dividido:
+
+- **Parte I — Contraste con la tesis (14-oct)**, nueva: las 9 características de ISO/IEC 25010:2023 una por una, OWASP Top 10 y API1/API2, COBIT/ITIL, Zero Trust y 27001/LOPDP, cada afirmación con su evidencia y su veredicto ✅/❌/⏳/📅. No vuelve a puntuar sobre 5: las notas de abril se quedan como historial.
+- **Parte II — Historial (marzo-abril)**: el documento original intacto, con notas `[Al 14-oct-2026: …]` donde su texto hoy engañaría — los 3 stored procedures (eliminados en `database/V6__drop_obsolete_stored_procedures.sql`; hoy ORM e `internal_api`), el pipeline con flake8/bandit (hoy Ruff, `ruff format`, mypy, detect-secrets y Semgrep) y el umbral de cobertura del 75 % «parcial (~62 %)» (hoy 90 % bloqueante, 92,2 % real).
+
+#### 3. El hallazgo: **RS-19**, datos personales sin cifrar
+
+El contraste destapó el único ❌: la tesis afirma «privacidad desde el diseño […] respetando a cabalidad la LOPDP» (p. 78) y los principios de la ISO/IEC 27001, pero `Cliente.ruc_cedula` y la fecha de nacimiento del usuario están **en claro** en la base. Era el defecto `SEC-08` de abril, diferido y nunca retomado. Lo que sí existe: RBAC de 11 roles, auditoría inmutable con justificación, cifrado en tránsito (HTTPS con HSTS y `Encrypt=yes` hacia la base) y respaldos.
+
+Queda abierto como **RS-19** en `REGISTRO_RIESGOS.md` (exposición 8 🟡) con las tres salidas posibles — cifrado por campo, TDE de la base (depende de la edición licenciada, ver RS-18) o corregir el texto de la tesis — y como fila nueva en `CORRECCIONES_TESIS.md`. **Pendiente de decisión del usuario.**
+
+#### 4. Otras correcciones
+
+| Documento | Corrección |
+|---|---|
+| `AUDITORIA_BACKLOG_VS_CODIGO.md` | **M-3 cerrado**: figuraba ⏳ pendiente, pero el 13-oct cada imagen quedó con su `HEALTHCHECK` (5 Dockerfiles + el de `db` en el compose); la referencia a un plan en una ruta de Windows fuera del repositorio se cambió por la entrada del `CHANGELOG`; el «Resultado» ya no deja hallazgos abiertos |
+| `CHECKLIST_EVIDENCIA_MANUAL.md` | Versión evaluada al día (`gestion/0009`), aclarando que la evidencia de infraestructura del Sprint 0 se capturó el 13-oct sobre `gestion/0008` |
+| `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` | Línea de vigencia (medido sobre `gestion/0008`, revisado contra `gestion/0009`) y el tiempo de la migración `0009` (**1,3 s**) junto a los de `0004`-`0008` |
+| `REQUISITOS_INFRAESTRUCTURA.md` | Misma línea de vigencia; el dimensionamiento no cambia |
+| `REGISTRO_RIESGOS.md` | RS-19 nuevo, resumen de exposición al día, dos referencias a un «§8» que no existe corregidas a «§5» y la próxima revisión atada al PR `MES → staging` en vez de una fecha de abril |
+| `CORRECCIONES_TESIS.md` | Fila nueva de la LOPDP y la cobertura al 92,2 % |
+
+#### 5. Repaso de `docs/superpowers/` a pedido del usuario
+
+23 planes y 9 especificaciones, revisados **uno por uno contra el código**, no por lo que declaraban:
+
+- **19 planes completos**, 1 histórico (microservicios independientes: se adoptó «monolito con servicios satélite», aunque de ahí salió `internal_api`), 1 supersedido (la v1 de la división de archivos dios), 1 ejecutado sin commitear (el de hoy) y **1 con un punto abierto**: la verificación con React DevTools Profiler de la división de dashboards.
+- **El problema no era que sobraran planes, era que 3 no declaraban su estado** y sus checkboxes seguían sin marcar aunque el trabajo estaba hecho. Ahora lo declaran, con la evidencia que lo respalda: producción flexible (transformación, mezcla y merma vendible, con sus pruebas), correcciones de la auditoría de la tesis (C-1, C-2 y M-4 cerrados el 30-sep) y la fase 1 de higiene, cuya nota pedía commitear `graphify-out/` — ya está versionado.
+- **`docs/superpowers/README.md` nuevo**: índice con el estado verificado de cada plan y spec, y la advertencia de que los checkboxes no son el estado. No se archivan ni se mueven: el `CHANGELOG` los referencia 28 veces por su ruta y son el registro del diseño.
+
+#### 6. Depuración: se eliminaron los 22 planes terminados
+
+Decisión del usuario tras el repaso: si están hechos, se borran. Quedó **un solo plan** en
+`docs/superpowers/plans/`, el de la división de dashboards, que tiene abierta la verificación con React
+DevTools Profiler. Las **9 especificaciones se conservan**: son el diseño y el «por qué» de cada cambio,
+que los ADR no cubren por completo.
+
+- `docs/superpowers/README.md` pasa a ser el **registro de lo eliminado**: una fila por plan con su tema
+  y dónde leer hoy su detalle (`CHANGELOG`, ADR, matriz de trazabilidad o la spec que sobrevive).
+- Las **9 referencias vivas** a planes borrados se reapuntaron al `CHANGELOG`, al ADR o a la spec
+  correspondiente: `ESTANDARES_DESARROLLO.md`, `ARQUITECTURA_SISTEMA.md`, `ADR_008`, `ADR_013`,
+  `PLAN_MEJORA.md`, la matriz de trazabilidad (2) y dos specs. Verificado con un barrido: **0 referencias
+  rotas** fuera del `CHANGELOG`.
+- Las entradas antiguas del `CHANGELOG` siguen citando las rutas de los planes: son referencias
+  históricas a archivos que ya no existen y el `CHANGELOG` no se reescribe.
+
+#### 7. Ramas viejas borradas
+
+`feature` y `refactorizacion`, que arrastraban el trabajo de septiembre, se eliminaron (las dos locales y
+`feature` también en el remoto; `refactorizacion` nunca se había subido). Verificado antes de borrar:
+
+- `MES..feature` → **0 commits**: está contenida por completo en `MES`;
+- `MES..refactorizacion` → 2 commits cuyo contenido **ya vive en `MES`** (middleware JWT de `printing_service`
+  con sus pruebas, Django 5.2.17, sqlparse 0.6.0 y cryptography 50.0.1). Lo único exclusivo eran cambios a
+  `.gitlab-ci.yml`, el pipeline retirado a propósito en `a65ff02`.
+
+Quedan `MES` (en curso), `staging`, `main` y `master` en el remoto — las dos últimas siguen pendientes del
+paso 9 de la hoja de ruta (rama por defecto `master` y borrar `main`).
+
+#### 8. Defecto que destapó el repaso (defecto 61)
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 61 | `scripts/auditar_rutas_frontend.py` devolvía **5 rutas sin consumidor** (las 3 del MRP por sede del 13-oct y las 2 del historial de mantenimiento de hoy) y la matriz de trazabilidad afirmaba que devuelve 0. Era un **falso positivo**: el frontend arma esas URL sobre un prefijo (`const BASE = '/paros-maquina/'` y después `${BASE}historial/`) y el script solo resolvía `${...}` como parámetro de ruta, no como constante | `expandir_constantes()` sustituye cada `${NOMBRE}` por el valor de la constante de cadena que lo define en el mismo archivo, antes de buscar. La auditoría vuelve a **0 rutas** y a código de salida 0 | `gestion/tests/test_auditoria_rutas_script.py`: 7 pruebas y 2 subcasos (constante de cadena, comillas dobles y backtick, constante que no es cadena, texto sin constantes, consumo por constante, consumo directo y ruta que nadie llama), en rojo antes del cambio |
+
+De paso, dos referencias a planes en rutas de Windows fuera del repositorio (`C:\Users\arebr\...`), una en la matriz de trazabilidad y otra en la auditoría del backlog, se cambiaron por las entradas del `CHANGELOG` que cuentan lo mismo.
+
+Sin cambios de código de producción: un guion de auditoría, su prueba nueva y documentos. `ruff check`, `ruff format --check`, `mypy` (303 archivos), `tsc` y `typecheck:tests`, todos en 0.
+
+### 14 de Octubre de 2026 (tarde) — Historial de mantenimiento y paros de máquina para el Jefe de Área (sin commitear)
+
+Pedido del usuario: «en el jefe de área es necesario poder ver el historial de mantenimiento de las máquinas, qué días se detuvieron, tener una tabla con esta información y poder imprimir». Plan: `docs/superpowers/plans/2026-10-14-historial-mantenimiento-maquinas.md`.
+
+#### 1. Situación de partida
+
+`ParoMaquina` ya guardaba cada paro con su categoría (Seis Grandes Pérdidas), inicio, fin y si era planificado, y `GET /api/paros-maquina/` los listaba por área. Pero **no se mostraba en ninguna pantalla** (el Jefe de Área solo tenía el modal para registrarlos), no se podía filtrar por fecha ni agregar nada, y el **cambio de estado de la máquina** (`operativa` / `mantenimiento` / `inactiva`) solo guardaba el valor nuevo: un mantenimiento hecho así no dejaba fechas y era justo lo que el usuario quería ver.
+
+#### 2. Decisiones del usuario
+
+1. **El cambio de estado abre y cierra el paro**: a `mantenimiento`, uno `MANTENIMIENTO_PLANIFICADO` planificado; a `inactiva`, uno `OTRO` no planificado (una máquina parada sin mantenimiento programado sí penaliza la Disponibilidad del OEE); de vuelta a `operativa`, se cierra.
+2. **Resumen por máquina y detalle paro por paro** en la misma pantalla.
+3. **Todas las categorías**, con filtro y los atajos «Solo mantenimiento» y «Solo averías».
+
+#### 3. Backend
+
+- **`ParoMaquina.origen`** (`manual` / `estado`, migración `gestion/0009_paromaquina_origen`): solo los automáticos se cierran solos. Un paro **registrado a mano no se toca nunca** — sigue siendo histórico inmutable y alimenta el OEE.
+- **`ParoPorEstadoService`** (`gestion/services/paro_por_estado.py`): cierra el automático abierto con `select_for_update()` y abre el del estado nuevo, dentro de una transacción; idempotente si el estado no cambió o si ya hay uno abierto del mismo tipo. Lo llama `MaquinaViewSet.perform_update`, que lee el estado anterior antes de guardar.
+- **`HistorialParosService`** (`gestion/services/historial_paros.py`), fuente única de la pantalla y del PDF:
+  - el rango filtra por **solape**, no por la fecha de inicio: un paro que empezó antes y sigue abierto son días detenidos dentro del rango;
+  - las horas se **acotan al rango**, así que dos rangos contiguos suman el total sin contar nada dos veces; un paro en curso cuenta hasta ahora;
+  - rango por omisión de 30 días y **máximo de 366 días** (el resumen necesita todas las filas del rango: se acota la consulta en vez de traer años, RNF-03);
+  - el resumen se agrega en Python sobre **una sola consulta `values()`** porque el tramo de cada paro dentro del rango no se puede sumar en SQL de forma portable entre SQL Server y SQLite; la prueba de rendimiento fija el número de consultas.
+- **`GET /api/paros-maquina/historial/`**: `fecha_desde`, `fecha_hasta`, `maquina`, `categoria` y `planificado`; devuelve rango, resumen por máquina (paros, horas, horas planificadas, paros en curso y último mantenimiento), totales y el detalle paginado con `PaginacionAcotada`. Mismo aislamiento por área y sede que el resto del módulo de máquinas.
+- **`POST /api/paros-maquina/imprimir-historial/`**: el mismo historial en PDF con el rango completo (sin paginar) y los filtros en el pie; 503 si printing_service no responde.
+
+#### 4. printing_service
+
+`POST /pdf/historial-mantenimiento` con `HistorialMantenimientoRequest`, plantilla `historial_mantenimiento.html` (**A4 horizontal**: totales, resumen por máquina y detalle, con los paros en curso y los automáticos marcados), alta en `REQUIRED_TEMPLATES` (el health check exige que exista) y auditoría de cada impresión. El servicio pasa de 10 a **11 endpoints**.
+
+#### 5. Frontend
+
+`HistorialMantenimientoPanel` en el panel del Jefe de Área, debajo de las máquinas: filtros de fecha, máquina y categoría, los tres atajos, tarjetas de totales, tabla de resumen (ordenada de más a menos horas detenidas) y tabla de detalle paginada, con el botón **Imprimir** que abre el PDF en una pestaña nueva. La carga usa `useCargaRemota`, que descarta las respuestas de un filtro anterior. API tipada en `lib/api/mantenimientoApi.ts`.
+
+#### 6. Defecto de arquitectura que destapó la suite (defecto 58)
+
+El serializer del historial importaba el servicio, y el servicio tomaba el parseo de parámetros de `gestion/views/_common.py`. Eso arrastra `gestion/views/__init__.py`, así que el círculo quedaba cerrado: **serializers → services → views → serializers**. Con SQLite el orden de importación lo ocultaba; sobre SQL Server la suite falló al cargar `gestion.serializers`.
+
+- Las tres funciones de parseo pasan a **`gestion/params.py`**, un módulo neutral sin dependencias de capas; `views/_common.py` las reexporta, así que ningún otro módulo cambia.
+- Prueba nueva `gestion/tests/test_capas_sin_ciclos.py`: ningún módulo de `gestion/services/` ni de `gestion/serializers/` importa de `gestion.views`, `gestion/params.py` no depende de ninguna capa, y el reexport sigue funcionando.
+
+#### 7. Dos defectos que solo aparecieron al probarlo en el stack
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 59 | El PDF respondía **503 con el servicio de impresión sano**: el resumen llevaba `ultimo_mantenimiento` como `datetime` y `requests.post(json=…)` usa el json de la biblioteca estándar, que no serializa fechas. `PrintingService` capturaba la excepción y devolvía `None` | El resumen devuelve la fecha en texto ISO, igual para la API y para el PDF | `json.dumps` sobre el payload que recibe `PrintingService`: falla si queda un `datetime`, un `Decimal` o un objeto del ORM |
+| 60 | El PDF imprimía las fechas en ISO con microsegundos (`2026-10-14T14:54:04.058488+00:00`) | La vista formatea a **dd/mm/aaaa HH:MM en hora local** antes de enviarlas (un paro en curso va con el fin vacío), y el rango del encabezado y del pie también; el nombre del archivo conserva las fechas ISO, que ordenan bien | Expresión regular sobre cada fila del payload y sobre el último mantenimiento |
+
+#### 8. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1814 aprobadas** (eran 1771), 0 fallidas; cobertura 92,2 % (gate 90 %) |
+| `printing_service` | 107 aprobadas (eran 99); cobertura 98,89 % (gate 95 %) |
+| `scanning_service` / `reporting_excel` | 58 / 76 aprobadas |
+| Frontend (Vitest) | 1972 aprobadas (eran 1955); cobertura 95,35 / 90,17 / 93,66 / 96,46 % |
+| `ruff check` · `ruff format --check` · mypy | 0 · 420 archivos conformes · 0 (302 archivos) |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+| Migración en el stack | `gestion.0009` aplicada en 1,3 s, con respaldo previo `texcore_db_pre_gestion0009_2026-10-14.bak` (150 610 páginas en 4,0 s) |
+| Pruebas nuevas | 43 de backend (8 del servicio de paros por estado, 31 del historial y la impresión, 4 de capas sin ciclos), 8 de `printing_service` y 17 de frontend |
+
+**En el stack `texcore-prod`** (imágenes con el código del día; respaldo previo de la base y migración aplicada), con `e1_jefe_area`:
+
+- las 4 máquinas del área y el historial inicial del rango de 30 días;
+- `PATCH` a `mantenimiento` → aparece un paro nuevo **en curso**, `origen=estado`, Mantenimiento Planificado y planificado; `PATCH` de vuelta a `operativa` → el mismo paro queda cerrado con su fin y el resumen suma sus horas;
+- categoría inválida, máquina no numérica y rango mayor a un año → **400**; filtro por categoría → solo mantenimiento;
+- **PDF de 14,2 kB**, `application/pdf`, con el nombre del rango; revisado en texto sobre las imágenes `mes-1016`: encabezado «Del 14/09/2026 al 14/10/2026», totales, resumen por máquina con el último mantenimiento, detalle con fecha y hora local, los paros automáticos marcados y el pie «Filtros: categoría Todas · Todos · del 14/09/2026 al 14/10/2026 — Impreso por e1_jefe_area»;
+- aislamiento: el jefe de planta consulta su sede (200) y el vendedor recibe **403**.
+
+#### 9. Documentos
+
+- **ADR-013** (`ADR_013_PARO_AUTOMATICO_POR_ESTADO.md`): por qué el estado de la máquina genera el paro, la tabla de transiciones, las alternativas descartadas y las consecuencias (incluido que `inactiva` penaliza la Disponibilidad y `mantenimiento` no). Indexado en `ARQUITECTURA_SISTEMA` §ADR-009 a ADR-013.
+- **Reglas de negocio** `PLAN_PRUEBAS.md`: **RN-24b** (el cambio de estado abre y cierra el paro; solo los de `origen='estado'`) y **RN-24c** (el rango filtra por solape y las horas se acotan al rango; 30 días por omisión, 366 de máximo).
+- Manual del Jefe de Área: sección 5 (el cambio de estado registra el paro) y **5.1** nueva con los filtros, las tablas, cómo se cuentan las horas y la impresión.
+- `MICROSERVICIO_IMPRESION.md` (11 endpoints, 107 pruebas), `ARQUITECTURA_SISTEMA` (endpoints nuevos, `ParoMaquina.origen` en los modelos de planta y los conteos de pruebas al día), `README` (conteos), matriz de trazabilidad (9 filas nuevas, defectos 58 a 60) y el plan del día.
+
+#### 10. Barrido de cierre: «sin deuda técnica»
+
+Repaso de todo lo que el cambio pudo dejar tocado, además de los gates:
+
+| Qué se revisó | Resultado |
+|---|---|
+| Comandos de datos tras el cambio de modelo (deriva conocida) | `seed_production_masters`, `seed_data`, `stress_test_data`, `stress_ventas_data`, `run_mrp` y `simular_operacion --dias 14 --sedes 1` corren sin errores sobre una SQLite temporal (el último exige base virgen por diseño) |
+| `flush_test_data` con el modelo nuevo | No necesita borrar `ParoMaquina`: los paros de la máquina de stress caen por `CASCADE` y las máquinas de `seed_data` no se borran, así que no quedan huérfanos |
+| Semgrep ERROR · detect-secrets · pip-audit (4 servicios) · `npm audit` prod y dev | 0 · 0 (41 hallazgos auditados, línea base **sin cambios**) · 0 · 0 y 0 |
+| Enlaces relativos de los 7 documentos tocados | 0 rotos |
+| Re-render del panel nuevo | La lista de máquinas que recibe el historial se memoiza con `useMemo`: antes se recreaba en cada render del panel del Jefe de Área y lo re-renderizaba sin necesidad (es lo que vigila el plan de división de dashboards) |
+| `SerializerMethodField` nuevos | Anotados (`str | None`, `bool`, `float | None`): mypy y el esquema los resuelven sin avisos |
+| Archivos temporales | `TexCore/settings_datos_tmp.py` (el settings de SQLite para probar los comandos) eliminado; el working tree solo tiene los archivos de la funcionalidad |
+| Avisos de `manage.py spectacular` | 124, **ninguno nuevo**: los que aparecen son del autenticador propio y de serializers preexistentes. Registrado como **RC-09** en `REGISTRO_RIESGOS.md`, con su plan — no se tapa |
+| Límite del diseño | **RC-10**: un cambio de estado hecho fuera de la API (admin de Django, SQL directo) no genera paro. Aceptado y documentado en el ADR-013, con la salida escrita (mover la sincronización a una señal `post_save`) si el admin pasa a usarse para eso |
+
+### 13 de Octubre de 2026 — Verificación total en el stack, MRP por sede, despliegue al día y cierre del CI/CD (commit `4e3ec1d`)
 
 Pedido del usuario: pull, verificación total, borrar las imágenes de Docker, levantar el stack y dejarlo arriba para probarlo.
 
@@ -217,7 +464,7 @@ Pedido del usuario: revisar y actualizar `docs/arquitectura/`. Decisiones del us
   - que solo `deploy_production.*` despliega producción y que todo compose referenciado existe.
 - **`scripts/deploy_production.sh` y `.ps1`:** construir, `up -d --wait --wait-timeout 900` y `seed_production_masters` en `backend`, con el proyecto `texcore-prod` (defecto 51).
 - **`.env.prod.example`** con exactamente las variables del compose y cómo generar cada secreto (defecto 52).
-- **`cd.yml`:**
+- **`cd.yml`** (el workflow se eliminó más tarde ese mismo día, punto 13; las dos correcciones siguen vivas en `release.yml`):
   - usa el `.env.prod` del servidor; los secretos de la aplicación ya no pasan por GitHub (defecto 53);
   - respalda como `:backup` la imagen en ejecución de cada servicio (defecto 54).
 - **`rollback.yml`:** igual que el CD, sin `sed` sobre `.env`.
@@ -252,8 +499,34 @@ Pedido del usuario: revisar y actualizar `docs/arquitectura/`. Decisiones del us
   - `ANALISIS_SISTEMA_DESPACHO.md` citaba `reporting_excel/src/infrastructure/django_client.py`, eliminado el 31-ago.
 - **Revisión de los planes (pedido del usuario):** contrastados con el código los 22 de `docs/superpowers/plans/` y los 2 de `~/.claude/plans/`.
   - Encabezados corregidos: la división de dashboards (decía «no ejecutado») y la Fase 5 de higiene (`Batch` ya eliminado en `481ce7f`).
-  - Abiertos: el plan de CI/CD (Ruff etapa 5, Tailwind 4 y Fases 3 a 6) y la verificación con React DevTools Profiler de la división de dashboards.
+  - Abiertos al hacer la revisión: el plan de CI/CD (Ruff etapa 5, Tailwind 4 y Fases 3 a 6) y la verificación con React DevTools Profiler de la división de dashboards. Las **Fases 3 a 6 se cerraron ese mismo día** (punto 13); quedan Ruff etapa 5, Tailwind 4 y el Profiler.
   - Verificación que exigía el plan del MRP: `simular_operacion`, `stress_test_data`, `stress_ventas_data`, `seed_data` y `run_mrp` corren sin errores sobre una SQLite temporal.
+
+#### 13. CI/CD Fases 3 a 6: release en `master`, despliegue y rollback seguros, contenedores endurecidos y gobierno
+
+Cierre del plan `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, que estaba en la Fase 2. Resuelve los hallazgos C-1 (el CD nunca se disparó), A-2 (lo probado no era lo desplegado), A-3 (los satélites llegaban sin escanear), A-6 (nadie verificaba las firmas), A-7 (migraciones dentro del entrypoint), A-9 (llave SSH en GitHub), M-4, M-5 y M-10.
+
+- **Fase 3 — `release.yml`, un solo artefacto desde `master`:**
+  - se dispara en `push` a `master` (el merge del PR `staging → master`) y corre el **CI completo** vía `workflow_call`;
+  - construye las **6 imágenes** (db, backend, nginx y los 3 satélites) **sin caché y con las bases actualizadas** sobre el commit exacto, y las publica en GHCR. Desde ahí todo usa el **digest**: la misma imagen se escanea, se prueba en staging, se firma y se despliega;
+  - `actions/attest-build-provenance` (procedencia SLSA) y **firma keyless con cosign** (OIDC, sin llaves que custodiar);
+  - **Trivy sobre las 6 imágenes** en matriz, con el SARIF a Security;
+  - el deploy encadena con `needs:` dentro del mismo workflow: **`cd.yml` se eliminó** y con él el disparador `workflow_run` que nunca funcionó;
+  - `db` pasa a publicarse como imagen propia (`image: ${CI_REGISTRY_IMAGE}/db:${TAG}` en el compose de producción), para desplegarla por digest como las otras cinco.
+- **Fase 4 — despliegue y rollback seguros:**
+  - **staging efímero** (`scripts/staging_efimero.sh`): levanta las 6 imágenes del release con el compose de producción y un SQL Server desechable, prepara la base **desde cero**, siembra los usuarios demo y corre `scripts/smoke_test.py` (301 del puerto 80, salud del backend y de scanning, y login + una consulta propia por cada uno de los 11 roles). Al terminar borra contenedores, volúmenes y secretos. Si falla, no se pide aprobación ni se despliega;
+  - **migraciones fuera del arranque:** `entrypoint.sh` delega en `infrastructure/docker/preparar_bd.sh` y solo lo ejecuta si `MIGRAR_AL_INICIAR` ≠ 0. Producción fija `MIGRAR_AL_INICIAR=0`: el despliegue respalda, migra y después levanta, así que un rollback de imagen no arranca sobre un esquema a medias. Desarrollo sigue migrando al arrancar;
+  - **`scripts/desplegar_release.sh`** (6 pasos en el servidor): respaldo `:backup` de las 6 imágenes en ejecución → `pull` por digest → **respaldo de la base** (`scripts/respaldar_bd.sh`, extraído y reutilizado por el cron de la guía) → dueño de los volúmenes de auditoría → `preparar_bd.sh` con la versión nueva → `up -d --wait`. Toma del servidor solo `.env.prod`, los certificados y el directorio de respaldos: sin SSH y sin `git checkout`;
+  - **verificación de la firma antes de desplegar:** `cosign verify` de las 6 imágenes contra la identidad del propio workflow;
+  - **runner propio** en lugar de la llave SSH: el job `deploy` corre en `[self-hosted, texcore-prod]`, en el environment `production` con aprobación, y verifica la salud por HTTPS con 15 intentos;
+  - **`rollback.yml`** pasa al mismo runner propio (adiós `appleboy/ssh-action` y los secretos SSH), no reescribe `.env` y espera a que los servicios estén sanos;
+  - `notify` publica el resultado del release por webhook opcional, armando el JSON con `jq` (nada se interpola en el script).
+- **Fase 5 — contenedores endurecidos:** los 5 Dockerfiles de producción y el de la base fijan su **imagen base por digest**, los 4 servicios Python corren como `appuser` (no root) sobre Python 3.12 y todos declaran `HEALTHCHECK`; los satélites no instalan ODBC; el SQL Server del CI y de `database/Dockerfile` queda en la **misma CU fija** (`2022-CU27-GDR1`, por digest) y Dependabot cubre cada Dockerfile.
+- **Fase 6 — gobierno:** `gobierno.yml` semanal con **OpenSSF Scorecard** (SARIF a Security) y **métricas DORA** (`scripts/metricas_dora.py`: frecuencia de despliegue, lead time, tasa de fallos y MTTR, a partir de los despliegues del environment y de los rollbacks) publicadas en el resumen del run; **`SECURITY.md`** con el canal privado de reporte, los plazos por severidad (CVSS), los controles automáticos, la rotación de secretos y la revisión trimestral. `.github/zizmor.yml` cambia su única excepción, que ya tiene criterio de salida.
+- **Verificación:**
+  - `gestion/tests/test_despliegue_produccion.py` crece de 12 a **35 casos con 62 subtests**, todos en verde, con las clases nuevas `ReleaseTest`, `ContenedoresEndurecidosTest`, `MigracionesFueraDelArranqueTest` y `GobiernoTest` (incluye que `cd.yml` ya no exista y que el compose de desarrollo siga migrando al arrancar);
+  - **actionlint 0 · zizmor 0 · shellcheck 0** sobre los 5 workflows y los scripts de despliegue, respaldo, staging y entrypoint (`.github/actionlint.yaml` declara la etiqueta del runner propio);
+  - las Fases 3 y 4 solo se ejercitan de punta a punta en el primer merge a `master`: requieren las acciones del usuario en GitHub (rama por defecto, rulesets, environment `production` y registro del runner).
 
 ### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (sin commitear)
 
