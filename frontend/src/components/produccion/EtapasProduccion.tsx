@@ -193,7 +193,7 @@ export function EtapasProduccion({ areaId }: { areaId: number }) {
             <div className="space-y-4">
               {etapas.map((etapa, idx) => (
                 <div key={etapa.id} className="relative">
-                  <div className="bg-gradient-to-r from-blue-50 to-transparent border border-blue-200 rounded-lg p-4">
+                  <div className="bg-linear-to-r from-blue-50 to-transparent border border-blue-200 rounded-lg p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <Badge className="bg-blue-100 text-blue-800">

@@ -321,7 +321,7 @@ export function EmpaquetadoDashboard() {
 
     return (
         <div className="space-y-6 p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-xs p-6 rounded-3xl border border-white/20 shadow-xs">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">
                         Estación de Empaque
@@ -358,7 +358,7 @@ export function EmpaquetadoDashboard() {
 
             {/* Operator KPIs Section */}
             <div className="grid gap-4 md:grid-cols-3">
-                <Card className="bg-gradient-to-br from-blue-50/50 to-white border-blue-100">
+                <Card className="bg-linear-to-br from-blue-50/50 to-white border-blue-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Bultos Empacados Hoy</p>
@@ -369,7 +369,7 @@ export function EmpaquetadoDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-emerald-50/50 to-white border-emerald-100">
+                <Card className="bg-linear-to-br from-emerald-50/50 to-white border-emerald-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Peso Total del Turno</p>
@@ -380,7 +380,7 @@ export function EmpaquetadoDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100">
+                <Card className="bg-linear-to-br from-indigo-50/50 to-white border-indigo-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Promedio por Bulto</p>
@@ -607,10 +607,10 @@ export function EmpaquetadoDashboard() {
                                 )}
 
                                 {/* Calculated Net Weight Display */}
-                                <div className="p-6 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
+                                <div className="p-6 bg-linear-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
                                     <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Peso Neto Calculado</span>
                                     <div className="flex items-baseline space-x-2">
-                                        <span className="text-5xl font-black tabular-nums text-primary drop-shadow-sm">
+                                        <span className="text-5xl font-black tabular-nums text-primary drop-shadow-xs">
                                             {(pesoBruto - tara).toFixed(2)}
                                         </span>
                                         <span className="text-xl font-bold text-primary/60 italic">kg</span>

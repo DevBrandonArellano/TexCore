@@ -203,7 +203,7 @@ export function TintoreroDashboard() {
 
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Panel de Tintorería</h1>
         <p className="text-muted-foreground">
           Bienvenido, {profile?.user.username}. Gestiona formulas químicas y monitorea el stock.

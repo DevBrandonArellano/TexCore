@@ -23,8 +23,8 @@ export function LotesRecientesTable({ onRechazarLote }: LotesRecientesTableProps
   };
 
   return (
-    <Card className="flex flex-col flex-shrink-0 mb-6">
-      <CardHeader className="flex-shrink-0">
+    <Card className="flex flex-col shrink-0 mb-6">
+      <CardHeader className="shrink-0">
         <CardTitle>Gestión de Lotes Recientes</CardTitle>
         <CardDescription>Visualiza y gestiona la producción reciente.</CardDescription>
       </CardHeader>

@@ -80,7 +80,7 @@ export function SearchableSelect({
       <SelectTrigger id={id} className={cn("w-full", className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className="max-h-80 w-[var(--radix-select-trigger-width)] min-w-[14rem]">
+      <SelectContent className="max-h-80 w-(--radix-select-trigger-width) min-w-56">
         <div
           className="sticky top-0 z-20 bg-popover p-2 border-b"
           onPointerDown={(e) => e.stopPropagation()}

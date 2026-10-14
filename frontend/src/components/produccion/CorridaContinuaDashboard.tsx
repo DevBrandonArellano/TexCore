@@ -382,7 +382,7 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Encabezado Principal */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-card border rounded-xl p-5 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-card border rounded-xl p-5 shadow-xs">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">Producción Continua (MES)</h1>
@@ -491,7 +491,7 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       {restrictedMode && corridaActiva && sinMaterialPrevio && (
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="py-4 flex items-center gap-3 text-amber-800 text-sm">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <AlertTriangle className="h-5 w-5 shrink-0" />
             <span>
               Un supervisor todavía no registra la primera transformación de esta corrida (producto e
               insumo). No puedes registrar avance hasta que se defina qué se está produciendo.

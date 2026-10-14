@@ -1,15 +1,95 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/*
+ * Estilos globales — Tailwind CSS 4 (migración del 14-oct-2026, CSS-first).
+ *
+ * Ya no hay `tailwind.config.js` ni PostCSS: el tema vive aquí (`@theme`) y Tailwind se
+ * integra como plugin de Vite. Las utilidades propias se declaran con `@utility`.
+ * Las variables de color se definen en `:root` y `.dark`, y `@theme inline` las expone
+ * como colores de Tailwind (`bg-card`, `text-muted-foreground`, …).
+ */
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
+/* Modo oscuro por clase, como en Tailwind 3 (`darkMode: ["class"]`). */
+@custom-variant dark (&:is(.dark *));
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/* Equivalente al `theme.container` de la configuración de Tailwind 3. */
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
 
 :root {
   --font-size: 16px;
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
-  /* ... (Otras variables de color) ... */
+  --card-foreground: oklch(0.145 0 0);
   --primary: #030213;
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.95 0.0058 264.53);
@@ -28,7 +108,7 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: oklch(0.708 0 0); /* <-- Color base del ring */
+  --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -43,63 +123,69 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --spacing-4: 1rem; /* Define el espaciado 4 (equivalente a 16px o p-4 en Tailwind) */
-  --sidebar-width: 250px;
-  --sidebar-width-icon: 60px;
 }
 
+/*
+ * Modo oscuro. Hoy ningún componente activa la clase `.dark` (no hay selector de tema), pero
+ * el bloque se deja completo y coherente con `:root` para que, si se activa, no queden colores
+ * del modo claro sin contraparte: antes solo 12 de las 40 variables tenían valor oscuro.
+ */
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
   --card-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
   --popover: var(--card);
   --popover-foreground: var(--card-foreground);
-  /* ... (Otras variables de color) ... */
-  --ring: oklch(0.439 0 0); /* <-- Color base del ring en modo oscuro */
-  --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+  --input-background: oklch(0.269 0 0);
+  --switch-background: oklch(0.269 0 0);
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  /* ... (Otras variables de color) ... */
+  --ring: oklch(0.439 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
 }
 
-/* El bloque @theme es una sintaxis de PostCSS/Tailwind que no es estándar en un archivo CSS simple. 
-   La configuración normal de Tailwind ya mapea estas variables a las clases si lo tienes en tu tailwind.config.js. 
-   Lo mantengo por si es una sintaxis propietaria de tu entorno.
-*/
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  /* ... (resto del bloque @theme) ... */
-  --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+/*
+ * En Tailwind 4 el color de borde por defecto es `currentcolor`. Estas reglas mantienen el
+ * gris de Tailwind 3 en los elementos que no declaran un color de borde propio.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
 }
 
 @layer base {
   * {
     @apply border-border;
-    /* CORRECCIÓN: Usamos ring-opacity-50 sobre ring-ring (si está definido) 
-       o aplicamos el color del outline con una opacidad manual para evitar el error de sintaxis.
-       La forma más limpia y compatible con esta estructura de variables es:
-       1. Aplicar la utilidad outline-none (para reiniciar)
-       2. Aplicar la utilidad focus-visible:ring-2 o focus-visible:outline-[3px] focus-visible:outline-ring/50
-       
-       Como estás aplicando a todos los elementos (*), simplemente uso una clase de outline genérica:
-    */
     outline-color: var(--ring);
     outline-offset: 2px;
     outline-width: 2px;
@@ -110,12 +196,13 @@
   }
 }
 
-/**
- * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+/*
+ * Tipografía base, con especificidad 0 (`:where`): cualquier clase `text-*` de Tailwind la
+ * sobrescribe. Usa las variables `--text-*` del tema de Tailwind 4; en la versión 3 no existían
+ * y el bloque no tenía efecto.
  */
 @layer base {
-  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
-    /* ... (resto de las definiciones de tipografía) ... */
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
     h1 {
       font-size: var(--text-2xl);
       font-weight: var(--font-weight-medium);
@@ -163,47 +250,6 @@
       font-weight: var(--font-weight-normal);
       line-height: 1.5;
     }
-  }
-}
-
-@layer components {
-
-  /* ... (Tus definiciones de botones, etc.) ... */
-
-  .sidebar-expanded {
-    @apply h-screen bg-card shadow-lg fixed top-0 left-0 transition-all duration-300;
-    width: var(--sidebar-width);
-    z-index: 1000;
-  }
-
-  .sidebar-collapsed {
-    @apply h-screen bg-card shadow-lg fixed top-0 left-0 transition-all duration-300;
-    /* *************************************************** */
-    /* *** CORRECCIÓN DE CALC() *** */
-    /* El error era por usar --spacing(4). Ahora usamos --spacing-4 (1rem) */
-    width: calc(var(--sidebar-width-icon) + var(--spacing-4));
-    /* *************************************************** */
-    z-index: 1000;
-  }
-
-  .main-content-expanded {
-    @apply transition-all duration-300;
-    margin-left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
-  }
-  
-  .main-content-collapsed {
-    @apply transition-all duration-300;
-    margin-left: calc(var(--sidebar-width-icon) + var(--spacing-4));
-    width: calc(100% - (var(--sidebar-width-icon) + var(--spacing-4)));
-  }
-
-  .scroll-area-thumb {
-    @apply bg-border rounded-full hover:bg-muted-foreground;
-  }
-
-  .scroll-area-viewport {
-    @apply p-4;
   }
 }
 

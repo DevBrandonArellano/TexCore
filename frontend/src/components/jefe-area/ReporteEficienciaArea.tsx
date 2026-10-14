@@ -75,7 +75,7 @@ export function ReporteEficienciaArea({ areaId }: { areaId: number }) {
   const sinProduccion = !!datos && datos.maquinas.length === 0 && datos.operarios.length === 0;
 
   return (
-    <Card className="flex-shrink-0">
+    <Card className="shrink-0">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
           <CardTitle>Eficiencia del día</CardTitle>

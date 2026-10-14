@@ -428,7 +428,7 @@ export function HistorialDespachos() {
                                     </h3>
                                     <div className="space-y-2">
                                         {selectedDespacho.pedidos_detalle.map(p => (
-                                            <div key={p.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-sm">
+                                            <div key={p.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-xs">
                                                 <div className="flex flex-col">
                                                     <span className="font-semibold text-sm">{p.cliente_nombre}</span>
                                                     <span className="text-xs text-muted-foreground font-mono">Guía: {p.guia_remision}</span>
@@ -445,7 +445,7 @@ export function HistorialDespachos() {
                                     </h3>
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                         {selectedDespacho.detalles.map(d => (
-                                            <div key={d.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-sm hover:border-slate-300 transition-colors">
+                                            <div key={d.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-xs hover:border-slate-300 transition-colors">
                                                 <div className="flex flex-col">
                                                     <span className="text-xs truncate max-w-[200px]" title={d.producto_nombre}>{d.producto_nombre}</span>
                                                     <span className="font-mono text-sm font-semibold">{d.codigo_lote}</span>

@@ -47,7 +47,7 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
 
   return (
     <Card className="flex flex-col flex-1 min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-blue-500" />

@@ -39,7 +39,7 @@ export function TablaLotesPaginada({ filtros = {}, accionesExtra, version = 0 }:
     <>
       <div className="overflow-x-auto">
         <Table>
-          <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+          <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
             <TableRow>
               <TableHead>Lote</TableHead>
               <TableHead>Máquina</TableHead>

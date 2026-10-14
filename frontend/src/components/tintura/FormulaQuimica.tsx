@@ -125,7 +125,7 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
       <div className="flex items-center gap-2 border rounded-md px-2 py-1 bg-background text-xs">
         <Search className="w-3 h-3 text-muted-foreground" />
         <input
-          className="flex-1 bg-transparent outline-none w-full"
+          className="flex-1 bg-transparent outline-hidden w-full"
           placeholder="Buscar insumo..."
           value={query}
           onFocus={() => setAbierto(true)}
@@ -133,7 +133,7 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
         />
       </div>
       {abierto && query && (
-        <div className="absolute z-[100] top-full mt-1 w-72 bg-popover border rounded-md shadow-xl max-h-48 overflow-auto">
+        <div className="absolute z-100 top-full mt-1 w-72 bg-popover border rounded-md shadow-xl max-h-48 overflow-auto">
           {filtrados.length === 0 ? (
             <div className="p-2 text-xs text-muted-foreground text-center">No se encontraron resultados</div>
           ) : (
@@ -436,7 +436,7 @@ export function FormulaQuimica({
   const isEditing = !!form.getValues('id');
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
+      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setVista('lista')}><ArrowLeft className="w-4 h-4 mr-2"/> Volver</Button>
           <ChevronRight className="w-4 h-4" />
@@ -455,7 +455,7 @@ export function FormulaQuimica({
           
           {/* PANEL IZQUIERDO */}
           <div className="flex-1 flex flex-col space-y-4 overflow-y-auto pr-2">
-            <Card className="flex-shrink-0">
+            <Card className="shrink-0">
               <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
                 <div className="space-y-2">
                   <Label>Código <span className="text-red-500">*</span></Label>
@@ -560,15 +560,15 @@ export function FormulaQuimica({
           </div>
 
           {/* PANEL DERECHO - CALCULADORA EN VIVO */}
-          <div className="lg:w-80 flex-shrink-0 flex flex-col min-h-0">
+          <div className="lg:w-80 shrink-0 flex flex-col min-h-0">
             <Card className="bg-slate-50 border-slate-200 shadow-inner flex flex-col flex-1 min-h-0">
-              <CardHeader className="py-3 px-4 bg-slate-100 border-b flex-shrink-0">
+              <CardHeader className="py-3 px-4 bg-slate-100 border-b shrink-0">
                 <CardTitle className="text-sm uppercase flex items-center gap-2 text-slate-700">
                   <Calculator className="w-4 h-4 text-emerald-600"/> Pesaje en Laboratorio
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 p-4 flex flex-col flex-1 min-h-0">
-                <div className="grid grid-cols-2 gap-3 flex-shrink-0 bg-white p-3 rounded-md border shadow-sm">
+                <div className="grid grid-cols-2 gap-3 shrink-0 bg-white p-3 rounded-md border shadow-xs">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-600">Peso (Kg)</Label>
                     <Input
@@ -607,14 +607,14 @@ export function FormulaQuimica({
                         const valTexto = det.tipo_calculo === 'gr_l' ? `${c_grl || 0}g/l` : `${c_pct || 0}%`;
 
                         return (
-                          <div key={di} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm gap-2">
+                          <div key={di} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-xs gap-2">
                             <div className="flex flex-col flex-1 truncate">
                               <span className="text-xs font-bold truncate text-slate-700">
                                 {det._productoObj?.descripcion || 'Insumo'}
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono">({valTexto})</span>
                             </div>
-                            <div className="font-mono font-bold text-sm text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex-shrink-0">
+                            <div className="font-mono font-bold text-sm text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded shrink-0">
                               {calc ? (calc.gr >= 1000 ? `${calc.kg.toFixed(3)}kg` : `${calc.gr.toFixed(2)}g`) : '0.00g'}
                             </div>
                           </div>
@@ -633,7 +633,7 @@ export function FormulaQuimica({
         </div>
 
         {/* CONTROLES / FOOTER STICKY */}
-        <div className="flex justify-end gap-3 pt-3 pb-2 border-t bg-background mt-auto flex-shrink-0">
+        <div className="flex justify-end gap-3 pt-3 pb-2 border-t bg-background mt-auto shrink-0">
           <Button type="button" variant="outline" onClick={() => setVista('lista')}>Cancelar</Button>
           <Button type="submit" disabled={guardando} className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[150px]">
             {guardando ? 'Guardando...' : (isEditing ? 'Actualizar Fórmula' : 'Crear Fórmula')}
@@ -684,7 +684,7 @@ function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, err
               <TableCell className="py-1">
                 <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100">
                   <button type="button" onClick={() => swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
-                  <button type="button" onClick={() => swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
+                  <button type="button" onClick={() => swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-135" /></button>
                 </div>
               </TableCell>
               <TableCell className="font-mono text-[10px] opacity-50 py-1">{index + 1}</TableCell>

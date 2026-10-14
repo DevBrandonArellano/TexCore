@@ -157,7 +157,7 @@ function NuevaVentaDialogImpl({
                 </Select>
                 <div className="flex flex-col gap-1 mt-1">
                   <div className="flex items-center space-x-2 px-1">
-                    <Switch id="iva-mode" className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({ ...newItem, incluye_iva: v })} />
+                    <Switch id="iva-mode" className="scale-75 shadow-xs data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({ ...newItem, incluye_iva: v })} />
                     <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
                   </div>
                 </div>
@@ -243,7 +243,7 @@ function NuevaVentaDialogImpl({
                   <Label>¿El cliente te emite retención?</Label>
                   <p className="text-xs text-muted-foreground">Activa esto para ingresar el valor de la retención a descontar.</p>
                 </div>
-                <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.aplica_retencion} onCheckedChange={v => {
+                <Switch className="scale-75 shadow-xs data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.aplica_retencion} onCheckedChange={v => {
                   setOrderForm({ ...orderForm, aplica_retencion: v, valor_retencion: v ? orderForm.valor_retencion : '0' });
                 }} />
               </div>
@@ -286,7 +286,7 @@ function NuevaVentaDialogImpl({
               <Label>¿El cliente pagó en caja?</Label>
               <p className="text-xs text-muted-foreground">Marca si ya recibiste el dinero, es requisito para despachar al contado.</p>
             </div>
-            <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
+            <Switch className="scale-75 shadow-xs data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
           </div>
 
           {isValidatingCash && (
