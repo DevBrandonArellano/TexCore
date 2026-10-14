@@ -32,7 +32,7 @@ function MaquinaCardInlineImpl({
               m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' :
               m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'
             }`} />
-            <h4 className="font-bold text-sm break-words">{m.nombre}</h4>
+            <h4 className="font-bold text-sm wrap-break-word">{m.nombre}</h4>
             <Badge className={`shrink-0 text-[9px] font-medium ${
               m.estado === 'operativa' ? 'bg-green-100 text-green-800' :
               m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' :

@@ -62,7 +62,7 @@ export function StockQuimicosDashboard() {
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
       {/* Header */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Stock de Químicos en Tintorería</h1>
         <p className="text-muted-foreground">
           Monitorea el inventario de insumos químicos. {alertaCount > 0 && (

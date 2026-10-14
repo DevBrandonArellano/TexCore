@@ -41,7 +41,7 @@ export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
       key={lote.id}
       className={`rounded-lg border p-3 text-sm transition-all ${
         esRaiz
-          ? 'border-primary/60 bg-primary/5 shadow-sm ring-1 ring-primary/20'
+          ? 'border-primary/60 bg-primary/5 shadow-xs ring-1 ring-primary/20'
           : 'bg-card'
       }`}
     >

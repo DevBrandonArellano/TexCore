@@ -239,7 +239,7 @@ export function PlanProduccionMTS({
   };
 
   return (
-    <Card className="border border-slate-200 shadow-sm">
+    <Card className="border border-slate-200 shadow-xs">
       <CardHeader className="pb-3 border-b border-slate-100">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -343,7 +343,7 @@ export function PlanProduccionMTS({
                 {planes.map(plan => (
                   <div
                     key={plan.id}
-                    className="border border-slate-200 rounded-lg p-4 bg-white hover:border-slate-300 transition-all shadow-sm"
+                    className="border border-slate-200 rounded-lg p-4 bg-white hover:border-slate-300 transition-all shadow-xs"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                       <div className="space-y-1">

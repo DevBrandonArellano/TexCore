@@ -13,7 +13,7 @@ function KpiSectionImpl({ kpis, alertasCount }: KpiSectionProps) {
   return (
     // UX-2: en lg (no xl) 5 tarjetas en 3 columnas queda 3+2 (más equilibrado
     // que el 4+1 de un grid a 2 columnas); en xl+ entran las 5 en una fila.
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 flex-shrink-0">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 shrink-0">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Producción Total (Kg)</CardTitle>

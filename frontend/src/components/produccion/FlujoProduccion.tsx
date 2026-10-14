@@ -126,7 +126,7 @@ export function FlujoProduccion() {
                   {/* Progreso de Peso */}
                   <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-full transition-all"
+                      className="bg-linear-to-r from-blue-500 to-purple-600 h-full transition-all"
                       style={{
                         width: `${Math.min(
                           ((orden.lotes?.reduce((sum, l) => sum + l.peso_neto_producido, 0) || 0) /
@@ -151,7 +151,7 @@ export function FlujoProduccion() {
                           <div key={etapa.id} className="relative">
                             <div className="absolute -left-9 top-1 w-4 h-4 bg-white border-2 border-purple-400 rounded-full" />
 
-                            <div className="bg-gradient-to-r from-purple-50 to-transparent border border-purple-200 rounded p-3">
+                            <div className="bg-linear-to-r from-purple-50 to-transparent border border-purple-200 rounded p-3">
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-semibold text-gray-900">
                                   {etapa.orden}. {etapa.nombre}

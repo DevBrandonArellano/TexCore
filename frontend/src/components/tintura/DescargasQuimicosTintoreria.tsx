@@ -48,7 +48,7 @@ export function DescargasQuimicosTintoreria() {
 
   return (
     <div className="flex flex-col h-full space-y-4 p-4">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Descargas de Químicos</h1>
         <p className="text-muted-foreground">
           Consulta las descargas aplicadas de un químico específico y su origen por orden de producción.

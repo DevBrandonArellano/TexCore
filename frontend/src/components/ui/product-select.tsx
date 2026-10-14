@@ -98,7 +98,7 @@ export function ProductSelect({
           {triggerLabel}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="max-h-80 w-[var(--radix-select-trigger-width)] min-w-[18rem]">
+      <SelectContent className="max-h-80 w-(--radix-select-trigger-width) min-w-[18rem]">
         {/* Barra de búsqueda integrada sticky */}
         <div
           className="sticky top-0 z-20 bg-popover p-2 border-b"

@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 // En Docker use backend:8000; en host local use localhost:8000
@@ -8,7 +9,8 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react()],
+    // Tailwind 4 se integra como plugin de Vite (sin PostCSS ni autoprefixer).
+    plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),

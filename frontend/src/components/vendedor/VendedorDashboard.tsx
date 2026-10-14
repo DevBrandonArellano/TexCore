@@ -171,7 +171,7 @@ export function VendedorDashboard() {
                     <Label className="text-base">Tiene Beneficios</Label>
                     <p className="text-sm text-muted-foreground">Activar descuentos especiales.</p>
                   </div>
-                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={clientesHook.formData.tiene_beneficio} onCheckedChange={v => clientesHook.setFormData({ ...clientesHook.formData, tiene_beneficio: v })} />
+                  <Switch className="scale-75 shadow-xs data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={clientesHook.formData.tiene_beneficio} onCheckedChange={v => clientesHook.setFormData({ ...clientesHook.formData, tiene_beneficio: v })} />
                 </div>
                 {clientesHook.editingCliente && (
                   <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
@@ -275,7 +275,7 @@ export function VendedorDashboard() {
             <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
               <div className="flex-1 overflow-auto rounded-md border relative">
                 <Table className="min-w-max">
-                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
                     <TableRow>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Estado Cuenta</TableHead>
@@ -410,7 +410,7 @@ export function VendedorDashboard() {
             <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
               <div className="flex-1 overflow-auto rounded-md border relative">
                 <Table className="min-w-max">
-                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
                     <TableRow>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Cliente</TableHead>

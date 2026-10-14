@@ -692,7 +692,7 @@ describe('FormulaQuimica', () => {
     expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
   });
 
-  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a y hace blur entonces navega', async () => {
+  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a y hace blur-sm entonces navega', async () => {
     const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
       ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
     }));

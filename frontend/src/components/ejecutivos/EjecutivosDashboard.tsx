@@ -115,7 +115,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
       {/* ── Header ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             {isAdminSede ? 'Panel de Administrador de Sede' : 'Panel Ejecutivo'}
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">

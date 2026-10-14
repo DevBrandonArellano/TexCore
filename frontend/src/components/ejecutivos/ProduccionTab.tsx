@@ -112,7 +112,7 @@ function ProduccionTabImpl({
         </Card>
 
         {/* Area chart: Tendencia de Producción con controles interactivos */}
-        <Card className="transition-all duration-300 hover:shadow-2xl hover:-translate-y-0.5 border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+        <Card className="transition-all duration-300 hover:shadow-2xl hover:-translate-y-0.5 border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs">
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
@@ -143,7 +143,7 @@ function ProduccionTabImpl({
                     onClick={() => setAgrupacionTendencia(opcion)}
                     className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-200 capitalize ${
                       agrupacionTendencia === opcion
-                        ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400'
+                        ? 'bg-white dark:bg-slate-800 shadow-xs text-blue-600 dark:text-blue-400'
                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
                   >
@@ -179,7 +179,7 @@ function ProduccionTabImpl({
                           <div className="backdrop-blur-xl bg-white/90 dark:bg-slate-950/90 border border-blue-100/60 dark:border-blue-900/40 p-3 rounded-2xl shadow-2xl space-y-1.5 animate-in fade-in-0 zoom-in-95 duration-150">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
                             <div className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-300 animate-pulse" />
+                              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shadow-blue-300 animate-pulse" />
                               <p className="text-base font-black tabular-nums text-slate-800 dark:text-slate-100">
                                 {fmt(Number(payload[0].value), 1)} <span className="text-xs font-semibold text-slate-400">kg</span>
                               </p>

@@ -117,7 +117,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
 
   return (
     <Card className="flex flex-col h-full min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Fórmulas</CardTitle>
@@ -200,7 +200,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Nombre del Color</TableHead>
@@ -257,7 +257,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
           currentPage={safePage}
           totalPages={safeTotalPages}
           setCurrentPage={setCurrentPage}
-          className="mt-4 flex-shrink-0"
+          className="mt-4 shrink-0"
         />
       </CardContent>
     </Card>

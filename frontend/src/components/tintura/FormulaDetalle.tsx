@@ -78,7 +78,7 @@ export function FormulaDetalle({
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
+      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onVolver}><ArrowLeft className="w-4 h-4 mr-2" /> Volver</Button>
           <ChevronRight className="w-4 h-4" />

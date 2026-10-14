@@ -289,7 +289,7 @@ export function JefePlantaDashboard() {
         </div>
 
         {/* ── Botones de exportación PDF ───────────────────────── */}
-        <div className="flex gap-2 flex-shrink-0 items-center">
+        <div className="flex gap-2 shrink-0 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
@@ -319,7 +319,7 @@ export function JefePlantaDashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {controlTowerCards.map(card => (
-            <Card key={card.label} className={`border ${card.color} shadow-sm transition-all hover:shadow-md`}>
+            <Card key={card.label} className={`border ${card.color} shadow-xs transition-all hover:shadow-md`}>
               <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-slate-600 uppercase tracking-wider">{card.label}</span>

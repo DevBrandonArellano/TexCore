@@ -291,7 +291,7 @@ export function OperarioDashboard() {
             const isComplete = progress >= 100;
 
             return (
-              <Card key={orden.id} className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+              <Card key={orden.id} className="border-l-4 border-l-blue-500 shadow-xs hover:shadow-md transition-shadow">
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
                     <div>

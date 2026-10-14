@@ -21,7 +21,7 @@ function AlertasInventarioPanelImpl({ alertas }: AlertasInventarioPanelProps) {
 
   return (
     <Card className="col-span-3 flex flex-col h-[400px]">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <CardTitle>Alertas de Inventario</CardTitle>
         <CardDescription>Productos químicos e hilos bajo mínimo.</CardDescription>
       </CardHeader>

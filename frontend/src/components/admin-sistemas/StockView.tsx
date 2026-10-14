@@ -64,7 +64,7 @@ function StockViewImpl({ sedeId }: StockViewProps) {
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Producto</TableHead>
                 <TableHead>Bodega</TableHead>
@@ -123,7 +123,7 @@ function StockViewImpl({ sedeId }: StockViewProps) {
           setCurrentPage={setCurrentPage}
           total={count}
           cargando={cargando}
-          className="mt-4 flex-shrink-0"
+          className="mt-4 shrink-0"
         />
       </CardContent>
     </Card>

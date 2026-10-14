@@ -108,7 +108,7 @@ export function HistorialOrdenesTintoreria() {
 
   return (
     <div className="flex flex-col h-full space-y-4 p-4">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Historial de Órdenes</h1>
         <p className="text-muted-foreground">
           Consulta las órdenes de tintorería: peso, litros de baño, relación y versión de fórmula usada.
@@ -234,7 +234,7 @@ export function HistorialOrdenesTintoreria() {
             </div>
           )}
         </CardContent>
-        <div className="flex items-center justify-end gap-2 p-3 border-t flex-shrink-0">
+        <div className="flex items-center justify-end gap-2 p-3 border-t shrink-0">
           <Button size="sm" variant="outline" disabled={!previous} onClick={() => previous && cargarPagina(previous)}>
             <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
           </Button>

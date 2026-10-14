@@ -71,7 +71,7 @@ export function MateriaPrimaView({ proveedores }: MateriaPrimaViewProps) {
 
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Recepción</TableHead>
                 <TableHead>Lote proveedor</TableHead>

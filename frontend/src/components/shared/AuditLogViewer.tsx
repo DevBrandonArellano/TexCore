@@ -208,7 +208,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                       <div className="min-w-0 max-w-full overflow-x-auto">
                         <div className="text-[10px] space-y-1 w-fit min-w-0">
                           {accion === 'UPDATE' && log.valor_anterior != null && (
-                            <div className="p-2 border rounded bg-muted/30 break-words">
+                            <div className="p-2 border rounded bg-muted/30 wrap-break-word">
                               <div className="text-destructive mb-1">
                                 <span className="font-bold">-</span> Anterior: 
                                 <pre className="inline break-all ml-1">{JSON.stringify(log.valor_anterior, null, 1)}</pre>
@@ -220,12 +220,12 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                             </div>
                           )}
                           {accion === 'CREATE' && (
-                            <div className="p-2 border rounded bg-green-50/50 text-green-700 break-words">
+                            <div className="p-2 border rounded bg-green-50/50 text-green-700 wrap-break-word">
                               Registro inicial: <pre className="inline break-all ml-1">{JSON.stringify(log.valor_nuevo, null, 1)}</pre>
                             </div>
                           )}
                           {accion === 'DELETE' && (
-                            <div className="p-2 border rounded bg-red-50/50 text-red-700 break-words">
+                            <div className="p-2 border rounded bg-red-50/50 text-red-700 wrap-break-word">
                               Valores eliminados: <pre className="inline break-all ml-1">{JSON.stringify(log.valor_anterior, null, 1)}</pre>
                             </div>
                           )}
@@ -234,8 +234,8 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                     </TableCell>
                     <TableCell className="align-top w-[200px] min-w-[160px] pl-4 whitespace-normal">
                       <div className="flex items-start gap-2 w-full min-w-0">
-                        <Info className="w-4 h-4 text-primary shrink-0 mt-0.5 flex-shrink-0" />
-                        <span className="text-sm italic break-words">{log?.justificacion ?? '-'}</span>
+                        <Info className="w-4 h-4 text-primary shrink-0 mt-0.5 shrink-0" />
+                        <span className="text-sm italic wrap-break-word">{log?.justificacion ?? '-'}</span>
                       </div>
                     </TableCell>
                   </TableRow>

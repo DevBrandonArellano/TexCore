@@ -394,7 +394,7 @@ export function BodegueroDashboard() {
   return (
     <div className="flex flex-col space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Panel de Bodeguero
@@ -413,7 +413,7 @@ export function BodegueroDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 flex-shrink-0">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Productos</CardTitle>
@@ -469,7 +469,7 @@ export function BodegueroDashboard() {
 
         <TabsContent value="inventario" className="mt-4">
           <Card>
-            <CardHeader className="flex-shrink-0">
+            <CardHeader className="shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
                 Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
@@ -489,7 +489,7 @@ export function BodegueroDashboard() {
 
         <TabsContent value="alertas" className="mt-4">
           <Card>
-            <CardHeader className="flex-shrink-0">
+            <CardHeader className="shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>
               <CardDescription>
                 Productos que están por debajo del stock mínimo configurado.
@@ -507,7 +507,7 @@ export function BodegueroDashboard() {
 
         <TabsContent value="catalogos" className="mt-4">
           <Card>
-            <CardHeader className="flex-shrink-0">
+            <CardHeader className="shrink-0">
               <CardTitle>Gestión de Productos e Insumos</CardTitle>
               <CardDescription>
                 Crea y actualiza productos, insumos y químicos para mantener los catálogos de bodega al día.
