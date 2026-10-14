@@ -324,7 +324,7 @@ describe('JefeAreaDashboard', () => {
       renderComponent();
 
       await waitFor(() => {
-        const alertasCard = screen.getByText('Alertas Activas').closest('div.flex-shrink-0')?.parentElement;
+        const alertasCard = screen.getByText('Alertas Activas').closest('div.shrink-0')?.parentElement;
         expect(within(alertasCard as HTMLElement).getByText('2')).toBeInTheDocument();
       });
     });

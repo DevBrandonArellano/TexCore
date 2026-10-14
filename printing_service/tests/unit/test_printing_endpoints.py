@@ -2,6 +2,7 @@
 Tests de endpoints e integración para printing_service.
 Cubre: config, main, health.py, pdf.py, zpl.py, output_strategy.py.
 """
+
 import sys
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -11,7 +12,7 @@ from unittest.mock import MagicMock, patch
 # Al registrar weasyprint como mock en sys.modules, ese import se resuelve sin instalar la librería.
 _mock_weasyprint = MagicMock()
 _mock_weasyprint.HTML.return_value.write_pdf.return_value = b"%PDF-1.4"
-sys.modules.setdefault('weasyprint', _mock_weasyprint)
+sys.modules.setdefault("weasyprint", _mock_weasyprint)
 
 from fastapi import Response  # noqa: E402 — tras el mock de weasyprint
 from fastapi.responses import PlainTextResponse, StreamingResponse  # noqa: E402 — tras el mock de weasyprint
@@ -33,7 +34,6 @@ _AUTH_HEADERS = {"Authorization": "Bearer test-token"}
 
 
 class TestHealthEndpoint:
-
     def test_health_ok_cuando_templates_existen_entonces_retorna_200(self):
         """EP: todos los templates presentes → status ok."""
         response = client.get("/health")  # templates reales del servicio
@@ -49,7 +49,6 @@ class TestHealthEndpoint:
 
 
 class TestPdfEndpoint:
-
     def test_nota_venta_dado_request_valido_cuando_genera_entonces_retorna_200(self):
         """EP: datos válidos de nota de venta → PDF generado (strategy mockeado)."""
         mock_strategy = MagicMock()
@@ -106,7 +105,8 @@ class TestPdfEndpoint:
         """F5: fallback universal — etiqueta en PDF para impresoras no-Zebra."""
         mock_strategy = MagicMock()
         mock_strategy.render.return_value = Response(
-            content=b"%PDF-1.4", media_type="application/pdf",
+            content=b"%PDF-1.4",
+            media_type="application/pdf",
             headers={"Content-Disposition": "attachment; filename=L-001.pdf"},
         )
         mock_audit = MagicMock()
@@ -284,9 +284,7 @@ class TestPdfReporteEndpoints:
                     "documento_sustento": "GR-001",
                 }
             ],
-            "detalles": [
-                {"codigo": "HN-40-1", "descripcion": "Hilo Nylon 40/1", "cantidad": 50.0, "unidad": "kg"}
-            ],
+            "detalles": [{"codigo": "HN-40-1", "descripcion": "Hilo Nylon 40/1", "cantidad": 50.0, "unidad": "kg"}],
         }
         response = client.post("/pdf/guia-remision", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
@@ -445,7 +443,9 @@ class TestPdfFormulaDosificacion:
 
     def test_formula_dosificacion_dado_peso_cero_cuando_genera_entonces_422(self):
         response = client.post(
-            "/pdf/formula-dosificacion", json=self._payload(peso_kg=0), headers=_AUTH_HEADERS,
+            "/pdf/formula-dosificacion",
+            json=self._payload(peso_kg=0),
+            headers=_AUTH_HEADERS,
         )
         assert response.status_code == 422
 
@@ -460,8 +460,147 @@ class TestPdfFormulaDosificacion:
             app.dependency_overrides.clear()
 
 
-class TestZplEndpoint:
+class TestHistorialMantenimientoEndpoint:
+    """Historial de mantenimiento y paros de máquina del Jefe de Área (14-oct-2026).
 
+    Usa el Environment real de Jinja2 contra la plantilla en disco (solo WeasyPrint está
+    mockeado): una variable no definida en la plantilla rompe la prueba."""
+
+    @staticmethod
+    def _payload(**cambios):
+        payload = {
+            "empresa_nombre": "Interfibra",
+            "sede_nombre": "Planta Quito",
+            "area_nombre": "Tejeduría",
+            "generado_en": "14/10/2026 10:00",
+            "impreso_por": "e1_jefe_area",
+            "filtros": {
+                "fecha_desde": "2026-09-14",
+                "fecha_hasta": "2026-10-14",
+                "fecha_desde_texto": "14/09/2026",
+                "fecha_hasta_texto": "14/10/2026",
+                "categoria": "Todas",
+                "planificado": "Todos",
+            },
+            "resumen": [
+                {
+                    "maquina_id": 1,
+                    "maquina_nombre": "Tejedora 1",
+                    "area_nombre": "Tejeduría",
+                    "paros": 2,
+                    "horas_total": 13.5,
+                    "horas_planificadas": 12.0,
+                    "paros_en_curso": 0,
+                    "ultimo_mantenimiento": "08/10/2026",
+                }
+            ],
+            "totales": {
+                "maquinas": 1,
+                "paros": 2,
+                "horas_total": 13.5,
+                "horas_planificadas": 12.0,
+                "paros_en_curso": 0,
+            },
+            "detalle": [
+                {
+                    "id": 10,
+                    "maquina_nombre": "Tejedora 1",
+                    "area_nombre": "Tejeduría",
+                    "inicio": "08/10/2026 08:30",
+                    "fin": "08/10/2026 20:30",
+                    "categoria": "MANTENIMIENTO_PLANIFICADO",
+                    "categoria_display": "Mantenimiento Planificado",
+                    "planificado": True,
+                    "descripcion": "Cambio de rodamientos",
+                    "turno": "Mañana",
+                    "usuario_nombre": "Jefe de Tejeduría",
+                    "origen": "manual",
+                    "en_curso": False,
+                    "horas": 12.0,
+                }
+            ],
+        }
+        payload.update(cambios)
+        return payload
+
+    def test_historial_dado_request_valido_cuando_genera_entonces_retorna_pdf(self):
+        response = client.post("/pdf/historial-mantenimiento", json=self._payload(), headers=_AUTH_HEADERS)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_historial_dado_plantilla_real_cuando_renderiza_entonces_incluye_resumen_y_detalle(self):
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from src.config import TEMPLATES_DIR
+
+        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        html = env.get_template("historial_mantenimiento.html").render(**self._payload())
+        assert "Tejedora 1" in html
+        assert "Mantenimiento Planificado" in html
+        assert "Cambio de rodamientos" in html
+        assert "13.5" in html or "13,5" in html
+        assert "14/09/2026" in html  # el rango se imprime en dd/mm/aaaa
+        assert "e1_jefe_area" in html
+
+    def test_historial_dado_paro_en_curso_cuando_renderiza_entonces_lo_marca(self):
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from src.config import TEMPLATES_DIR
+
+        payload = self._payload()
+        payload["detalle"][0].update({"fin": "", "en_curso": True, "horas": 5.0})
+        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        html = env.get_template("historial_mantenimiento.html").render(**payload)
+        assert "En curso" in html
+
+    def test_historial_dado_sin_paros_cuando_renderiza_entonces_avisa_que_no_hay_datos(self):
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from src.config import TEMPLATES_DIR
+
+        payload = self._payload(resumen=[], detalle=[])
+        payload["totales"] = {"maquinas": 0, "paros": 0, "horas_total": 0, "horas_planificadas": 0, "paros_en_curso": 0}
+        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        html = env.get_template("historial_mantenimiento.html").render(**payload)
+        assert "Sin paros" in html
+
+    def test_historial_dado_render_cuando_genera_entonces_audita_con_su_plantilla(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.return_value = Response(content=b"%PDF-1.4", media_type="application/pdf")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            response = client.post("/pdf/historial-mantenimiento", json=self._payload(), headers=_AUTH_HEADERS)
+            assert response.status_code == 200
+            plantilla, contexto, nombre = mock_strategy.render.call_args.args
+            assert plantilla == "historial_mantenimiento.html"
+            assert contexto["totales"]["paros"] == 2
+            assert nombre == "historial_mantenimiento_2026-09-14_2026-10-14"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_historial_dado_filtros_incompletos_cuando_genera_entonces_422(self):
+        payload = self._payload()
+        del payload["filtros"]["fecha_desde"]
+        response = client.post("/pdf/historial-mantenimiento", json=payload, headers=_AUTH_HEADERS)
+        assert response.status_code == 422
+
+    def test_historial_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar el historial")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            response = client.post("/pdf/historial-mantenimiento", json=self._payload(), headers=_AUTH_HEADERS)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_historial_dado_sin_token_cuando_genera_entonces_401(self):
+        response = client.post("/pdf/historial-mantenimiento", json=self._payload())
+        assert response.status_code == 401
+
+
+class TestZplEndpoint:
     def test_etiqueta_dado_request_valido_cuando_genera_entonces_retorna_200(self):
         """EP: datos válidos de etiqueta → ZPL generado (strategy mockeado)."""
         mock_strategy = MagicMock()
@@ -551,7 +690,6 @@ class TestZplEndpoint:
 
 
 class TestGetStrategyFunctions:
-
     def test_get_pdf_strategy_retorna_instancia_pdf_output_strategy(self):
         """Cubre get_pdf_strategy: crea Environment y PdfOutputStrategy."""
         strategy = get_pdf_strategy()
@@ -564,7 +702,6 @@ class TestGetStrategyFunctions:
 
 
 class TestZplOutputStrategy:
-
     def test_dado_zpl_strategy_cuando_render_entonces_retorna_plain_text(self):
         """Cubre ZplOutputStrategy.__init__ y render: renderiza template ZPL."""
         mock_env = MagicMock()
@@ -581,7 +718,6 @@ class TestZplOutputStrategy:
 
 
 class TestPdfOutputStrategy:
-
     def test_dado_pdf_strategy_cuando_render_entonces_retorna_streaming_response(self):
         """Cubre PdfOutputStrategy.__init__ y render con WeasyPrint mockeado."""
         mock_env = MagicMock()

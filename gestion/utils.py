@@ -15,9 +15,7 @@ def _printing_auth_headers() -> dict:
     """Firma un JWT RS256 de corta duración para autenticarse ante
     printing_service — sin esto, cualquier actor en la red interna de
     Docker podía generar PDFs/ZPL con datos arbitrarios sin credenciales."""
-    token = JWTServiceAuthentication.generate_token(
-        service_name="backend", scopes=["printing:write"], expires_in=60
-    )
+    token = JWTServiceAuthentication.generate_token(service_name="backend", scopes=["printing:write"], expires_in=60)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -30,7 +28,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating PDF: %s',
+                "Error generating PDF: %s",
                 response.text,
             )
             return None
@@ -46,7 +44,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.text
             logger.error(
-                'Error generating ZPL: %s',
+                "Error generating ZPL: %s",
                 response.text,
             )
             return None
@@ -63,7 +61,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating label PDF: %s',
+                "Error generating label PDF: %s",
                 response.text,
             )
             return None
@@ -80,7 +78,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating historial despachos PDF: %s',
+                "Error generating historial despachos PDF: %s",
                 response.text,
             )
             return None
@@ -97,7 +95,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating producción por producto PDF: %s',
+                "Error generating producción por producto PDF: %s",
                 response.text,
             )
             return None
@@ -114,7 +112,7 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating guía de remisión PDF: %s',
+                "Error generating guía de remisión PDF: %s",
                 response.text,
             )
             return None
@@ -131,7 +129,24 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             logger.error(
-                'Error generating hoja de dosificación PDF: %s',
+                "Error generating hoja de dosificación PDF: %s",
+                response.text,
+            )
+            return None
+        except Exception as e:
+            logger.exception("Printing Service Unavailable: %s", e)
+            return None
+
+    @staticmethod
+    def generate_historial_mantenimiento_pdf(data):
+        """Historial de mantenimiento y paros de máquina de un área (rol Jefe de Área)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/historial-mantenimiento"
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=15)
+            if response.status_code == 200:
+                return response.content
+            logger.error(
+                "Error generating historial de mantenimiento PDF: %s",
                 response.text,
             )
             return None
@@ -145,6 +160,7 @@ class PaymentReconciler:
     Utilidad para reconciliar los pagos de clientes contra sus pedidos (FIFO).
     Actualiza el estado 'esta_pagado' basado en el saldo acumulado.
     """
+
     @staticmethod
     def reconcile_client_orders(cliente):
         # Importaciones locales para evitar dependencias circulares
@@ -153,9 +169,9 @@ class PaymentReconciler:
         logger.info("Iniciando reconciliación de pagos para cliente: %s", cliente.nombre_razon_social)
 
         # 1. Obtener Total Pagado
-        total_pagado = PagoCliente.objects.filter(cliente=cliente).aggregate(
-            total=Sum('monto')
-        )['total'] or Decimal('0.00')
+        total_pagado = PagoCliente.objects.filter(cliente=cliente).aggregate(total=Sum("monto"))["total"] or Decimal(
+            "0.00"
+        )
 
         # 2. Obtener Todos los Pedidos ordenados por fecha (FIFO - First In First Out)
         # Calculamos el valor total de cada pedido dinámicamente
@@ -168,10 +184,14 @@ class PaymentReconciler:
         # por lo que el FIFO debe excluirlos también. Un pedido anulado que
         # consume saldo deja los pedidos activos posteriores sin marcar como
         # pagados (inconsistencia entre cartera y estado de pedidos).
-        pedidos = PedidoVenta.objects.filter(
-            cliente=cliente,
-            anulado=False,
-        ).prefetch_related('detalles').order_by('fecha_pedido', 'id')
+        pedidos = (
+            PedidoVenta.objects.filter(
+                cliente=cliente,
+                anulado=False,
+            )
+            .prefetch_related("detalles")
+            .order_by("fecha_pedido", "id")
+        )
 
         # 3. Iterar y Aplicar Pagos (FIFO con abonos parciales — P1-003)
         saldo_disponible = total_pagado
@@ -181,7 +201,7 @@ class PaymentReconciler:
             for pedido in pedidos:
                 # Calcular total del pedido
                 valor_pedido = sum(d.total_con_iva for d in pedido.detalles.all())
-                valor_retencion = pedido.valor_retencion or Decimal('0.000')
+                valor_retencion = pedido.valor_retencion or Decimal("0.000")
                 valor_pedido = Decimal(str(valor_pedido - valor_retencion))
 
                 if valor_pedido <= 0:
@@ -190,7 +210,7 @@ class PaymentReconciler:
                 # Lo aplicado al pedido es lo que alcance del saldo (parcial o total).
                 # El remanente que no cubre un pedido completo queda registrado
                 # como abono parcial en lugar de descartarse.
-                monto_aplicado = min(saldo_disponible, valor_pedido).quantize(Decimal('0.001'))
+                monto_aplicado = min(saldo_disponible, valor_pedido).quantize(Decimal("0.001"))
                 nuevo_estado = saldo_disponible >= valor_pedido
                 saldo_disponible -= monto_aplicado
 
@@ -198,13 +218,13 @@ class PaymentReconciler:
                 if pedido.esta_pagado != nuevo_estado or pedido.monto_pagado != monto_aplicado:
                     pedido.esta_pagado = nuevo_estado
                     pedido.monto_pagado = monto_aplicado
-                    pedido.save(update_fields=['esta_pagado', 'monto_pagado'])
+                    pedido.save(update_fields=["esta_pagado", "monto_pagado"])
                     pedidos_actualizados.append(pedido.id)
 
         # El saldo_disponible final > 0 es anticipo del cliente (saldo a favor),
         # visible como saldo_calculado negativo en ClienteManager
         logger.info(
-            'Reconciliación completada. %s pedidos actualizados para cliente %s. Saldo restante: %s',
+            "Reconciliación completada. %s pedidos actualizados para cliente %s. Saldo restante: %s",
             len(pedidos_actualizados),
             cliente.id,
             saldo_disponible,

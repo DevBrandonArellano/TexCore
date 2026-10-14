@@ -3,7 +3,10 @@ from decimal import Decimal
 
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce
-from rest_framework import mixins, viewsets
+from django.http import HttpResponse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -23,27 +26,32 @@ from gestion.permissions import (
 from gestion.serializers import (
     LineaProduccionSerializer,
     MaquinaSerializer,
+    ParoMaquinaHistorialSerializer,
     ParoMaquinaSerializer,
     ProcesoTintoreriaSerializer,
 )
+from gestion.services.historial_paros import FiltrosHistorial, HistorialParosService
+from gestion.services.paro_por_estado import ParoPorEstadoService
 from gestion.services.procesos_maquina import ProcesosMaquinaService
+from gestion.utils import PrintingService
+from inventory.pagination import PaginacionAcotada
 
 from ._common import parse_int_param
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
 def _acotar_por_area_y_sede(qs, user, campo_area):
     """OWASP A01: el Jefe de Área ve solo su área; el resto, su sede (helper único)."""
-    if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+    if user.groups.filter(name="jefe_area").exists() and not user.is_superuser:
         if not user.area_id:
             return qs.none()
-        qs = qs.filter(**{f'{campo_area}_id': user.area_id})
-    return filtrar_por_sede(qs, user, f'{campo_area}__sede')
+        qs = qs.filter(**{f"{campo_area}_id": user.area_id})
+    return filtrar_por_sede(qs, user, f"{campo_area}__sede")
 
 
 def maquinas_visibles(user):
-    return _acotar_por_area_y_sede(Maquina.objects.all(), user, 'area')
+    return _acotar_por_area_y_sede(Maquina.objects.all(), user, "area")
 
 
 class MaquinaViewSet(viewsets.ModelViewSet):
@@ -52,26 +60,34 @@ class MaquinaViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
-        if self.action == 'procesos':
-            if self.request.method == 'PUT':
+        if self.action == "procesos":
+            if self.request.method == "PUT":
                 return [IsAuthenticated(), IsJefeAreaOrAdmin()]
             return [IsAuthenticated(), IsLectorProcesosTintoreria()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+        if self.request.user.groups.filter(name__in=["jefe_area", "jefe_planta", "admin_sistemas"]).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
         # MaquinaSerializer lee estas FK y el M2M operarios (dos veces) por fila.
-        queryset = Maquina.objects.select_related(
-            'area', 'bodega_entrada', 'bodega_salida', 'bodega_merma', 'producto_merma',
-        ).prefetch_related('operarios').all()
+        queryset = (
+            Maquina.objects.select_related(
+                "area",
+                "bodega_entrada",
+                "bodega_salida",
+                "bodega_merma",
+                "producto_merma",
+            )
+            .prefetch_related("operarios")
+            .all()
+        )
 
-        queryset = _acotar_por_area_y_sede(queryset, user, 'area')
+        queryset = _acotar_por_area_y_sede(queryset, user, "area")
 
-        area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
+        area_id = parse_int_param(self.request.query_params.get("area", None), "area")
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
@@ -83,16 +99,17 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         datos = serializer.validated_data
         instancia = serializer.instance
-        area = datos['area'] if 'area' in datos else getattr(instancia, 'area', None)
+        area = datos["area"] if "area" in datos else getattr(instancia, "area", None)
         if area is None:
             if not ve_todas_las_sedes(user):
-                raise ValidationError({'area': 'Este campo es requerido.'})
+                raise ValidationError({"area": "Este campo es requerido."})
             return
-        validar_visible(areas_gestionables(user), area, 'area')
-        campos = ('bodega_entrada', 'bodega_salida', 'bodega_merma')
+        validar_visible(areas_gestionables(user), area, "area")
+        campos = ("bodega_entrada", "bodega_salida", "bodega_merma")
         referencias = {c: datos[c] if c in datos else getattr(instancia, c, None) for c in campos}
-        operarios = datos['operarios'] if 'operarios' in datos else (
-            list(instancia.operarios.all()) if instancia else [])
+        operarios = (
+            datos["operarios"] if "operarios" in datos else (list(instancia.operarios.all()) if instancia else [])
+        )
         validar_misma_sede(area.sede_id, operarios=operarios, **referencias)
 
     def perform_create(self, serializer):
@@ -101,44 +118,52 @@ class MaquinaViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         self._validar_alcance(serializer)
-        serializer.save()
+        # El estado anterior se lee ANTES de guardar: el cambio de estado abre o cierra el paro
+        # automático que alimenta el historial de mantenimiento (decisión del usuario, 14-oct-2026).
+        estado_anterior = serializer.instance.estado
+        maquina = serializer.save()
+        ParoPorEstadoService.sincronizar(maquina, estado_anterior, maquina.estado, self.request.user)
 
-    @action(detail=True, methods=['get', 'put'], url_path='procesos')
+    @action(detail=True, methods=["get", "put"], url_path="procesos")
     def procesos(self, request, pk=None):
         """GET /maquinas/{id}/procesos/ — procesos de tintorería que ejecuta la máquina.
         PUT con `{procesos: [ids]}` los reemplaza (Jefe de Área de esa área, Jefe de Planta
         o admin; la máquina de otra área no es visible → 404)."""
         maquina = self.get_object()
-        if request.method == 'PUT':
-            ids = request.data.get('procesos') if isinstance(request.data, dict) else None
+        if request.method == "PUT":
+            ids = request.data.get("procesos") if isinstance(request.data, dict) else None
             if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
-                raise ValidationError({'procesos': 'Envía la lista de ids de procesos.'})
+                raise ValidationError({"procesos": "Envía la lista de ids de procesos."})
             procesos = ProcesosMaquinaService.reemplazar(maquina, ids, request.user)
         else:
-            procesos = ProcesoTintoreria.objects.filter(maquinas_asignadas__maquina=maquina).order_by('codigo')
+            procesos = ProcesoTintoreria.objects.filter(maquinas_asignadas__maquina=maquina).order_by("codigo")
         return Response(ProcesoTintoreriaSerializer(procesos, many=True).data)
 
-    @action(detail=True, methods=['get'], url_path='eficiencia')
+    @action(detail=True, methods=["get"], url_path="eficiencia")
     def eficiencia(self, request, pk=None):
         maquina = self.get_object()
         from django.db.models import Sum
         from django.utils import timezone
 
-        produccion = LoteProduccion.objects.filter(
-            maquina=maquina,
-            hora_final__date=timezone.localdate()
-        ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
+        produccion = (
+            LoteProduccion.objects.filter(maquina=maquina, hora_final__date=timezone.localdate()).aggregate(
+                total=Sum("peso_neto_producido")
+            )["total"]
+            or 0
+        )
 
         eficiencia = (Decimal(str(produccion)) / maquina.capacidad_maxima * 100) if maquina.capacidad_maxima > 0 else 0
 
-        return Response({
-            "maquina": maquina.nombre,
-            "capacidad_maxima": maquina.capacidad_maxima,
-            "produccion_hoy": produccion,
-            "eficiencia_porcentaje": round(eficiencia, 2)
-        })
+        return Response(
+            {
+                "maquina": maquina.nombre,
+                "capacidad_maxima": maquina.capacidad_maxima,
+                "produccion_hoy": produccion,
+                "eficiencia_porcentaje": round(eficiencia, 2),
+            }
+        )
 
-    @action(detail=True, methods=['get'], url_path='oee')
+    @action(detail=True, methods=["get"], url_path="oee")
     def oee(self, request, pk=None):
         """GET /maquinas/{id}/oee/ — OEE = Disponibilidad x Rendimiento x Calidad
         de esta máquina (histórico completo, sin acotar por fecha; ver OeeService)."""
@@ -155,6 +180,7 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
     supervisa los de su área; aislamiento por área/sede idéntico a MaquinaViewSet.
     Un paro es histórico (alimenta el OEE): no se edita ni se borra.
     """
+
     queryset = ParoMaquina.objects.all()
     serializer_class = ParoMaquinaSerializer
     pagination_class = None
@@ -162,24 +188,110 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
 
     def get_queryset(self):
         user = self.request.user
-        queryset = ParoMaquina.objects.select_related('maquina', 'maquina__area', 'usuario').all()
-        queryset = _acotar_por_area_y_sede(queryset, user, 'maquina__area')
+        queryset = ParoMaquina.objects.select_related("maquina", "maquina__area", "usuario").all()
+        queryset = _acotar_por_area_y_sede(queryset, user, "maquina__area")
 
-        maquina_id = parse_int_param(self.request.query_params.get('maquina', None), 'maquina')
+        maquina_id = parse_int_param(self.request.query_params.get("maquina", None), "maquina")
         if maquina_id:
             queryset = queryset.filter(maquina_id=maquina_id)
 
         return queryset
 
     def perform_create(self, serializer):
-        validar_visible(maquinas_visibles(self.request.user), serializer.validated_data['maquina'], 'maquina')
+        validar_visible(maquinas_visibles(self.request.user), serializer.validated_data["maquina"], "maquina")
         serializer.save(usuario=self.request.user)
+
+    def _historial(self, params):
+        """Filtros validados, resumen, totales y el queryset del detalle (fuente única de la
+        pantalla y del PDF: lo impreso es exactamente lo que se ve)."""
+        filtros = FiltrosHistorial(params)
+        base = HistorialParosService.filtrar(self.get_queryset(), filtros)
+        resumen = HistorialParosService.resumen(base, filtros)
+        return filtros, resumen, HistorialParosService.totales(resumen), base.order_by("-inicio")
+
+    @action(detail=False, methods=["get"], url_path="historial", pagination_class=PaginacionAcotada)
+    def historial(self, request):
+        """GET /api/paros-maquina/historial/ — historial de mantenimiento y paros del área.
+
+        Parámetros opcionales: `fecha_desde`, `fecha_hasta` (por omisión, los últimos 30 días),
+        `maquina`, `categoria` y `planificado`. Devuelve el resumen por máquina, los totales y el
+        detalle paginado. El rango filtra por solape: un paro que empezó antes y sigue abierto son
+        días detenidos dentro del rango.
+        """
+        filtros, resumen, totales, detalle = self._historial(request.query_params)
+        pagina = self.paginate_queryset(detalle)
+        serializer = ParoMaquinaHistorialSerializer(pagina, many=True, context={"filtros": filtros})
+        paginado = self.paginator.get_paginated_response(serializer.data).data
+        return Response(
+            {
+                "rango": {
+                    "fecha_desde": filtros.fecha_desde.isoformat(),
+                    "fecha_hasta": filtros.fecha_hasta.isoformat(),
+                },
+                "resumen": resumen,
+                "totales": totales,
+                "detalle": paginado,
+            }
+        )
+
+    @staticmethod
+    def _fechas_para_imprimir(resumen, detalle):
+        """El PDF lleva las fechas en dd/mm/aaaa y hora local, sin microsegundos ni zona: un
+        documento para planta no se lee en ISO. Lo que viaja a printing_service ya va formateado."""
+
+        def texto(valor, con_hora=True):
+            if not valor:
+                return ""
+            fecha = parse_datetime(valor) if isinstance(valor, str) else valor
+            if fecha is None:
+                return ""
+            local = timezone.localtime(fecha)
+            return local.strftime("%d/%m/%Y %H:%M" if con_hora else "%d/%m/%Y")
+
+        resumen_pdf = [
+            {**fila, "ultimo_mantenimiento": texto(fila["ultimo_mantenimiento"], con_hora=False)} for fila in resumen
+        ]
+        detalle_pdf = [{**fila, "inicio": texto(fila["inicio"]), "fin": texto(fila["fin"])} for fila in detalle]
+        return resumen_pdf, detalle_pdf
+
+    @action(detail=False, methods=["post"], url_path="imprimir-historial")
+    def imprimir_historial(self, request):
+        """POST /api/paros-maquina/imprimir-historial/ — el mismo historial en PDF, con el rango
+        completo (sin paginar) y los filtros aplicados en el pie. 503 si printing_service no responde."""
+        filtros, resumen, totales, detalle = self._historial(request.data if isinstance(request.data, dict) else {})
+        filas = ParoMaquinaHistorialSerializer(detalle, many=True, context={"filtros": filtros}).data
+        resumen_pdf, detalle_pdf = self._fechas_para_imprimir(resumen, filas)
+
+        sede = request.user.sede
+        data = {
+            "empresa_nombre": sede.nombre if sede else "TexCore",
+            "sede_nombre": sede.nombre if sede else "Todas las sedes",
+            "area_nombre": request.user.area.nombre if request.user.area else "Todas las áreas",
+            "generado_en": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+            "impreso_por": request.user.username,
+            "filtros": filtros.como_texto(),
+            "resumen": resumen_pdf,
+            "totales": totales,
+            "detalle": detalle_pdf,
+        }
+
+        pdf_content = PrintingService.generate_historial_mantenimiento_pdf(data)
+        if not pdf_content:
+            return Response(
+                {"error": "El servicio de impresión no está disponible temporalmente."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_content, content_type="application/pdf")
+        nombre = f"historial_mantenimiento_{filtros.fecha_desde}_{filtros.fecha_hasta}.pdf"
+        response["Content-Disposition"] = f'inline; filename="{nombre}"'
+        return response
 
 
 class LineaProduccionViewSet(viewsets.ModelViewSet):
     """Células de Manufactura Flexibles: la línea agrupa flujo, NO asigna
     carga — colas y OPs se calculan a nivel de ÁREA (ver LineaProduccion)."""
-    queryset = LineaProduccion.objects.select_related('area')
+
+    queryset = LineaProduccion.objects.select_related("area")
     serializer_class = LineaProduccionSerializer
     pagination_class = None
 
@@ -198,25 +310,30 @@ class LineaProduccionViewSet(viewsets.ModelViewSet):
         # vez del total real de líneas activas que comparten la máquina).
         # La Subquery corre independiente del join externo del Prefetch y
         # evita el conflicto.
-        conteo_activas = LineaProduccion.objects.filter(
-            maquinas=OuterRef('pk'), estado='activa'
-        ).order_by().values('maquinas').annotate(c=Count('id')).values('c')
+        conteo_activas = (
+            LineaProduccion.objects.filter(maquinas=OuterRef("pk"), estado="activa")
+            .order_by()
+            .values("maquinas")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
         maquinas_anotadas = Maquina.objects.annotate(
-            num_lineas_activas=Coalesce(
-                Subquery(conteo_activas, output_field=IntegerField()), 0))
-        return LineaProduccion.objects.select_related('area').prefetch_related(
-            Prefetch('maquinas', queryset=maquinas_anotadas))
+            num_lineas_activas=Coalesce(Subquery(conteo_activas, output_field=IntegerField()), 0)
+        )
+        return LineaProduccion.objects.select_related("area").prefetch_related(
+            Prefetch("maquinas", queryset=maquinas_anotadas)
+        )
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = _acotar_por_area_y_sede(self._base_queryset(), user, 'area')
+        queryset = _acotar_por_area_y_sede(self._base_queryset(), user, "area")
 
-        area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
+        area_id = parse_int_param(self.request.query_params.get("area", None), "area")
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
@@ -224,8 +341,8 @@ class LineaProduccionViewSet(viewsets.ModelViewSet):
 
     def _validar_area(self, serializer):
         # El serializer ya exige que las máquinas sean del área de la línea.
-        area = serializer.validated_data.get('area', getattr(serializer.instance, 'area', None))
-        validar_visible(areas_gestionables(self.request.user), area, 'area')
+        area = serializer.validated_data.get("area", getattr(serializer.instance, "area", None))
+        validar_visible(areas_gestionables(self.request.user), area, "area")
 
     def perform_create(self, serializer):
         self._validar_area(serializer)
