@@ -1,6 +1,7 @@
 # Contraste de la tesis con el sistema — evidencia no automatizada
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha:** 13-oct-2026
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0009` · **Fecha:** 14-oct-2026
+> (La evidencia de infraestructura del Sprint 0 se capturó el 13-oct, sobre `gestion/0008`; nada de lo añadido después la altera.)
 > **Propósito:** respaldar el paso a producción, contrastando cada compromiso de la tesis con el sistema.
 > **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
 > **Fuente de la tesis:** `docs/Anteproyecto_Capstone_Final_Version.pdf`: RNF (Tablas 6 a 10), Definición de Hecho (§5.1), sprints (Tabla 14), despliegue (§5.3) y puesta en marcha (§5.4).
@@ -71,13 +72,13 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 
 | Afirmación de la tesis | Situación del sistema | Veredicto |
 |---|---|---|
-| Pipeline configurado en GitLab CI; imágenes en GitLab Container Registry | GitHub Actions (`ci.yml`, `cd.yml`, `security.yml`, `rollback.yml`) y GitHub Container Registry | ❌ como está redactado |
+| Pipeline configurado en GitLab CI; imágenes en GitLab Container Registry | GitHub Actions (`ci.yml`, `release.yml`, `security.yml`, `rollback.yml`, `gobierno.yml`) y GitHub Container Registry | ❌ como está redactado |
 | Validación de sintaxis y formato con flake8 y detección de vulnerabilidades con bandit | Ruff con las reglas de estilo y de seguridad `S`, además de mypy y Semgrep | ❌ como está redactado |
 | Escaneo de secretos con detect-secrets | Dos pasos bloqueantes en `ci.yml`: ningún secreto nuevo en los archivos versionados y línea base auditada | ✅ |
 | Base de datos efímera para pruebas unitarias y de integración (Pytest y Django) | SQL Server 2022 como servicio del job `backend-test` | ✅ |
 | Umbral de cobertura mínimo del 75 % para la mezcla | Gate del 90 % en el backend | ✅ |
-| Imágenes de Backend, Frontend y microservicios | 5 imágenes: backend, nginx con el frontend y los 3 microservicios | ✅ |
-| Despliegue automático a staging | — | ⏳ |
+| Imágenes de Backend, Frontend y microservicios | 6 imágenes: backend, nginx con el frontend, los 3 microservicios y la base de datos; el release las construye sin caché y las despliega por digest, firmadas con cosign | ✅ |
+| Despliegue automático a staging | No hay servidor de staging: `release.yml` levanta un **staging efímero** con las 6 imágenes del release y un SQL Server desechable, migra desde cero y corre las pruebas de humo de los 11 roles antes de pedir la aprobación de producción | ✅ en configuración · ⏳ ejecución (primer merge a `master`) |
 | Producción en Ubuntu Server (Hyper-V) con Gunicorn y Nginx | Compose de producción con Gunicorn (20 workers) detrás de Nginx; dimensionamiento en `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` | ✅ en configuración · ⏳ despliegue |
 | Rollback manual con un solo clic | `.github/workflows/rollback.yml` (`workflow_dispatch` con confirmación) | ⏳ ejecución |
 

@@ -3,7 +3,7 @@
 Servicio satélite FastAPI dedicado a la generación de documentos PDF (notas de venta, guías de remisión, reportes de producción y despachos, hojas de dosificación, etiquetas universales) y etiquetas ZPL para impresoras Zebra. Desacopla las dependencias pesadas de WeasyPrint del núcleo Django.
 
 > **Refactorizado:** 2026-04-23 — Se aplicó arquitectura de capas SOLID con Strategy Pattern y separación DTO/Servicio.
-> **Estado al 13-oct-2026:** 10 endpoints (8 PDF, 1 ZPL y `/health`), 99 pruebas con cobertura mínima del 95 %, JWT RS256 obligatorio en todo salvo `/health`.
+> **Estado al 14-oct-2026:** 11 endpoints (9 PDF, 1 ZPL y `/health`), 107 pruebas con cobertura mínima del 95 %, JWT RS256 obligatorio en todo salvo `/health`.
 > **Extendido:** 2026-07-20 — F5 del módulo de Gestión de Etiquetas (ver [GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md)): endpoint `/pdf/etiqueta` (fallback universal para impresoras no-Zebra) + campos de gobernanza (`motivo`, `tipo_evento`, `version`, `usuario`) en `EtiquetaRequest` y `PrintAuditLog`.
 
 ---
@@ -24,7 +24,7 @@ printing_service/src/
   routers/
     pdf.py                   ← POST /pdf/{nota-venta, etiqueta, reporte-avance, reporte-balance,
                                historial-despachos, produccion-por-producto, guia-remision,
-                               formula-dosificacion}
+                               formula-dosificacion, historial-mantenimiento}
     zpl.py                   ← POST /zpl/etiqueta
     health.py                ← GET /health
   templates/
@@ -280,9 +280,9 @@ Genera el reporte de Balance de Masas Mensual (orientación vertical A4).
 
 ---
 
-### `POST /pdf/historial-despachos`, `/pdf/produccion-por-producto`, `/pdf/guia-remision` y `/pdf/formula-dosificacion`
+### `POST /pdf/historial-despachos`, `/pdf/produccion-por-producto`, `/pdf/guia-remision`, `/pdf/formula-dosificacion` y `/pdf/historial-mantenimiento`
 
-Siguen el mismo patrón: un DTO Pydantic de entrada (`HistorialDespachosRequest`, `ProduccionPorProductoRequest`, `GuiaRemisionRequest`, `FormulaDosificacionRequest` en `schemas/printing.py`), una plantilla HTML y `StreamingResponse (application/pdf)`.
+Siguen el mismo patrón: un DTO Pydantic de entrada (`HistorialDespachosRequest`, `ProduccionPorProductoRequest`, `GuiaRemisionRequest`, `FormulaDosificacionRequest`, `HistorialMantenimientoRequest` en `schemas/printing.py`), una plantilla HTML y `StreamingResponse (application/pdf)`.
 
 | Endpoint | Lo pide Django desde | Documento |
 |---|---|---|
@@ -290,6 +290,7 @@ Siguen el mismo patrón: un DTO Pydantic de entrada (`HistorialDespachosRequest`
 | `/pdf/guia-remision` | `inventory/views/despacho_views.py` | Guía de remisión de un despacho |
 | `/pdf/produccion-por-producto` | `gestion/views/kpi_views.py` | Producción por producto del panel ejecutivo |
 | `/pdf/formula-dosificacion` | `gestion/views/formula_views.py` (`POST /api/formula-colors/{id}/imprimir-dosificacion/`) | Hoja de dosificación para un peso y litros de baño: versión oficial o, sin ella, receta viva marcada «BORRADOR» |
+| `/pdf/historial-mantenimiento` | `gestion/views/production_maquina_views.py` (`POST /api/paros-maquina/imprimir-historial/`) | Historial de mantenimiento y paros del área (A4 horizontal): totales del rango, resumen por máquina y detalle paro por paro |
 
 ---
 
@@ -304,12 +305,12 @@ tests/
     test_label_service.py        ← contexto y sellos de la etiqueta
     test_zpl_sanitizer.py        ← escape de datos en ZPL
     test_audit_repository.py     ← AuditRepository / build_print_record (incl. campos F5)
-    test_printing_endpoints.py   ← los 9 endpoints de documentos (mocks de strategy/audit)
+    test_printing_endpoints.py   ← los 10 endpoints de documentos (mocks de strategy/audit)
     test_database_engine.py
     test_concurrency.py
 ```
 
-99 pruebas. Las de `DocumentService` no requieren WeasyPrint (la importación es lazy, dentro de `render`). `pytest.ini` exige `--cov-fail-under=95` y el CI lo aplica.
+107 pruebas. Las de `DocumentService` no requieren WeasyPrint (la importación es lazy, dentro de `render`). `pytest.ini` exige `--cov-fail-under=95` y el CI lo aplica.
 
 ---
 
@@ -325,6 +326,7 @@ PrintingService.generate_historial_despachos_pdf(data_dict)          # /pdf/hist
 PrintingService.generate_produccion_por_producto_pdf(data_dict)      # /pdf/produccion-por-producto
 PrintingService.generate_guia_remision_pdf(data_dict)                # /pdf/guia-remision
 PrintingService.generate_formula_dosificacion_pdf(data_dict)         # /pdf/formula-dosificacion
+PrintingService.generate_historial_mantenimiento_pdf(data_dict)      # /pdf/historial-mantenimiento
 ```
 
 Los reportes de avance y balance los pide `internal_api/views/pdf_produccion_views.py`. Todas las llamadas llevan el encabezado de `_printing_auth_headers()`; el 13-oct-2026 se corrigieron los cuatro métodos que se habían agregado sin él y recibían 401.

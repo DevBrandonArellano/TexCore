@@ -126,7 +126,7 @@ explícito propios para los tres umbrales, está en `scripts/loadtest/locustfile
 
 ### Fase B — rutas sin consumidor y control de acceso (1-oct-2026)
 
-Plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. Cada prueba de alcance se vio roja contra el
+Fase B de rutas sin consumidor (`CHANGELOG.md`, 1-oct-2026). Cada prueba de alcance se vio roja contra el
 código anterior (los casos que ya se cumplían se indican en el CHANGELOG). Regla común: una referencia de otra sede o
 fuera del alcance del usuario responde igual que una inexistente (400 «No encontrado.» o 404).
 
@@ -144,10 +144,11 @@ fuera del alcance del usuario responde igual que una inexistente (400 «No encon
 | Lotes: editar y rechazar solo el operario dueño, jefes y admins; sin DELETE; costo F0-002 para los roles de costos; transformaciones y trazabilidad de otra sede → 404; consumos por lote y componentes de mezcla acotados por sede | `gestion/tests/test_alcance_lotes_y_transformaciones.py`, `gestion/tests/test_transformacion_api.py` | TD, EP | ✅ |
 | Indicadores: reporte de eficiencia del área (Jefe de Área solo su área, Jefe de Planta y admins); desempeño del operario (el propio, su Jefe de Área, Jefe de Planta y admins de su sede) | `gestion/tests/test_alcance_indicadores.py` | TD, EP | ✅ |
 | Auditoría reproducible de rutas sin consumidor en el frontend (debe devolver 0) | `scripts/auditar_rutas_frontend.py` | — | ✅ |
+| La auditoría de rutas expande las constantes de cadena del archivo (`const BASE = '/paros-maquina/'` + `${BASE}historial/`): sin eso marcaba como huérfanas 5 rutas que el frontend sí consume | `gestion/tests/test_auditoria_rutas_script.py` | EP, BVA | ✅ |
 
 ### Hallazgos de la revisión de manuales (2-oct-2026)
 
-Plan `C:/Users/arebr/.claude/plans/vammos-a-generar-un-crispy-ember.md`. Cada prueba se vio en rojo antes del cambio.
+Ver el `CHANGELOG` del 2-oct-2026 («Pruebas del frontend» y «Pruebas del backend»). Cada prueba se vio en rojo antes del cambio.
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
@@ -258,6 +259,20 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | `PrintingService.generate_formula_dosificacion_pdf` envía el JWT interno † | `gestion/tests/test_utils.py` | EP | ✅ |
 | `printing_service` `/pdf/formula-dosificacion`: PDF con la plantilla real, aviso BORRADOR, peso en cero → 422, error → 500 † | `printing_service/tests/unit/test_printing_endpoints.py` | EP, BVA | ✅ |
 | Frontend: botón Imprimir en la tabla de Fórmulas, diálogo con peso y litros, aviso de borrador, error del servicio † | `FormulaQuimica.test.tsx`, `formulasApi.test.ts` | EP | ✅ |
+
+### Jefe de Área: historial de mantenimiento y paros de máquina (14-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `ParoPorEstadoService`: el paso a mantenimiento abre un paro planificado; a inactiva, uno no planificado; la vuelta a operativa lo cierra; mantenimiento → inactiva cierra y abre; el mismo estado no duplica; el paro **manual** abierto no se cierra nunca † | `gestion/tests/test_paro_por_estado.py` | Tabla de decisión, EP, STT | ✅ |
+| `PATCH /maquinas/{id}/` con estado nuevo abre o cierra el paro automático y lo deja visible en el historial; un PATCH que no toca el estado no crea paros † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| `GET /paros-maquina/historial/`: resumen por máquina y totales; paro en curso contado hasta ahora; solape del rango; horas acotadas al rango; filtros de máquina, categoría y planificado; categoría inválida, fecha inválida, rango invertido, rango mayor a un año y máquina no numérica → 400; máquina de otra área no aparece; vendedor → 403; sin autenticar → 401; detalle paginado; consultas constantes † | `gestion/tests/test_historial_mantenimiento.py` | EP, BVA, tabla de decisión | ✅ |
+| `POST /paros-maquina/imprimir-historial/`: PDF con el rango completo sin paginar, filtros del body aplicados, servicio caído → 503, vendedor → 403 † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| `printing_service` `/pdf/historial-mantenimiento`: PDF con la plantilla real (resumen, detalle, filtros y quién imprimió), paro en curso marcado, rango sin paros, auditoría con su plantilla, filtros incompletos → 422, error → 500, sin token → 401 † | `printing_service/tests/unit/test_printing_endpoints.py` | EP, BVA | ✅ |
+| El payload que recibe `PrintingService` es JSON serializable: ningún `datetime` en el resumen (defecto 59) † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| Las fechas del PDF van en dd/mm/aaaa y hora local, sin microsegundos; el paro en curso va con el fin vacío (defecto 60) † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| Capas sin ciclos: ningún módulo de `services/` ni de `serializers/` importa de `gestion.views`; `gestion/params.py` es neutral; el reexport de `views/_common.py` sigue sirviendo (defecto 58) † | `gestion/tests/test_capas_sin_ciclos.py` | EP, estática | ✅ |
+| Frontend: panel con totales, resumen y detalle; rango por omisión de 30 días; atajos de mantenimiento y averías; cambio de fechas y de máquina; paro en curso y paro automático marcados; rango vacío; error de carga con reintento; impresión con los filtros vigentes y fallo del servicio; paginación † | `HistorialMantenimientoPanel.test.tsx`, `mantenimientoApi.test.ts` | EP, BVA | ✅ |
 
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
@@ -527,7 +542,7 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
 Verificación: `python manage.py check` (0 issues) y descubrimiento de tests de
 `gestion`/`inventory`/`internal_api` (`manage.py test`) importaron todos los módulos
 sin error — solo fallaron al conectar a SQL Server real (sin Docker local). Detalle
-completo en `docs/superpowers/plans/2026-09-02-hygiene-sweep-fase6-limpieza-tests.md`.
+completo en el `CHANGELOG.md` del 2-oct-2026 (barrido de higiene, fase 6).
 
 ## Estado de cobertura
 

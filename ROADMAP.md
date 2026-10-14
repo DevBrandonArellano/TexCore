@@ -203,10 +203,10 @@ Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se im
     -   Implementado despliegue seguro sin SSH usando el Runner local.
 
 -   **[x] Pipeline GitHub Actions (`.github/workflows/`) — Implementado:**
-    -   Workflows `ci.yml`, `cd.yml`, `rollback.yml` y `security.yml` con jobs paralelos por servicio.
+    -   Workflows `ci.yml`, `release.yml`, `rollback.yml`, `security.yml` y `gobierno.yml` con jobs paralelos por servicio (al 13-oct-2026; `cd.yml` se eliminó al entrar `release.yml`).
     -   Quality Gate como barrera final antes de merge.
-    -   CD via GHCR + SSH con rollback manual.
-    -   Escaneo Trivy y SARIF en GitHub Security tab.
+    -   Release en el push a `master`: las 6 imágenes se construyen sin caché, se escanean con Trivy, se firman con cosign y se prueban en un staging efímero antes de desplegarse por digest desde un runner propio, con rollback manual.
+    -   Escaneo Trivy y SARIF en GitHub Security tab; Scorecard y métricas DORA semanales.
 
 -   **[x] Corrección de Pipelines CI/CD (Mayo 2026):**
     -   Creado `TexCore/settings_test.py` (faltante) — los jobs `test:backend` / `backend-test` fallaban con `ModuleNotFoundError` al arrancar.

@@ -11,13 +11,13 @@ Arquitectura de **monolito modular (Django 5 + SQL Server 2022)** complementado 
 | Capa | Tecnología |
 |------|-----------|
 | **Backend Core** | Python 3.12 + Django 5.2 + Django REST Framework 3.16 |
-| **Frontend UI** | React 18 + TypeScript 5 + Vite 7 + Tailwind CSS + Shadcn/UI + Radix UI |
+| **Frontend UI** | React 18 + TypeScript 5 + Vite 7 + Tailwind CSS 4 (CSS-first, plugin de Vite) + Shadcn/UI + Radix UI |
 | **Base de Datos** | Microsoft SQL Server 2022 (Nivel de aislamiento RCSI + Índices Covering y Filtrados T-SQL) |
 | **Servicios Satélite** | FastAPI + SQLAlchemy 2.0 (aiosqlite) — `scanning_service`, `reporting_excel`, `printing_service` |
 | **Autenticación Inter-Servicio** | JWT RS256 vía `internal_api` (ISO 27001 A.10 / Criptografía RSA 2048) |
-| **Pruebas y Calidad** | Django test runner + Coverage (umbral ≥90 %, 1478 pruebas) + Vitest (1888 pruebas frontend) + flake8 + bandit + mypy |
+| **Pruebas y Calidad** | Django test runner + Coverage (umbral ≥90 %, 1814 pruebas) + Vitest (1972 pruebas frontend) + Ruff (lint, seguridad y formato) + mypy + Semgrep + detect-secrets |
 | **Gateway & Proxy** | Nginx (Reverse proxy + rate limiting + cabeceras de seguridad) |
-| **CI / CD** | GitHub Actions (`.github/workflows/ci.yml`, `cd.yml`, `security.yml`, `rollback.yml`), actions fijadas por SHA, Dependabot, actionlint + zizmor. Flujo: rama de trabajo → PR a `staging` → PR a `master` (producción) |
+| **CI / CD** | GitHub Actions (`.github/workflows/ci.yml`, `release.yml`, `security.yml`, `rollback.yml`, `gobierno.yml`), actions fijadas por SHA, imágenes por digest firmadas con cosign, Dependabot, actionlint + zizmor. Flujo: rama de trabajo → PR a `staging` → PR a `master` (release y despliegue) |
 
 ---
 
@@ -86,7 +86,7 @@ TexCore/
 ├── docs/                      # Documentación técnica, manuales de arquitectura, base de datos y despliegue
 ├── .agent/workflows/          # Workflows operativos de agentes por rol (11 archivos .md)
 ├── .agents/rules/             # Reglas estandarizadas de calidad, pruebas y grafo de conocimiento (graphify)
-├── .github/workflows/         # Pipeline CI/CD de GitHub Actions (ci.yml, cd.yml, security.yml, rollback.yml)
+├── .github/workflows/         # Pipeline CI/CD de GitHub Actions (ci.yml, release.yml, security.yml, rollback.yml, gobierno.yml)
 ├── manage.py                  # CLI de administración Django
 ├── setup.cfg                  # Configuración unificada de pytest, coverage (fail_under = 89) y linters
 ├── package.json               # Scripts unificados del monorepo
