@@ -26,6 +26,8 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
+      # El formato lo decide `ruff format` (Etapa 5): el mismo gate que corre el CI.
+      - id: ruff-format
 
   # --------------------------------------------------------------------------
   # Secrets — Prevenir commits con claves o credenciales hardcodeadas
