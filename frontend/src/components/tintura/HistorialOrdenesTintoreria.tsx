@@ -245,7 +245,7 @@ export function HistorialOrdenesTintoreria() {
       </Card>
 
       <Dialog open={!!ordenDetalle} onOpenChange={(open) => !open && setOrdenDetalle(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <History className="h-5 w-5 text-primary" />

@@ -88,6 +88,16 @@
             color: #0f766e;
         }
 
+        .aviso-paginacion {
+            margin-top: 10px;
+            padding: 6px 10px;
+            border: 1px solid #fcd34d;
+            border-radius: 4px;
+            background-color: #fffbeb;
+            color: #92400e;
+            font-size: 8.5pt;
+        }
+
         .footer {
             border-top: 1px solid #e2e8f0;
             padding-top: 6px;
@@ -147,6 +157,15 @@
         Peso total despachado: {{ "%.2f"|format(despachos | sum(attribute='total_peso')) }} kg
         · Bultos totales: {{ despachos | sum(attribute='total_bultos') }}
     </div>
+
+    {% if total_registros and total_paginas > 1 %}
+    <div class="aviso-paginacion">
+        Este documento muestra la página {{ pagina }} de {{ total_paginas }}:
+        <strong>{{ despachos | length }} de {{ total_registros }} despachos</strong>
+        {% if fecha_desde and fecha_desde == fecha_hasta %}del día {{ fecha_desde }}{% else %}del rango filtrado{% endif %}.
+        Para ver el resto, imprime las demás páginas (1 a {{ total_paginas }}).
+    </div>
+    {% endif %}
 
     <div class="footer">
         Documento interno generado por TexCore Printing Service — No tiene validez como comprobante oficial.

@@ -20,7 +20,7 @@ export function FichaLoteDialog({ lote, onClose }: FichaLoteDialogProps) {
 
   return (
     <Dialog open={lote !== null} onOpenChange={(abierto) => !abierto && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         {lote && (
           <>
             <DialogHeader>

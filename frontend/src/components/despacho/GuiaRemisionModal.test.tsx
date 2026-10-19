@@ -101,6 +101,20 @@ describe('GuiaRemisionModal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('dado una respuesta pdf sin tipo cuando genera entonces abre el pdf con tipo application/pdf en otra pestana', async () => {
+    // El blob de axios llega sin MIME en este caso; si se abriera tal cual, el navegador
+    // mostraria la pestana en blanco en lugar de renderizar el PDF.
+    mockPost.mockResolvedValueOnce({ data: new Blob(['%PDF-fake']) });
+    render(<GuiaRemisionModal despachoId={7} onOpenChange={vi.fn()} />);
+    await completarCamposObligatorios();
+
+    await userEvent.click(screen.getByRole('button', { name: /generar guía/i }));
+
+    await waitFor(() => expect(window.open).toHaveBeenCalledWith('blob:mock-url', '_blank'));
+    const blobAbierto = vi.mocked(window.URL.createObjectURL).mock.calls[0][0] as Blob;
+    expect(blobAbierto.type).toBe('application/pdf');
+  });
+
   it('dado transporte de tercero completo cuando genera entonces incluye datos del transportista', async () => {
     mockPost.mockResolvedValueOnce({ data: new Blob(['%PDF-fake']) });
     render(<GuiaRemisionModal despachoId={7} onOpenChange={vi.fn()} />);

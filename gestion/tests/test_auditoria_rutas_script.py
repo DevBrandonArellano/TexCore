@@ -11,6 +11,7 @@ Técnicas ISTQB aplicadas:
 """
 
 import importlib.util
+import logging
 from pathlib import Path
 
 from django.conf import settings
@@ -21,6 +22,23 @@ _spec = importlib.util.spec_from_file_location("auditar_rutas_frontend", _ruta)
 assert _spec is not None and _spec.loader is not None, f"No se pudo cargar {_ruta}"
 auditoria = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(auditoria)
+
+
+class CargaDelScriptTest(SimpleTestCase):
+    def test_cargar_dado_django_ya_configurado_cuando_se_importa_entonces_no_desactiva_los_loggers_existentes(self):
+        """
+        Importar el script dentro de la suite no debe volver a ejecutar `django.setup()`:
+        reaplica el `LOGGING` de pruebas (`disable_existing_loggers=True`) y silencia los
+        loggers ya creados, lo que rompe las pruebas con `assertLogs` según el orden de carga.
+        """
+        logger = logging.getLogger("gestion.prueba_carga_script")
+        self.assertFalse(logger.disabled)
+
+        spec = importlib.util.spec_from_file_location("auditar_rutas_frontend_recarga", _ruta)
+        assert spec is not None and spec.loader is not None
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+        self.assertFalse(logger.disabled)
 
 
 class ExpansionDeConstantesTest(SimpleTestCase):

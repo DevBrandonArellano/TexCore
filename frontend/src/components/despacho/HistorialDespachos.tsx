@@ -9,10 +9,13 @@ import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package, Rot
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
+import { logger } from '../../lib/logger';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
-import { GuiaRemisionModal } from './GuiaRemisionModal';
+import { GuiaRemisionModal } from './GuiaRemisionModal';
+
 import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 import { useCargaRemota } from '../../hooks/useCargaRemota';
 
@@ -184,15 +187,16 @@ export function HistorialDespachos() {
             const params = new URLSearchParams();
             if (fechaDesde) params.append('fecha_desde', fechaDesde);
             if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+            // Se imprime solo la página que se está viendo (mismos filtros y misma paginación).
+            params.append('page', page.toString());
 
             const response = await apiClient.get(
                 `/inventory/historial-despachos/imprimir/?${params.toString()}`,
                 { responseType: 'blob' },
             );
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            window.open(url, '_blank');
+            abrirPdfEnPestana(response.data);
         } catch (error) {
-            console.error('Error al imprimir el historial', error);
+            logger.error('Error al imprimir el historial de despachos', { entity: 'HistorialDespachos', page, error: String(error) });
             toast.error('Error al generar el PDF del historial de despachos.');
         } finally {
             setImprimiendoHistorial(false);
@@ -383,7 +387,7 @@ export function HistorialDespachos() {
 
             {/* Modal de Detalles del Despacho */}
             <Dialog open={!!selectedDespacho} onOpenChange={(open) => !open && setSelectedDespacho(null)}>
-                <DialogContent className="max-w-3xl">
+                <DialogContent className="sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl flex items-center gap-2">
                             <Package className="w-5 h-5 text-primary" />
@@ -447,7 +451,7 @@ export function HistorialDespachos() {
                                         {selectedDespacho.detalles.map(d => (
                                             <div key={d.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-xs hover:border-slate-300 transition-colors">
                                                 <div className="flex flex-col">
-                                                    <span className="text-xs truncate max-w-[200px]" title={d.producto_nombre}>{d.producto_nombre}</span>
+                                                    <span className="text-xs truncate max-w-[280px]" title={d.producto_nombre}>{d.producto_nombre}</span>
                                                     <span className="font-mono text-sm font-semibold">{d.codigo_lote}</span>
                                                 </div>
                                                 <div className="flex flex-col items-end">

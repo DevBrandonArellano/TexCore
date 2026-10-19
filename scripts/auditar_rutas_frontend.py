@@ -26,8 +26,13 @@ sys.path.insert(0, str(RAIZ))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TexCore.settings_test_local")
 
 import django  # noqa: E402 — tras django.setup()
+from django.apps import apps  # noqa: E402
 
-django.setup()
+# Si Django ya está configurado (el script se importa desde la suite de pruebas),
+# no se vuelve a llamar a setup(): reaplica LOGGING con disable_existing_loggers
+# y silencia los loggers ya creados.
+if not apps.ready:
+    django.setup()
 
 from django.urls import URLPattern, URLResolver, get_resolver  # noqa: E402 — tras django.setup()
 

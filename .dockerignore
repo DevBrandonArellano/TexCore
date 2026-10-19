@@ -22,6 +22,10 @@ venv/
 # embebida dentro de la imagen del backend (detectado por Trivy 2026-09-22).
 nginx/certs/
 
+# Socket de control de gunicorn: lo crea el backend de desarrollo (que monta el repo)
+# como root en la raíz; al estar en el contexto, `docker build` falla con «no permission to read».
+gunicorn.ctl
+
 # Node
 node_modules/
 frontend/node_modules/

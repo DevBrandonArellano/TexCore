@@ -7,7 +7,9 @@ import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
+
 import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 
 const MOTIVOS_TRASLADO = [
@@ -79,8 +81,7 @@ export function GuiaRemisionModal({ despachoId, onOpenChange }: GuiaRemisionModa
         },
         { responseType: 'blob' },
       );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      window.open(url, '_blank');
+      abrirPdfEnPestana(response.data);
       toast.success('Guía de remisión generada.');
       handleClose(false);
     } catch (error) {

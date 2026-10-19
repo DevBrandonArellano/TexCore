@@ -163,14 +163,22 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def imprimir(self, request):
         """
-        GET /inventory/historial-despachos/imprimir/?fecha_desde=&fecha_hasta=
-        PDF del historial de despachos — usa los mismos filtros de fecha que
-        list() (get_queryset ya los aplica leyendo request.query_params).
+        GET /inventory/historial-despachos/imprimir/?fecha_desde=&fecha_hasta=&page=
+        PDF del historial de despachos con exactamente las filas que muestra la
+        página del listado: mismos filtros de fecha (get_queryset los aplica
+        leyendo request.query_params) y misma paginación (`page`, tamaño de
+        página de DRF). Imprimir todo el historial (miles de despachos) tardaba
+        más que el timeout del servicio de impresión y bloqueaba un worker.
         """
-        # Sin prefetch_related: su IN lleva un parámetro por despacho y, sin filtro de
-        # fechas, supera el límite de 2100 parámetros de SQL Server. Los pedidos se
-        # leen con el listado como subconsulta.
+        # Sin prefetch_related: su IN lleva un parámetro por despacho. Solo se leen las
+        # columnas necesarias y, tras paginar, los ids de la página (acotados por el
+        # tamaño de página, lejos del límite de 2100 parámetros de SQL Server).
         queryset = self.get_queryset().prefetch_related(None)
+        # DISTINCT + ORDER BY exige que fecha_despacho esté en el SELECT (SQL Server).
+        pagina = self.paginate_queryset(queryset.values("id", "fecha_despacho"))
+        ids_pagina = [fila["id"] for fila in pagina]
+        paginador = self.paginator.page.paginator
+        queryset = queryset.filter(id__in=ids_pagina)
         historiales = list(
             queryset.values(
                 "id",
@@ -185,7 +193,7 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
         pedidos_por_historial = defaultdict(list)
         for fila in (
             DetalleHistorialDespachoPedido.objects.filter(
-                historial_id__in=queryset.values("id"),
+                historial_id__in=ids_pagina,
             )
             .order_by("historial_id", "pedido_id")
             .values(
@@ -219,6 +227,11 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
             "fecha_hasta": request.query_params.get("fecha_hasta"),
             "generado_en": timezone.now().isoformat(),
             "despachos": despachos,
+            # El PDF trae solo la página visible; el pie informa cuántos registros
+            # y páginas tiene el filtro completo (mismo conteo que el listado).
+            "total_registros": paginador.count,
+            "pagina": self.paginator.page.number,
+            "total_paginas": paginador.num_pages,
         }
 
         pdf_content = PrintingService.generate_historial_despachos_pdf(data)

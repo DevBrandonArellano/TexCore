@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import type { ProduccionProductoItem, TendenciaDia } from './types';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
+import type { ProduccionProductoItem, TendenciaDia } from './types';
+
 import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface UseProduccionPorProductoParams {
@@ -63,8 +65,7 @@ export function useProduccionPorProducto({ fechaInicio, fechaFin, sedeId }: UseP
         params: buildParams(),
         responseType: 'blob',
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      window.open(url, '_blank');
+      abrirPdfEnPestana(response.data);
     } catch {
       toast.error('Error al generar el PDF de producción por producto');
     } finally {

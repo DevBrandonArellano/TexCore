@@ -48,7 +48,7 @@ export function StockBodegaModal({ bodega, onClose }: StockBodegaModalProps) {
 
   return (
     <Dialog open={bodega !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Stock en Bodega: {bodega?.nombre}</DialogTitle>
           <DialogDescription>
@@ -107,7 +107,7 @@ export function PedidosEstadoModal({ estado, onClose, pedidos }: PedidosEstadoMo
 
   return (
     <Dialog open={estado !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-5xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Pedidos en Estado: <span className="capitalize">{estado}</span></DialogTitle>
           <DialogDescription>
@@ -157,7 +157,7 @@ export function VentasVendedorModal({ vendedor, onClose, pedidos }: VentasVended
 
   return (
     <Dialog open={vendedor !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-5xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Ventas del Vendedor: {vendedor}</DialogTitle>
           <DialogDescription>
@@ -207,7 +207,7 @@ export function ClienteComprasModal({ cliente, onClose, pedidos }: ClienteCompra
 
   return (
     <Dialog open={cliente !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-5xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Historial de Compras: {cliente}</DialogTitle>
           <DialogDescription>
@@ -252,7 +252,7 @@ export function ClienteDeudorModal({ clienteNombre, onClose, topDeudores }: Clie
 
   return (
     <Dialog open={clienteNombre !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Perfil de Riesgo Financiero</DialogTitle>
           <DialogDescription>Detalle de la deuda para acciones de cobranza.</DialogDescription>
@@ -300,7 +300,7 @@ interface ProductoHistorialModalProps {
 export function ProductoHistorialModal({ producto, historial, cargando, onClose }: ProductoHistorialModalProps) {
   return (
     <Dialog open={producto !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Historial de Producción: {producto?.producto_nombre}</DialogTitle>
           <DialogDescription>
