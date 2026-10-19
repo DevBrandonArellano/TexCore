@@ -16,7 +16,7 @@ function DesempenoOperarioDialog({ operario, onClose }: {
 }) {
   return (
     <Dialog open={operario !== null} onOpenChange={(abierto) => { if (!abierto) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Desempeño de {operario?.username}</DialogTitle>
           <DialogDescription>Producción de hoy y últimos lotes registrados.</DialogDescription>

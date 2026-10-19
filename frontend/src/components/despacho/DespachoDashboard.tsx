@@ -10,6 +10,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
 import { PedidoVenta } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
 import { format } from 'date-fns';
@@ -262,9 +263,8 @@ export function DespachoDashboard() {
         for (const pid of selectedPedidos) {
             try {
                 const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/${query}`, { responseType: 'blob' });
-                const url = window.URL.createObjectURL(new Blob([response.data]));
                 // Open in new tab is better for multiple downloads
-                window.open(url, '_blank');
+                abrirPdfEnPestana(response.data);
             } catch (e) {
                 console.error("Print error", e);
                 toast.error(`Error al imprimir pedido #${pid}`);

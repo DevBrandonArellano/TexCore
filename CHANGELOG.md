@@ -4,7 +4,7 @@
 
 ### Para continuar — Hoja de ruta (actualizada el 14-oct-2026)
 
-Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está **sin commitear**: mañana, Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD); tarde, el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct.
+Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está commiteado en `MES` (`6b22edf`…`bfa6513`): Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD) y el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct.
 
 #### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
@@ -51,11 +51,27 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
   - recursos del `.env` (BD 3 CPU / 3 GB, backend 3 CPU / 3 GB, 20 workers) y nginx con la redirección 80 → 443;
   - los 6 contenedores en `healthy`, `gestion.0009` aplicada y 0 migraciones pendientes;
   - sobrevive al reinicio del equipo: tras el corte de luz del 14-oct los 6 contenedores volvieron a `healthy` por sí solos.
-- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1016 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
+- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1017 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
-### 14 de Octubre de 2026 — Cierre del plan de CI/CD: formateador de Ruff y Tailwind CSS 4 (sin commitear)
+### 16 de Octubre de 2026 — Despacho: PDF en blanco, detalle angosto, impresión de la página visible y orden de carga de las pruebas (sin commitear)
+
+Pedidos del usuario, probando el rol Despacho en el stack: «al imprimir la guía se abre una pestaña blob en blanco», «el detalle del despacho está amontonado», «error al imprimir el historial de despachos», «al imprimir solo debe salir lo que se muestra en la página» y «un mensaje al final si supera la paginación, con el total de registros del día y el número de páginas».
+
+| Defecto | Hallazgo | Corrección | Prueba |
+|---|---|---|---|
+| 62 | La guía de remisión (y el historial, la nota de venta y la producción por producto) abría una pestaña **en blanco**: `new Blob([response.data])` descarta el tipo MIME del PDF, y el navegador no lo renderiza. El backend devolvía un PDF válido (`%PDF-1.7`, 200) | Helper `lib/abrirPdf.ts` (`abrirPdfEnPestana`): reconstruye el blob como `application/pdf`, abre la pestaña y libera la URL a los 60 s. Usado en los 4 sitios que abrían PDF en pestaña (`usePedidosVendedor` descarga con nombre y no se toca) | `abrirPdf.test.ts` (4) y una de regresión en `GuiaRemisionModal.test.tsx`, que falla con el código anterior (`expected '' to be 'application/pdf'`) |
+| 63 | El detalle del despacho (y 9 diálogos más) se veía angosto: el diálogo base trae `sm:max-w-lg` y `max-w-3xl` **sin prefijo `sm:`** pierde contra él desde 640 px | `sm:max-w-*` en los diálogos de 2xl a 5xl (10 archivos); el detalle del despacho pasa a `sm:max-w-4xl` y el nombre del producto ya no se corta a 200 px | `HistorialDespachos.test.tsx` comprueba la clase `sm:max-w-4xl` |
+| 64 | Imprimir el historial daba **503**: sin filtro se mandaban los 5 889 despachos al servicio de impresión (≈4 ms por fila: 24,6 s) y `gestion/utils.py` espera 10 s; además bloqueaba un worker | `GET /inventory/historial-despachos/imprimir/` usa la **misma paginación del listado** (`page`, 50 por página): imprime exactamente lo que muestra la página, con sus filtros de fecha, y el frontend envía `page`. Los parámetros SQL quedan acotados por la página | 8 pruebas nuevas en `test_despacho_documentos.py` (mismas filas que el listado en la página 1 y 2, con fechas, 404 fuera de rango, parámetros ≤ 60); también sobre SQL Server 2022 |
+| 65 | El PDF no decía que había más páginas | El servicio de impresión recibe `total_registros`, `pagina` y `total_paginas` y, si hay más de una página, añade un aviso al pie: «página P de T: N de M despachos del día X / del rango filtrado. Para ver el resto, imprime las demás páginas» | 7 pruebas en `printing_service/tests/unit/test_historial_despachos_paginacion.py` y 3 en el backend |
+| 66 | 4 pruebas de `assertLogs` fallaban en la suite completa (también en `HEAD`) y pasaban solas | `test_auditoria_rutas_script.py` importa `scripts/auditar_rutas_frontend.py`, que llamaba a `django.setup()` por segunda vez: reaplica el `LOGGING` de pruebas (`disable_existing_loggers=True`) y silencia los loggers ya creados, según el orden de carga. Ahora solo llama a `setup()` si `apps.ready` es falso | Regresión en `CargaDelScriptTest` (en rojo antes) |
+
+**Otros cambios:** el manejador de impresión del historial usa `logger` (RFC 5424) en lugar de `console.error`; el stack de desarrollo tenía los volúmenes de auditoría de `printing` y `reporting_excel` creados por root (antes del `chown` de los Dockerfile) y los servicios no arrancaban: se les asignó uid 10001 sin borrar los `logs.db`.
+
+**Pendiente, sin tocar:** los diálogos `max-w-md` y `max-w-lg` sin `sm:` se ven en `lg` (más anchos de lo previsto) y se dejaron como están para no estrecharlos; quedan 89 llamadas a `console.*` en el frontend frente a 5 archivos que usan `logger`. **Imágenes reconstruidas** como `texcore-local/*:mes-1017` y stack `texcore-prod` recreado con ellas (6 contenedores `healthy`, 5 889 despachos intactos, 0 migraciones nuevas). Probado en el stack: el historial completo, que daba 503, se imprime en 0,3 a 0,7 s por página. El build fallaba con «no permission to read from `gunicorn.ctl`»: el backend de desarrollo (que monta el repo) crea ese socket como root en la raíz y entra en el contexto; ahora está en `.dockerignore`.
+
+### 14 de Octubre de 2026 — Cierre del plan de CI/CD: formateador de Ruff y Tailwind CSS 4
 
 Pedido del usuario: hacer los dos puntos que quedaban abiertos de la Fase 2 del plan de CI/CD.
 
@@ -120,7 +136,7 @@ Motivo del plan: las 7 vulnerabilidades de `npm audit` del frontend venían **to
 - `ESTANDARES_DESARROLLO.md`: el gate de formato y el pre-commit. `README.md`: Tailwind 4 y las cifras de pruebas al día. `ARQUITECTURA_SISTEMA.md`: versión de Tailwind.
 - Con la verificación visual conforme, **el plan de CI/CD queda cerrado en el código**: las 7 fases hechas. Lo único que queda son las acciones en GitHub de las Fases 1 y 4 (rama por defecto, rulesets, environment `production` y registro del runner `texcore-prod`), que no se pueden hacer desde el repositorio.
 
-### 14 de Octubre de 2026 (noche) — Repaso de los documentos que la tesis cita como evidencia (sin commitear)
+### 14 de Octubre de 2026 (noche) — Repaso de los documentos que la tesis cita como evidencia
 
 Paso 3 de la hoja de ruta: revisar con el criterio «la tesis manda» todo documento que respalde lo que la tesis afirma. Se revisó qué cita el anteproyecto (`docs/Anteproyecto_Capstone_Final_Version.pdf`): ISO/IEC 25010:2023 y la Tabla 11, COBIT 2019 e ITIL v4, NIST SP 800-207, OWASP Top 10 y API Security, ISO/IEC 27001 y la LOPDP. **ANSI/ISA-95, ISA-88 y VDI 5600 no los cita**, así que `docs/analisis_y_reportes/auditoria_cumplimiento_ANSI_ISA_VDI.md` queda fuera del alcance de la evidencia (se deja como análisis propio).
 
@@ -160,7 +176,7 @@ Queda abierto como **RS-19** en `REGISTRO_RIESGOS.md` (exposición 8 🟡) con l
 
 23 planes y 9 especificaciones, revisados **uno por uno contra el código**, no por lo que declaraban:
 
-- **19 planes completos**, 1 histórico (microservicios independientes: se adoptó «monolito con servicios satélite», aunque de ahí salió `internal_api`), 1 supersedido (la v1 de la división de archivos dios), 1 ejecutado sin commitear (el de hoy) y **1 con un punto abierto**: la verificación con React DevTools Profiler de la división de dashboards.
+- **19 planes completos**, 1 histórico (microservicios independientes: se adoptó «monolito con servicios satélite», aunque de ahí salió `internal_api`), 1 supersedido (la v1 de la división de archivos dios), 1 ejecutado (el de hoy, commiteado en `8848f7e`) y **1 con un punto abierto**: la verificación con React DevTools Profiler de la división de dashboards.
 - **El problema no era que sobraran planes, era que 3 no declaraban su estado** y sus checkboxes seguían sin marcar aunque el trabajo estaba hecho. Ahora lo declaran, con la evidencia que lo respalda: producción flexible (transformación, mezcla y merma vendible, con sus pruebas), correcciones de la auditoría de la tesis (C-1, C-2 y M-4 cerrados el 30-sep) y la fase 1 de higiene, cuya nota pedía commitear `graphify-out/` — ya está versionado.
 - **`docs/superpowers/README.md` nuevo**: índice con el estado verificado de cada plan y spec, y la advertencia de que los checkboxes no son el estado. No se archivan ni se mueven: el `CHANGELOG` los referencia 28 veces por su ruta y son el registro del diseño.
 
@@ -203,7 +219,7 @@ De paso, dos referencias a planes en rutas de Windows fuera del repositorio (`C:
 
 Sin cambios de código de producción: un guion de auditoría, su prueba nueva y documentos. `ruff check`, `ruff format --check`, `mypy` (303 archivos), `tsc` y `typecheck:tests`, todos en 0.
 
-### 14 de Octubre de 2026 (tarde) — Historial de mantenimiento y paros de máquina para el Jefe de Área (sin commitear)
+### 14 de Octubre de 2026 (tarde) — Historial de mantenimiento y paros de máquina para el Jefe de Área
 
 Pedido del usuario: «en el jefe de área es necesario poder ver el historial de mantenimiento de las máquinas, qué días se detuvieron, tener una tabla con esta información y poder imprimir». Plan: `docs/superpowers/plans/2026-10-14-historial-mantenimiento-maquinas.md`.
 
@@ -528,7 +544,7 @@ Cierre del plan `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, que 
   - **actionlint 0 · zizmor 0 · shellcheck 0** sobre los 5 workflows y los scripts de despliegue, respaldo, staging y entrypoint (`.github/actionlint.yaml` declara la etiqueta del runner propio);
   - las Fases 3 y 4 solo se ejercitan de punta a punta en el primer merge a `master`: requieren las acciones del usuario en GitHub (rama por defecto, rulesets, environment `production` y registro del runner).
 
-### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (sin commitear)
+### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (commiteado en `73f099a`)
 
 Pedido del usuario: hacer pull, volver a correr graphify y reescribir la evidencia manual y los requisitos de infraestructura. Decisiones del usuario:
 - cerrar antes los dos hallazgos que afectaban veredictos (RNF-01 y detect-secrets);
@@ -615,7 +631,7 @@ Pedido del usuario: hacer pull, volver a correr graphify y reescribir la evidenc
 | YAML de `ci.yml`, `.pre-commit-config.yaml` y el compose de producción | válidos |
 | `actionlint` / `zizmor` | no disponibles en este equipo: los corre el job `workflow-lint` |
 
-### 8 de Octubre de 2026 — Fase 7 en el equipo con SQL Server: migraciones medidas, índice de auditoría, Locust con 3 años de datos y evidencia del Sprint 0 (sin commitear)
+### 8 de Octubre de 2026 — Fase 7 en el equipo con SQL Server: migraciones medidas, índice de auditoría, Locust con 3 años de datos y evidencia del Sprint 0 (commiteado en `cf5256a`)
 
 Pedido del usuario: hacer pull, ubicarse con el CHANGELOG y terminar los planes pendientes en el equipo con el entorno completo y 3 años de datos ficticios.
 
@@ -730,7 +746,7 @@ La primera corrida (4,2 % de fallos) medía rechazos correctos del sistema como 
 4. Captura de TEX-02 CA-2 desde otro equipo de la LAN.
 5. Al final: CI/CD Fases 3–6, staging y TEX-54.
 
-### 7 de Octubre de 2026 (noche) — Evidencia por sprint para la tesis (sin commitear)
+### 7 de Octubre de 2026 (noche) — Evidencia por sprint para la tesis (commiteado en `dec016c`)
 
 Pedido del usuario: demostrar, sprint por sprint, lo que declara la tesis (Tabla 14, DoD del §5.1 y capítulo 7).
 
@@ -749,7 +765,7 @@ Pedido del usuario: demostrar, sprint por sprint, lo que declara la tesis (Tabla
 - Las cifras de Locust de la tesis (Tabla 47) coinciden con `scripts/loadtest/resultados/carga_100_2026-09-29_stats.csv`.
 - `pyproject.toml`: `per-file-ignores` de `scripts/evidencia/**` (S314, S603, S607), con su justificación.
 
-### 7 de Octubre de 2026 (noche, cierre) — Fase 8 completa: ESLint en 0 y bloqueante en el CI (sin commitear)
+### 7 de Octubre de 2026 (noche, cierre) — Fase 8 completa: ESLint en 0 y bloqueante en el CI (commiteado en `dec016c`)
 
 Pedido del usuario: «continuar con lo que falta». Se retomó la Fase 8 desde la entrada siguiente. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
 
@@ -829,7 +845,7 @@ Estado derivado sin efecto:
 2. **Fase 9:** TEX-54, CI/CD Fases 3 a 6 (incluye M-3 `HEALTHCHECK`), ajustes de GitHub, contraseña de `admin` y congelamiento.
 3. Commit del trabajo: lo hace el usuario.
 
-### 7 de Octubre de 2026 (noche) — Fase 8: ESLint del frontend de 1146 a 57 hallazgos (EN CURSO, sin commitear)
+### 7 de Octubre de 2026 (noche) — Fase 8: ESLint del frontend de 1146 a 57 hallazgos (EN CURSO, commiteado en `dec016c`)
 
 Pedido del usuario: «continúa con la fase 8 de ESLint» (plan `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`). La sesión se detuvo a pedido del usuario a mitad de la fase. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
 
@@ -2073,7 +2089,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 - Módulos con más líneas sin cubrir: `gestion/views/mes_views.py` (67,3 %, 83 líneas), `gestion/services/genealogia_service.py` (75,7 %), `inventory/services/reposicion_service.py` (78,4 %), `inventory/services/reserva_service.py` (80,1 %) y `gestion/services/registro_lote.py` (80,6 %). Les siguen `mrp_engine.py`, `internal_api/views/reporting_views.py`, `internal_api/services/reporting_data.py` y `ejecucion_produccion.py` (81-82 %).
 - Pendiente de decisión: meta de cobertura con margen sobre SQL Server, hacer bloqueante el paso del CI y actualizar la tabla de la matriz.
 
-### 29 de Septiembre de 2026 — Carga emulando producción, control de acceso (OWASP A01), paginación de lotes y ficha de lote (todo sin commitear)
+### 29 de Septiembre de 2026 — Carga emulando producción, control de acceso (OWASP A01), paginación de lotes y ficha de lote (commiteado en `7217448`)
 
 **Resumen del día:** tras bajar `MES` (commits `cab00fb`, `8594f97`), se corrió todo en Docker contra SQL Server 2022 y se emuló producción con 100 usuarios concurrentes. En orden:
 
@@ -2200,7 +2216,7 @@ Spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-de
 - Arrastrado del 25-sep, no revisado hoy: el `pytest` instalado en el contenedor `backend` apunta a una ruta del host. `manage.py test` funciona como alternativa.
 - Nada de lo de hoy está commiteado (el usuario hace los commits).
 
-### 28 de Septiembre de 2026 — Cierre de RNF-03, kárdex escalable y cero deuda técnica (todo sin commitear)
+### 28 de Septiembre de 2026 — Cierre de RNF-03, kárdex escalable y cero deuda técnica (commiteado en `cab00fb`)
 
 **Resumen del día (una sesión, cuatro bloques):**
 
@@ -2274,7 +2290,7 @@ Spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-de
   - Ejecutar el loadtest.
 - **Entorno:** `docker/docker-compose.windows.yml` no incluye `reporting_excel`, así que los exports Excel responden 502 en local.
 
-### 25 de Septiembre de 2026 — Fases 3-4 de tintorería, cobertura frontend >90% en branches y fix de arranque en microservicios (todo sin commitear)
+### 25 de Septiembre de 2026 — Fases 3-4 de tintorería, cobertura frontend >90% en branches y fix de arranque en microservicios (commiteado en `33cdc00`)
 
 **Resumen del día:** continuación directa de la spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. Se retomó el entorno (pull de `MES`, migraciones y contenedores), se cerraron las Fases 3 y 4 de tintorería (backend + frontend), se validó todo contra `graphify`, se subió la cobertura de branches del frontend por encima del 90% literal solicitado, y se corrigió un bug de arranque (`greenlet` faltante) que afectaba a los tres microservicios FastAPI.
 

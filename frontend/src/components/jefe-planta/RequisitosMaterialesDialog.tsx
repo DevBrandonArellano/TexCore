@@ -44,7 +44,7 @@ function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: Requisito
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Requisitos de Materiales para OP: {orden?.codigo}</DialogTitle>
           <DialogDescription>

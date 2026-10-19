@@ -58,7 +58,7 @@ function OrdenFormDialogImpl({
           {loading ? 'Cargando Catálogos...' : 'Nueva Orden'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editingOrden ? 'Editar Orden de Producción' : 'Nueva Orden de Producción'}</DialogTitle>
           <DialogDescription>

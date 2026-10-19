@@ -16,6 +16,7 @@ from django.contrib.auth.models import Group
 from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -131,14 +132,8 @@ class HistorialDespachosDocumentosTestCase(TestCase):
             resp = self.client.get(reverse("historial-despachos-imprimir"))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
-    def test_imprimir_dado_muchos_despachos_cuando_get_entonces_parametros_sql_no_crecen_con_las_filas(self):
-        """
-        Sin filtro de fechas se imprimen todos los despachos de la sede. Con
-        prefetch_related, cada consulta llevaba un IN con un parámetro por
-        despacho: en SQL Server, sobre ~26 000 despachos, superaba el límite de
-        2100 parámetros y la vista respondía 500. Debe resolverse con subconsultas.
-        """
-        for i in range(30):
+    def _crear_despachos_con_pedido(self, cantidad):
+        for i in range(cantidad):
             historial = HistorialDespacho.objects.create(
                 usuario=self.usuario,
                 total_bultos=1,
@@ -150,6 +145,92 @@ class HistorialDespachosDocumentosTestCase(TestCase):
                 cantidad_despachada=Decimal(f"{i + 1}.000"),
             )
 
+    def _ids_impresos(self, **params):
+        with patch(
+            "inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf",
+            return_value=b"%PDF-fake",
+        ) as mock_pdf:
+            resp = self.client.get(reverse("historial-despachos-imprimir"), params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return [d["id"] for d in mock_pdf.call_args[0][0]["despachos"]]
+
+    def _ids_del_listado(self, **params):
+        resp = self.client.get(reverse("historial-despachos-list"), params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return [fila["id"] for fila in resp.data["results"]]
+
+    def test_imprimir_dado_mas_de_una_pagina_cuando_get_sin_page_entonces_imprime_solo_la_primera(self):
+        self._crear_despachos_con_pedido(60)  # 61 en total; la pagina trae 50
+
+        impresos = self._ids_impresos()
+
+        self.assertEqual(len(impresos), 50)
+        self.assertEqual(impresos, self._ids_del_listado())
+
+    def test_imprimir_dado_pagina_dos_cuando_get_entonces_imprime_exactamente_las_filas_que_muestra_el_listado(self):
+        self._crear_despachos_con_pedido(60)
+
+        impresos = self._ids_impresos(page=2)
+
+        self.assertEqual(len(impresos), 11)
+        self.assertEqual(impresos, self._ids_del_listado(page=2))
+
+    def test_imprimir_dado_pagina_y_fechas_cuando_get_entonces_respeta_ambos_como_el_listado(self):
+        self._crear_despachos_con_pedido(60)
+        filtros = {"fecha_desde": "2020-01-01", "fecha_hasta": "2099-12-31"}
+
+        impresos = self._ids_impresos(page=2, **filtros)
+
+        self.assertEqual(impresos, self._ids_del_listado(page=2, **filtros))
+
+    def _datos_enviados_al_pdf(self, **params):
+        with patch(
+            "inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf",
+            return_value=b"%PDF-fake",
+        ) as mock_pdf:
+            self.client.get(reverse("historial-despachos-imprimir"), params)
+        return mock_pdf.call_args[0][0]
+
+    def test_imprimir_dado_mas_de_una_pagina_cuando_get_entonces_envia_total_de_registros_y_de_paginas(self):
+        self._crear_despachos_con_pedido(120)  # 121 en total => 3 paginas de 50
+
+        datos = self._datos_enviados_al_pdf(page=2)
+
+        self.assertEqual(datos["total_registros"], 121)
+        self.assertEqual(datos["pagina"], 2)
+        self.assertEqual(datos["total_paginas"], 3)
+
+    def test_imprimir_dado_filtro_de_un_dia_cuando_get_entonces_el_total_cuenta_solo_ese_dia(self):
+        self._crear_despachos_con_pedido(60)
+        hoy = timezone.localdate().isoformat()
+
+        datos = self._datos_enviados_al_pdf(fecha_desde=hoy, fecha_hasta=hoy)
+
+        self.assertEqual(datos["total_registros"], 61)
+        self.assertEqual(datos["total_paginas"], 2)
+        self.assertEqual(len(datos["despachos"]), 50)
+
+    def test_imprimir_dado_una_sola_pagina_cuando_get_entonces_total_de_paginas_es_uno(self):
+        datos = self._datos_enviados_al_pdf()
+
+        self.assertEqual(datos["total_registros"], 1)
+        self.assertEqual(datos["pagina"], 1)
+        self.assertEqual(datos["total_paginas"], 1)
+
+    def test_imprimir_dado_pagina_inexistente_cuando_get_entonces_404_como_el_listado(self):
+        resp = self.client.get(reverse("historial-despachos-imprimir"), {"page": 99})
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_imprimir_dado_muchos_despachos_cuando_get_entonces_parametros_sql_acotados_por_la_pagina(self):
+        """
+        Sin filtro de fechas el historial real supera los ~26 000 despachos. Con
+        prefetch_related, cada consulta llevaba un IN con un parametro por
+        despacho y superaba el limite de 2100 parametros de SQL Server (500).
+        Ahora se imprime solo la pagina visible, asi que los parametros estan
+        acotados por el tamano de pagina (50), no por el total.
+        """
+        self._crear_despachos_con_pedido(120)
         parametros_por_consulta = []
 
         def _contar_parametros(execute, sql, params, many, context):
@@ -166,8 +247,8 @@ class HistorialDespachosDocumentosTestCase(TestCase):
             resp = self.client.get(reverse("historial-despachos-imprimir"))
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mock_pdf.call_args[0][0]["despachos"]), 31)
-        self.assertLess(max(parametros_por_consulta), 10)
+        self.assertEqual(len(mock_pdf.call_args[0][0]["despachos"]), 50)
+        self.assertLessEqual(max(parametros_por_consulta), 60)
 
     def _usuarios_en_pdf(self):
         with patch(

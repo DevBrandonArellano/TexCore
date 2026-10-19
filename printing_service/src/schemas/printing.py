@@ -162,6 +162,11 @@ class HistorialDespachosRequest(BaseModel):
     fecha_hasta: str | None = None
     generado_en: str
     despachos: list[DetalleDespachoResumen]
+    # Paginación: el PDF contiene solo la página visible del listado. Si el filtro
+    # tiene más de una página, el pie informa el total de registros y de páginas.
+    total_registros: int | None = None
+    pagina: int = 1
+    total_paginas: int = 1
 
 
 # ---------------------------------------------------------------------------

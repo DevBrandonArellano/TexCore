@@ -224,7 +224,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                 Nuevo Usuario
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
