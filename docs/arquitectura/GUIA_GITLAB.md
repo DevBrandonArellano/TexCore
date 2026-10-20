@@ -100,7 +100,7 @@ TOKEN_CI=glrt-... TOKEN_STAGING=glrt-... bash infrastructure/gitlab/registrar_ru
 3. Prepara el directorio de `TEXCORE_DIR` con `.env.prod` y `nginx/certs`, como en `GUIA_DESPLIEGUE.md` §3.
 4. Agrega al usuario del runner al grupo `docker`.
 
-**Paralelismo.** `texcore-ci` corre 2 jobs a la vez (`concurrent = 2` en `/etc/gitlab-runner/config.toml` del contenedor, que vive en el volumen `runner_ci_config`); súbelo solo si hay memoria libre, porque `test:backend` levanta un SQL Server. Antes de empujar, corre en local los mismos gates que `lint:backend` (`ruff`, `mypy`, `detect-secrets-hook`): son los que más fallan en el primer pipeline.
+**Paralelismo.** `texcore-ci` corre 2 jobs a la vez (`concurrent = 2` en `/etc/gitlab-runner/config.toml` del contenedor, que vive en el volumen `runner_ci_config`); súbelo solo si hay memoria libre, porque `test:backend` levanta un SQL Server. Antes de empujar, corre en local los mismos gates que `lint:backend` (`ruff`, `mypy`, `detect-secrets-hook`): son los que más fallan en el primer pipeline. Si `git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline` responde «The baseline file was updated», **no lo descartes**: hace `git add .secrets.baseline` y súbelo en el mismo commit (solo se movieron números de línea de secretos ya auditados); el CI falla mientras esa actualización no esté commiteada.
 
 Un job de feature no puede usar el socket del host: los runners con socket son protegidos y el pipeline solo los pide en `master` y `staging`.
 

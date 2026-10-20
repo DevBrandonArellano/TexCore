@@ -1280,9 +1280,9 @@
     "semantic_hash": "9579665b0fff9986e25a9e2db674c045"
   },
   "internal_api/views/scanning_views.py": {
-    "mtime": 1792507613.2436802,
-    "ast_hash": "d52406e667b390a49f0b3f0f8de1629c",
-    "semantic_hash": "d52406e667b390a49f0b3f0f8de1629c"
+    "mtime": 1792519810.6717482,
+    "ast_hash": "2f4053ec41ad773714b19f451afd57dc",
+    "semantic_hash": "2f4053ec41ad773714b19f451afd57dc"
   },
   "inventory/__init__.py": {
     "mtime": 1780593565.120424,
@@ -4657,9 +4657,9 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_despliegue_produccion.py": {
-    "mtime": 1792512666.9845185,
-    "ast_hash": "3b6c067f7f99b17c6782a94e973ae093",
-    "semantic_hash": "3b6c067f7f99b17c6782a94e973ae093"
+    "mtime": 1792519810.6744475,
+    "ast_hash": "d6e0042c1b29d005c775a5ecff2f4db3",
+    "semantic_hash": "d6e0042c1b29d005c775a5ecff2f4db3"
   },
   "gestion/tests/test_metricas_dora.py": {
     "mtime": 1792512011.0754972,
