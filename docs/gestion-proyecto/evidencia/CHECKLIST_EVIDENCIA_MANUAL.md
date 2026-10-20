@@ -25,7 +25,7 @@ DoD de la tesis: «Contenedores levantan sin errores; pipeline ejecuta build y l
 | Puerto de la BD no accesible desde fuera (TEX-02 CA-2) | 1433 sin publicar y conexión rechazada: `sprint-0/2026-10-08_puerto-bd.txt` | ✅ |
 | Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` por HTTPS a `/api/health/` y a `/`: `sprint-0/2026-10-13_nginx-https.txt` | ✅ |
 | IP real del cliente en la auditoría (TEX-03 CA-3) | `gestion/tests/test_system_views.py` (`_extract_client_ip`) | ✅ |
-| Pipeline ejecuta build y lint (TEX-04) | Ejecución del `.gitlab-ci.yml` en GitLab CI con los jobs `lint:*`, `test:*` y `audit:*` en verde (`GUIA_GITLAB.md` §11) | ⏳ |
+| Pipeline ejecuta build y lint (TEX-04) | Pipeline #6 del `.gitlab-ci.yml` en GitLab CI (20-oct-2026): los 12 jobs de integración (`lint:*`, `test:*`, `audit:*`) en verde, cobertura media 95,8 %. El build de imágenes y el release se ejecutan al fusionar en `master` | ✅ integración · ⏳ release |
 | Estructura base del repositorio y estándares (TEX-05) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` y convención ISTQB de nombres de prueba | ✅ |
 | Backlog estimado y priorizado | `docs/gestion-proyecto/PRODUCT_BACKLOG.md`: 54 historias, 288 puntos, 9 épicas | ✅ |
 

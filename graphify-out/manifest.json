@@ -1855,9 +1855,9 @@
     "semantic_hash": "a606f3454455cacba35346d8bf33a901"
   },
   "scripts/run_backend_tests.sh": {
-    "mtime": 1792503119.5375838,
-    "ast_hash": "b30d1679e4b6d9be6befe116f2cc842d",
-    "semantic_hash": "b30d1679e4b6d9be6befe116f2cc842d"
+    "mtime": 1792523154.3625982,
+    "ast_hash": "37164c323b93687fc48148829fbba53c",
+    "semantic_hash": "37164c323b93687fc48148829fbba53c"
   },
   "scripts/tests/print_service_manual_test.py": {
     "mtime": 1791984669.6645782,
@@ -1965,8 +1965,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1792512598.2628527,
-    "ast_hash": "a95724da81745a06bc0c7a41055a7eb6",
+    "mtime": 1792526948.161924,
+    "ast_hash": "8cf25a216e97443d62a124716b247879",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -2080,8 +2080,8 @@
     "semantic_hash": ""
   },
   "docs/matriz_trazabilidad_pruebas.md": {
-    "mtime": 1792512598.258362,
-    "ast_hash": "31d80201dc1dff7ba32b692ff2ba71ce",
+    "mtime": 1792523065.1415503,
+    "ast_hash": "b542877ccaaffe5db86b60d484b0ea7d",
     "semantic_hash": ""
   },
   "docs/modulos/ANALISIS_SISTEMA_DESPACHO.md": {
@@ -2135,8 +2135,8 @@
     "semantic_hash": ""
   },
   "docs/requerimientos/REGISTRO_RIESGOS.md": {
-    "mtime": 1792512555.249599,
-    "ast_hash": "cbaea62376eaab18ac643ba0dd30f8e6",
+    "mtime": 1792523241.3921235,
+    "ast_hash": "56b15743bf6089012e358a3028b73547",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-05-27-microservicios-independientes-design.md": {
@@ -4512,8 +4512,8 @@
     "semantic_hash": "3528054d4303995d09fa46ca736367db"
   },
   "docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md": {
-    "mtime": 1792512555.246553,
-    "ast_hash": "c7c054615cbd1a30209749b23de2b6eb",
+    "mtime": 1792524767.9304483,
+    "ast_hash": "9580f276cbb1f8a82c3183296e1a104d",
     "semantic_hash": ""
   },
   "docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md": {
@@ -4832,28 +4832,28 @@
     "semantic_hash": "8130c099d5cbe328dbec0465530309c8"
   },
   "reports/coverage_html/coverage_html_cb_6fb7b396.js": {
-    "mtime": 1792508930.2184696,
+    "mtime": 1792522905.0975528,
     "ast_hash": "1010a04fa977c31cf1c5a4e1783911f0",
     "semantic_hash": "1010a04fa977c31cf1c5a4e1783911f0"
   },
   "reports/coverage_html/status.json": {
-    "mtime": 1792508930.3085167,
-    "ast_hash": "fe7e0e5b8b6356489368b9fb209a4a75",
-    "semantic_hash": "fe7e0e5b8b6356489368b9fb209a4a75"
+    "mtime": 1792522905.2222877,
+    "ast_hash": "b74b938d015e5df76a10ce5ce6df29a0",
+    "semantic_hash": "b74b938d015e5df76a10ce5ce6df29a0"
   },
   "reports/coverage_html/class_index.html": {
-    "mtime": 1792508930.5542214,
-    "ast_hash": "46fa3e6f0708f1a2bd42d7de008e5d5a",
+    "mtime": 1792522905.5198762,
+    "ast_hash": "8ab77155b034f0384e08ae4abeb7e356",
     "semantic_hash": ""
   },
   "reports/coverage_html/function_index.html": {
-    "mtime": 1792508930.5354514,
-    "ast_hash": "045e46d3150a555c7ea26ed903888fcd",
+    "mtime": 1792522905.4982948,
+    "ast_hash": "68a9da7ab2d86e84a9daf2ca826511cf",
     "semantic_hash": ""
   },
   "reports/coverage_html/index.html": {
-    "mtime": 1792508930.3075287,
-    "ast_hash": "a919bd0d507eab446c712a1314ef45cb",
+    "mtime": 1792522905.2206872,
+    "ast_hash": "c96b2ee014550e6160cef98f7bb096be",
     "semantic_hash": ""
   },
   "reports/coverage_html/z_1346f4d1c1244d72___init___py.html": {
@@ -5597,8 +5597,8 @@
     "semantic_hash": ""
   },
   "reports/coverage_html/z_fdb4385211d96e29_scanning_views_py.html": {
-    "mtime": 1792508642.587626,
-    "ast_hash": "32ba079c9cfcbcec8b354b0b29c3922e",
+    "mtime": 1792522905.191369,
+    "ast_hash": "a1f3c504afdb1e0107932dbddb3fe15b",
     "semantic_hash": ""
   },
   "gestion/tests/test_acceso_no_autorizado_global.py": {
@@ -5657,8 +5657,8 @@
     "semantic_hash": "d28688d5d756bfed12ee0942b89df496"
   },
   ".gitlab-ci.yml": {
-    "mtime": 1792512295.5120428,
-    "ast_hash": "34cd4277b1e7d5c3f4c828e0715a6c28",
+    "mtime": 1792523472.095105,
+    "ast_hash": "fcdd8ce69779e95a0e6e6fa4eb9cd4aa",
     "semantic_hash": ""
   },
   "docs/arquitectura/ADR/ADR_014_GITLAB_CI_AUTOALOJADO.md": {
@@ -5672,18 +5672,18 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/GUIA_GITLAB.md": {
-    "mtime": 1792512450.388632,
-    "ast_hash": "30fea3205a7f21478ba421cfacd23ea7",
+    "mtime": 1792526830.6864016,
+    "ast_hash": "7eccc8b155bb6e5372475a9ef2386153",
     "semantic_hash": ""
   },
   "docs/requerimientos/PLAN_PRUEBAS_ISTQB.md": {
-    "mtime": 1792511747.5885742,
-    "ast_hash": "5b92a4adb2be56d38e032587182bbbe2",
+    "mtime": 1792523065.1175492,
+    "ast_hash": "e62e747893ce099abab43f046fda9d97",
     "semantic_hash": ""
   },
   "infrastructure/gitlab/docker-compose.gitlab.yml": {
-    "mtime": 1792511881.7076485,
-    "ast_hash": "caf31f047ecd7e7d56886cf09490c3c7",
+    "mtime": 1792517968.8023047,
+    "ast_hash": "40009ca4e46830ebb605b8b8974f8ae8",
     "semantic_hash": ""
   }
 }
