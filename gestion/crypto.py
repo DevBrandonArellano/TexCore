@@ -24,6 +24,7 @@ cifrados en cada rotación.
 
 import hashlib
 import hmac
+import logging
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
@@ -31,12 +32,15 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.signals import setting_changed
 from django.dispatch import receiver
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "ErrorDeCifrado",
     "cifrar",
     "descifrar",
     "generar_clave",
     "indice_ciego",
+    "normalizar_identificacion",
 ]
 
 # Caché de los objetos criptográficos: construirlos en cada lectura de fila
@@ -68,6 +72,7 @@ def _fernet() -> MultiFernet:
         try:
             _cache["fernet"] = MultiFernet([Fernet(clave) for clave in claves])
         except (TypeError, ValueError) as exc:
+            logger.exception("FIELD_ENCRYPTION_KEYS contiene una clave Fernet inválida (%d configuradas).", len(claves))
             raise ImproperlyConfigured(
                 "FIELD_ENCRYPTION_KEYS contiene una clave que no es una clave Fernet "
                 "válida (32 bytes en base64 urlsafe)."
@@ -97,9 +102,13 @@ def cifrar(texto: str) -> str:
     return _fernet().encrypt(texto.encode("utf-8")).decode("ascii")
 
 
-def descifrar(token: str) -> str:
+def descifrar(token: str, *, registrar: bool = True) -> str:
     """
     Descifra un token Fernet probando todas las claves activas.
+
+    `registrar=False` es para quien espera el fallo como parte de su trabajo (el comando
+    `cifrar_datos_personales` busca justamente las filas que no descifran) y lo informa
+    por su cuenta; si no, cada fila en claro dejaría un error falso en el registro.
 
     Lanza `ErrorDeCifrado` si ninguna sirve, en vez de devolver el valor crudo: un
     valor que no descifra significa que falta una clave en la rotación o que la fila
@@ -110,11 +119,19 @@ def descifrar(token: str) -> str:
     try:
         return _fernet().decrypt(token).decode("utf-8")
     except InvalidToken as exc:
+        if registrar:
+            # Nunca se registra el token ni el valor: solo el hecho, para poder alertar.
+            logger.exception("Un dato personal no se pudo descifrar con las claves activas.")
         raise ErrorDeCifrado(
             "No se pudo descifrar un dato personal con las claves activas. Revisa "
             "FIELD_ENCRYPTION_KEYS (¿falta la clave anterior tras una rotación?) o "
             "ejecuta `manage.py cifrar_datos_personales` si quedan filas sin migrar."
         ) from exc
+
+
+def normalizar_identificacion(valor) -> str:
+    """Forma canónica de una identificación: texto sin espacios alrededor."""
+    return str(valor).strip()
 
 
 def indice_ciego(valor: str) -> str:
@@ -126,7 +143,7 @@ def indice_ciego(valor: str) -> str:
     una copia de la base no pueda confirmar una identificación por fuerza bruta sobre
     el espacio de cédulas, que es pequeño.
     """
-    normalizado = str(valor).strip()
+    normalizado = normalizar_identificacion(valor)
     return hmac.new(_clave_indice(), normalizado.encode("utf-8"), hashlib.sha256).hexdigest()
 
 

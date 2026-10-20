@@ -26,7 +26,7 @@ TEX-43 CA-3 exige lo contrario: *«el sistema informa la ausencia de configuraci
    - el MRP omite los pedidos de esa sede y lo avisa en la respuesta de `ejecutar-mrp`, porque el motor corre en segundo plano.
 
    No hay valor por defecto en el modelo.
-3. **Despliegue sin cambio de comportamiento:** la migración `gestion/0006_configuracion_empaque_explicita` crea la configuración 15/15 de cada sede existente. Las sedes nuevas no la reciben; la registra su administrador.
+3. **Despliegue sin cambio de comportamiento:** la migración `gestion/0006_configuracion_empaque_explicita` (hoy dentro de `0003_squashed_0009_paromaquina_origen`) crea la configuración 15/15 de cada sede existente. Las sedes nuevas no la reciben; la registra su administrador.
 4. **Comandos de datos** (`seed_data`, `simular_operacion`, `stress_test_data`, `stress_ventas_data`, `load_million`): crean la configuración de las sedes que generan.
 
 ## 3. Consecuencias

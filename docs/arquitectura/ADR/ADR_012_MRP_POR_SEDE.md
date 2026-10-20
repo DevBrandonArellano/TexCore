@@ -55,7 +55,7 @@ No hay lista de materiales: un producto fabricado no se desglosa en compras salv
 - API: `POST sugerencias-compra/ejecutar-mrp/` (`{sede_id}` o `{todas: true}`), `GET sugerencias-compra/ultima-ejecucion/`, `GET sugerencias-compra/necesidades-produccion/`, listas paginadas con `PaginacionAcotada`.
 - TEX-28 (`requisitos_materiales`) y `ReposicionService.analizar_necesidades_reposicion` usan las mismas funciones.
 - Comando `run_mrp [--sede ID]`.
-- Migración `inventory/0003_mrp_por_sede`: crea `MRPEjecucion`, vincula los requerimientos a su orden y deja las sugerencias sin estados. Borra los resultados anteriores, que se recalculan.
+- Migración `inventory/0003_mrp_por_sede` (hoy dentro de `inventory/0001_squashed_0003_mrp_por_sede`): crea `MRPEjecucion`, vincula los requerimientos a su orden y deja las sugerencias sin estados. Borra los resultados anteriores, que se recalculan.
 
 ## 3. Consecuencias
 

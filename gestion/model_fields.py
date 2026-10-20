@@ -9,10 +9,14 @@ usa como el campo normal del que heredan, sin saber que están cifrados.
 buscar por igualdad y declarar unicidad en la base. Ver `gestion/crypto.py`.
 """
 
+import logging
+
 from django.core.exceptions import FieldError
 from django.db import models
 
-from gestion.crypto import cifrar, descifrar, indice_ciego
+from gestion.crypto import ErrorDeCifrado, cifrar, descifrar, indice_ciego
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["BlindIndexField", "EncryptedCharField", "EncryptedDateField"]
 
@@ -42,7 +46,13 @@ class _CampoCifradoMixin:
     def from_db_value(self, value, expression, connection):
         if value is None:
             return None
-        return self.to_python(descifrar(value))
+        try:
+            return self.to_python(descifrar(value))
+        except ErrorDeCifrado:
+            # Django no pasa la clave primaria a `from_db_value`: aquí solo hay modelo y
+            # campo; la fila exacta la localiza `manage.py cifrar_datos_personales`.
+            logger.exception("No se pudo leer %s.%s: dato cifrado ilegible.", self.model.__name__, self.name)
+            raise
 
     def get_db_prep_value(self, value, connection, prepared=False):
         if value is None:

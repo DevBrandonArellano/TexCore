@@ -87,6 +87,6 @@ Reglas que acompañan la decisión:
 ## 6. Referencias
 
 - `gestion/services/paro_por_estado.py`, `gestion/services/historial_paros.py`
-- `gestion/models/maquina.py` (`ParoMaquina.origen`), migración `gestion/0009_paromaquina_origen`
+- `gestion/models/maquina.py` (`ParoMaquina.origen`), migración `gestion/0009_paromaquina_origen` (hoy dentro de `0003_squashed_0009_paromaquina_origen`)
 - Manual del Jefe de Área, secciones 5 y 5.1
 - Detalle de la implementación: `CHANGELOG.md`, 14 de octubre de 2026 (tarde)

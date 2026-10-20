@@ -99,7 +99,8 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 
 - Cada migration debe tener un nombre descriptivo: `0050_agregar_constraint_cantidad_positiva`.
 - Los índices nuevos van en migrations separadas de los cambios de esquema.
-- Si una migración hace más estricta una columna (por ejemplo, `NULL` → `NOT NULL`), primero normaliza los datos con `RunPython` y después cambia el esquema, en la misma migración (ejemplo: `gestion/0003_cadenas_vacias_sin_null`). Antes de desplegarla, se prueba sobre un respaldo con datos de producción, no solo sobre la BD vacía del CI.
+- Si una migración hace más estricta una columna (por ejemplo, `NULL` → `NOT NULL`), primero normaliza los datos con `RunPython` y después cambia el esquema, en la misma migración (ejemplo: `RunPython nulos_a_vacio` de `gestion/0003_squashed_0009_paromaquina_origen`). Antes de desplegarla, se prueba sobre un respaldo con datos de producción, no solo sobre la BD vacía del CI.
+- **Consolidar migraciones** (`squashmigrations`): se conserva la lista `replaces` para siempre (sin ella, una base ya migrada volvería a ejecutar la consolidada); las funciones de cada `RunPython` se copian dentro de la migración nueva antes de borrar las originales; las migraciones que dependen de otra app (`gestion.0002` con `token_blacklist`) no se fusionan con la que crea el modelo del que dependen, porque forman una dependencia circular; y solo se borran las originales cuando toda base existente ya las aplicó. Se comprueba con la comparación de esquemas (columnas, índices, restricciones) entre el árbol viejo y el nuevo y con una base que ya estaba en la última migración original.
 - **No** usar `python manage.py makemigrations` en producción sin revisión del SQL generado.
 
 ---

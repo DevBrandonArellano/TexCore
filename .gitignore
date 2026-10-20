@@ -47,6 +47,9 @@ logs/
 htmlcov/
 .pytest_cache/
 
+# Socket de control de gunicorn (lo crea el backend de desarrollo al montar el repo)
+gunicorn.ctl
+
 # Graphify AST cache y backups temporales por fecha
 graphify-out/cache/
 graphify-out/20*/

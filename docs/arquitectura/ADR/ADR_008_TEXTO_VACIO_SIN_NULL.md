@@ -17,7 +17,7 @@ La guía de Django recomienda que el vacío de un campo de texto sea `''` y que 
 
 1. Los campos de texto opcionales se declaran `blank=True, default=''`, sin `null=True`.
 2. La migración convierte los datos existentes antes de cambiar el esquema, en el mismo archivo: `RunPython` (`NULL` → `''`) y después `AlterField` (`ALTER COLUMN ... NOT NULL`). Así el `ALTER` no falla en SQL Server con filas antiguas.
-   - `gestion/migrations/0003_cadenas_vacias_sin_null.py` cubre 26 campos.
+   - `gestion/migrations/0003_cadenas_vacias_sin_null.py` cubre 26 campos (hoy dentro de `0003_squashed_0009_paromaquina_origen.py`).
    - `inventory/migrations/0002_cadenas_vacias_sin_null.py` cubre 6 campos.
 3. **Excepción:** un campo opcional con `unique=True` conserva `null=True` con `# noqa: DJ001` y su motivo. mssql-django crea ese índice único filtrado (`WHERE col IS NOT NULL`): admite varias filas sin valor si son `NULL`, pero no si son `''`. Hoy ningún campo cae en este caso.
 4. Ruff (`DJ001`) impide volver a introducir texto nulo; la regla bloquea el CI.

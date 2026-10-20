@@ -280,7 +280,7 @@ Cierre de los criterios abiertos en `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
-| **TEX-43** Equivalencias de empaque por sede: CA-1 (la sede usa las suyas), CA-2 (dos sedes no interfieren), CA-3 (sin configuración: aviso en el lote y en el MRP, sin constante), valores límite y justificación obligatoria; relleno 15/15 de la migración 0006 † | `gestion/tests/test_configuracion_empaque_sede.py` | EP, BVA, CB | ✅ |
+| **TEX-43** Equivalencias de empaque por sede: CA-1 (la sede usa las suyas), CA-2 (dos sedes no interfieren), CA-3 (sin configuración: aviso en el lote y en el MRP, sin constante), valores límite y justificación obligatoria; relleno 15/15 de la migración 0006 (hoy dentro de `0003_squashed_0009_paromaquina_origen`) † | `gestion/tests/test_configuracion_empaque_sede.py` | EP, BVA, CB | ✅ |
 | **TEX-43** API `/api/configuracion-empaque/`: Admin de Sede (la suya, otra → 404), Admin de Sistemas (`sede_id`), roles sin permiso → 403, auditoría con justificación; aviso de sedes sin equivalencias en `ejecutar-mrp` † | `gestion/tests/test_configuracion_empaque_api.py` | EP, STT | ✅ |
 | **TEX-43** Frontend: pestaña Configuración del Admin de Sede, componente de equivalencias y aviso del MRP † | `ConfiguracionEmpaqueView.test.tsx`, `configuracionEmpaqueApi.test.ts`, `EjecutivosDashboard.test.tsx`, `MRPDashboard.test.tsx` | EP, BVA | ✅ |
 | **TEX-52 CA-1** Auditoría filtrable por fecha (registros de cualquier antigüedad) y tipo de operación; límites del rango; rango invertido y valores inválidos → 400; el Admin de Sede sigue acotado (CA-2) † | `inventory/tests/test_audit_logs_sede.py`, `AuditLogViewer.test.tsx` | EP, BVA | ✅ |
@@ -441,7 +441,7 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
 36. **Índices que SQL Server no usaba** (RD-06, medido el 8-oct-2026) — tras el defecto 27, el
     `COUNT` del listado de auditoría seguía siendo el 40,7 % de la CPU de la base con 250
     usuarios: con un índice por cada rama del `OR`, el optimizador recorría los dos completos
-    (10 356 lecturas). Un índice por fecha que incluye las dos sedes (`gestion/0008`) lo deja
+    (10 356 lecturas). Un índice por fecha que incluye las dos sedes (`gestion/0008`, hoy dentro de `0003_squashed_0009_paromaquina_origen`) lo deja
     en 299. Prueba: `gestion/tests/test_auditlog_usuario_sede.py` (`IndiceListadoAuditoriaTestCase`).
 37. **Prueba de carga no representativa** — tras paginar el stock, `locustfile.py` tomaba los
     lotes de la primera página (mermas ya vendidas), elegía clientes con deuda vencida y ponía a

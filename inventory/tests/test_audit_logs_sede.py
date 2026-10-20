@@ -4,7 +4,7 @@ GET /api/inventory/audit-logs/: alcance por sede, búsqueda y consulta indexable
 Hallazgo de la prueba de carga del 2026-10-06: el COUNT de la paginación consumía el 75 %
 de la CPU de SQL Server. El filtro `usuario__sede_id OR object_sede_id` unía con el
 usuario; ahora filtra por dos columnas de gestion_auditlog (usuario_sede_id y
-object_sede_id), cubiertas por el índice por fecha idx_audit_fecha_sedes (gestion/0008).
+object_sede_id), cubiertas por el índice por fecha idx_audit_fecha_sedes (gestion/0003_squashed_0009, antes 0008).
 
 También se cubre un hueco encontrado al revisar la pantalla: AuditLogViewer envía
 `?search=` y el backend lo ignoraba.

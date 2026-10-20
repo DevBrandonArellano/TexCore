@@ -15,7 +15,8 @@ valor llega como `str`/`date` de Python y el formato es explícito.
 
 Requiere `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el entorno. Tómese el respaldo
 previo de costumbre: el paso que borra las columnas en claro no se puede revertir con
-`migrate gestion 0009` (ver docs/arquitectura/CIFRADO_DATOS_PERSONALES.md).
+`migrate gestion 0003_squashed_0009_paromaquina_origen` (ver
+docs/arquitectura/CIFRADO_DATOS_PERSONALES.md).
 """
 
 from django.db import migrations
@@ -95,7 +96,7 @@ def descifrar_fechas_nacimiento(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("gestion", "0009_paromaquina_origen")]
+    dependencies = [("gestion", "0003_squashed_0009_paromaquina_origen")]
 
     operations = [
         # ── Cliente.ruc_cedula ────────────────────────────────────────────────

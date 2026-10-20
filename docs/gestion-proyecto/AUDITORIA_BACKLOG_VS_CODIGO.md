@@ -38,7 +38,7 @@ entrada «7 de Octubre de 2026 (tarde)» del `CHANGELOG.md`, y el cierre de M-3,
 | C-2 Exportación asíncrona sin broker | — | ✅ Resuelto (30-sep) | `test_reporting_proxy_extra.py` |
 | A-1 Fórmulas sin versionar | TEX-38 | ✅ Resuelto (24/25-sep) | Recetas versionadas, `VersionFormula` |
 | A-2 La cobertura no bloquea | TEX-04 CA-3 | ✅ Resuelto (5-oct) | `fail_under = 90` bloqueante en el CI; criterio actualizado |
-| M-1 Kárdex con 3 decimales | TEX-18 CA-4 | ✅ Resuelto (7-oct) | Metros de tela en `DECIMAL(12, 4)` (`gestion/0007`); los kg siguen en 3 decimales, criterio aclarado. `test_metros_tela_precision.py` |
+| M-1 Kárdex con 3 decimales | TEX-18 CA-4 | ✅ Resuelto (7-oct) | Metros de tela en `DECIMAL(12, 4)` (`gestion/0007`, hoy dentro de `0003_squashed_0009_paromaquina_origen`); los kg siguen en 3 decimales, criterio aclarado. `test_metros_tela_precision.py` |
 | M-2 CI no corre en cualquier rama | TEX-04 CA-1 | ✅ Criterio corregido (7-oct) | Decisión del plan de CI/CD: `staging` y PRs a `master`/`staging` |
 | M-3 `healthcheck` solo en `db` | TEX-01 CA-1 | ✅ Resuelto (13-oct) | Fase 5 del plan de CI/CD: `HEALTHCHECK` propio en los 5 Dockerfiles (`infrastructure/docker/Dockerfile.prod`, `nginx`, `scanning_service`, `printing_service`, `reporting_excel`) y el de `db` en el compose; los 6 contenedores en `healthy`: `evidencia/sprint-0/2026-10-13_docker-compose-ps.txt` |
 | M-4 Puertos de BD y Redis publicados | TEX-02 CA-2 | ✅ Resuelto (30-sep) | Ligados a `127.0.0.1` |
