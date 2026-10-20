@@ -60,7 +60,7 @@ cache:
 .entorno_django_test: &entorno_django_test
   DJANGO_SETTINGS_MODULE: TexCore.settings_test
   DEBUG: "0"
-  SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # pragma: allowlist secret
   FIELD_ENCRYPTION_KEYS: "XlejxlU-TjcZMY6ub4Qy9Y2sSvQcp17J3DBw0uh6fv8=" # pragma: allowlist secret
   BLIND_INDEX_KEY: "-xCQ08_ZmqAiZIQIPIOegGJZj1XY09_QZJX7LNuqzfM" # pragma: allowlist secret
 

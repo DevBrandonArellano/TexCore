@@ -190,7 +190,7 @@ def _pipeline() -> dict:
 
 def _script(trabajo: dict) -> str:
     """Todo lo que el job ejecuta: `before_script`, `script` y `after_script`."""
-    partes = []
+    partes: list[str] = []
     for clave in ("before_script", "script", "after_script"):
         partes.extend(str(linea) for linea in trabajo.get(clave, []))
     return "\n".join(partes)
