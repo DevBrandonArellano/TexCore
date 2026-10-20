@@ -52,10 +52,10 @@ class ValidateLoteView(APIView):
         lotes = LoteProduccion.objects.select_related("orden_produccion__producto_salida").filter(
             codigo_lote=codigo_barras
         )
-        stock = StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0)
+        existencias = StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0)
         if sede_id is not None:
             lotes = filtrar_lotes_de_sede(lotes, sede_id)
-            stock = stock.filter(bodega__sede_id=sede_id)
+            existencias = existencias.filter(bodega__sede_id=sede_id)
         # El código no es único entre sedes: sin acotar, el primero (antes, un 500).
         lote = lotes.order_by("id").first()
         if lote is None:
@@ -63,7 +63,7 @@ class ValidateLoteView(APIView):
 
         # Filas vendibles con stock (todas salvo la merma vendible), la del producto del
         # lote primero: tomar la primera fila por lote devolvía a veces la merma.
-        filas = principal_primero(stock_vendible_del_lote(stock, [lote]), lote)
+        filas = principal_primero(stock_vendible_del_lote(existencias, [lote]), lote)
         stock = filas[0] if filas else None
 
         op = lote.orden_produccion

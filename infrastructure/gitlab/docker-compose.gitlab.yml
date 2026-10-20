@@ -39,7 +39,8 @@ services:
         # Respaldo diario por cron del contenedor y retención de 7 días.
         gitlab_rails['backup_keep_time'] = 604800
         gitlab_rails['backup_path'] = '/var/opt/gitlab/backups'
-        # Sin registro abierto: las cuentas las crea el administrador.
+        # Sin registro abierto: las cuentas las crea el administrador. Este valor solo rige en el
+        # primer arranque; en una instalación existente se cierra en Admin > Settings (GUIA_GITLAB §2).
         gitlab_rails['gitlab_signup_enabled'] = false
     volumes:
       - gitlab_config:/etc/gitlab

@@ -40,7 +40,7 @@ La primera vez, GitLab tarda varios minutos en estar sano (`start_period` de 5 m
 docker compose -f infrastructure/gitlab/docker-compose.gitlab.yml exec gitlab cat /etc/gitlab/initial_root_password
 ```
 
-Ese archivo se borra solo a las 24 horas: entra a `https://192.168.1.55:8929`, cambia la contraseña y crea una cuenta de administración propia. El registro de usuarios está cerrado (`gitlab_signup_enabled = false`); las cuentas las crea el administrador.
+Ese archivo se borra solo a las 24 horas: entra a `https://192.168.1.55:8929`, cambia la contraseña y crea una cuenta de administración propia. **Cierra el registro de usuarios** (Admin > Settings > General > Sign-up restrictions > desactivar «Sign-up enabled»): el ajuste `gitlab_signup_enabled` de `gitlab.rb` solo se aplica en el primer arranque y GitLab lo deja abierto. Las cuentas las crea el administrador. El 20-oct-2026 se cerró por consola y se comprobó que nadie se había registrado.
 
 ## 3. Confiar en el certificado propio
 
@@ -99,6 +99,8 @@ TOKEN_CI=glrt-... TOKEN_STAGING=glrt-... bash infrastructure/gitlab/registrar_ru
 2. Instala `gitlab-runner`, regístralo con ejecutor **shell** y confía en la CA (§3).
 3. Prepara el directorio de `TEXCORE_DIR` con `.env.prod` y `nginx/certs`, como en `GUIA_DESPLIEGUE.md` §3.
 4. Agrega al usuario del runner al grupo `docker`.
+
+**Paralelismo.** `texcore-ci` corre 2 jobs a la vez (`concurrent = 2` en `/etc/gitlab-runner/config.toml` del contenedor, que vive en el volumen `runner_ci_config`); súbelo solo si hay memoria libre, porque `test:backend` levanta un SQL Server. Antes de empujar, corre en local los mismos gates que `lint:backend` (`ruff`, `mypy`, `detect-secrets-hook`): son los que más fallan en el primer pipeline.
 
 Un job de feature no puede usar el socket del host: los runners con socket son protegidos y el pipeline solo los pide en `master` y `staging`.
 
