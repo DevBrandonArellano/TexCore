@@ -97,7 +97,7 @@ Los riesgos y su mitigación están en `REGISTRO_RIESGOS.md`. Los que condiciona
 
 | Suite | Pruebas | Cobertura |
 |---|---|---|
-| Núcleo (SQL Server 2022) | 1918 al cierre del 20-oct y 1931 con el gate ISTQB | 92,5 % |
+| Núcleo (SQL Server 2022) | 1944 al cierre del 20-oct | 92,5 % |
 | `scanning_service` | 66 | 94,3 % |
 | `printing_service` | 114 | 98,9 % |
 | `reporting_excel` | 76 | 99,2 % |

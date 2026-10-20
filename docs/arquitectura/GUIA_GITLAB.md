@@ -17,7 +17,13 @@
 
 Los puertos 80 y 443 son del stack de TexCore y no se tocan. El archivo es `infrastructure/gitlab/docker-compose.gitlab.yml`, con versión y digest fijos.
 
-**Memoria.** El equipo tiene 16 GB. GitLab queda limitado a 6 GB y el stack de TexCore usa unos 3 GB, así que el staging es **efímero** (`scripts/staging_efimero.sh`): se levanta, se prueba y se baja dentro del pipeline.
+**Memoria.** El equipo tiene 16 GB y **no tiene swap**. GitLab queda limitado a 6 GB (usa ~3,8) y el stack de TexCore usa unos 3 GB, así que el staging es **efímero** (`scripts/staging_efimero.sh`): se levanta, se prueba y se baja dentro del pipeline. El 20-oct el OOM killer cerró el navegador y el escritorio al coincidir un pipeline con ambos; por eso:
+
+- `texcore-ci` corre **1 job a la vez** y cada job tiene un tope de 4 GB (`memory = "4g"` y `service_memory = "3g"` en `[runners.docker]` del `config.toml` del runner). Un exceso hace fallar ese job, no el equipo.
+- El SQL Server de las pruebas lleva `MSSQL_MEMORY_LIMIT_MB=2048` (en `.gitlab-ci.yml` y en `scripts/run_backend_tests.sh`): sin tope, reserva hasta el 80 % de la memoria.
+- `test:frontend` acota el heap de Node a 2 GB.
+- **Crea swap** (necesita `sudo`; protege al escritorio de los picos): `sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab`; o zram con `systemd-zram-generator`.
+- Mientras corre un pipeline evita abrir muchas pestañas; el pipeline completo dura unos 15 minutos.
 
 ## 0. Estado de la instalación (20-oct-2026)
 
@@ -100,7 +106,7 @@ TOKEN_CI=glrt-... TOKEN_STAGING=glrt-... bash infrastructure/gitlab/registrar_ru
 3. Prepara el directorio de `TEXCORE_DIR` con `.env.prod` y `nginx/certs`, como en `GUIA_DESPLIEGUE.md` §3.
 4. Agrega al usuario del runner al grupo `docker`.
 
-**Paralelismo.** `texcore-ci` corre 2 jobs a la vez (`concurrent = 2` en `/etc/gitlab-runner/config.toml` del contenedor, que vive en el volumen `runner_ci_config`); súbelo solo si hay memoria libre, porque `test:backend` levanta un SQL Server. Antes de empujar, corre en local los mismos gates que `lint:backend` (`ruff`, `mypy`, `detect-secrets-hook`): son los que más fallan en el primer pipeline. Si `git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline` responde «The baseline file was updated», **no lo descartes**: hace `git add .secrets.baseline` y súbelo en el mismo commit (solo se movieron números de línea de secretos ya auditados); el CI falla mientras esa actualización no esté commiteada.
+**Paralelismo.** `texcore-ci` corre 1 job a la vez (`concurrent = 1` en `/etc/gitlab-runner/config.toml` del contenedor, que vive en el volumen `runner_ci_config`); lo habíamos subido a 2 y provocó el OOM del 20-oct. Súbelo solo si hay swap y memoria libre, porque `test:backend` levanta un SQL Server. Antes de empujar, corre en local los mismos gates que `lint:backend` (`ruff`, `mypy`, `detect-secrets-hook`): son los que más fallan en el primer pipeline. Si `git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline` responde «The baseline file was updated», **no lo descartes**: hace `git add .secrets.baseline` y súbelo en el mismo commit (solo se movieron números de línea de secretos ya auditados); el CI falla mientras esa actualización no esté commiteada.
 
 Un job de feature no puede usar el socket del host: los runners con socket son protegidos y el pipeline solo los pide en `master` y `staging`.
 

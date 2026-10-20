@@ -195,6 +195,9 @@ test:backend:
         ACCEPT_EULA: "Y"
         MSSQL_SA_PASSWORD: "CI_Pass1234!" # pragma: allowlist secret
         MSSQL_PID: "Developer"
+        # Sin tope, SQL Server reserva hasta el 80 % de la memoria del equipo, y este runner
+        # comparte equipo con GitLab y con el stack de TexCore (el OOM del 20-oct cerró el escritorio).
+        MSSQL_MEMORY_LIMIT_MB: "2048"
   variables:
     <<: *entorno_django_test
     ALLOWED_HOSTS: "localhost,127.0.0.1"
@@ -279,6 +282,9 @@ test:frontend:
   stage: test
   image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
   rules: *reglas_ci
+  variables:
+    # Vitest llegó a usar 3 GB en este equipo compartido: se acota el heap de Node.
+    NODE_OPTIONS: "--max-old-space-size=2048"
   cache:
     key:
       files:
@@ -291,7 +297,9 @@ test:frontend:
     - npx tsc --noEmit
     - npm run typecheck:tests
     - npm run lint
-    - npx vitest run --coverage
+    # 4 procesos: sin límite, Vitest lanza uno por núcleo (16 aquí) y en el runner compartido
+    # las pruebas de interfaz excedían el tiempo máximo y usaban 3 GB. Con 4 tarda ~2 minutos.
+    - npx vitest run --coverage --maxWorkers=4
     - npm run build
   coverage: '/All files\s*\|\s*(\d+(?:\.\d+)?)/'
   artifacts:
