@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario vacío / código, área y peso completos / que onOrdenCreate
+ *   resuelve false / el formulario de creación abierto / el menú de acciones de fila.
+ * - Análisis de valores límite (BVA): el formulario vacío.
+ * - Transición de estados (STT): una orden pendiente en el Sheet / una orden en proceso en el Sheet / el menú
+ *   de acciones de fila de una orden pendiente / el menú de acciones de fila de una orden en proceso.
+ * - Caja blanca (CB): ramas de error — que la API de requisitos falla / que la API de registrar-lote falla.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

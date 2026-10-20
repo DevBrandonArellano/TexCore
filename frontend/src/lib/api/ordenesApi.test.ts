@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): asignación e inicio / litros / máquina / orden.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ordenesApi } from './ordenesApi';
 

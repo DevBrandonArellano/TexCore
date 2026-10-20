@@ -215,3 +215,70 @@ class TestValidateLoteFilasVendibles(_LoteConStockMixin, TestCase):
         data = self._validar()
         self.assertIsNone(data["peso_kg"])
         self.assertEqual(data["productos"], [])
+
+
+class TestValidateLoteAlcanceSede(_LoteConStockMixin, TestCase):
+    """
+    OWASP API1: el scanning_service reenvía la sede del usuario que escaneó (la verifica
+    nginx contra Django). Con `sede_id`, un lote de otra sede responde igual que uno
+    inexistente; sin `sede_id` (usuario que ve todas las sedes) no se acota.
+    Técnicas ISTQB: EP (sede propia / ajena / sin acotar / sede inválida).
+    """
+
+    URL = "/api/internal/v1/lotes/LOT-2026-001/validate/"
+
+    def setUp(self):
+        super().setUp()
+        self.otra_sede = Sede.objects.create(nombre="Sede Ajena")
+
+    def test_validate_lote_dado_sede_del_lote_cuando_valida_entonces_200(self):
+        resp = self.client.get(self.URL, {"sede_id": self.sede.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["codigo_lote"], "LOT-2026-001")
+
+    def test_validate_lote_dado_otra_sede_cuando_valida_entonces_404_como_inexistente(self):
+        resp = self.client.get(self.URL, {"sede_id": self.otra_sede.id})
+        self.assertEqual(resp.status_code, 404)
+        inexistente = self.client.get("/api/internal/v1/lotes/NO-EXISTE/validate/", {"sede_id": self.otra_sede.id})
+        self.assertEqual(resp.data, inexistente.data)
+
+    def test_validate_lote_dado_sede_id_no_numerico_cuando_valida_entonces_400(self):
+        self.assertEqual(self.client.get(self.URL, {"sede_id": "abc"}).status_code, 400)
+
+    def test_validate_lote_dado_stock_en_bodega_de_otra_sede_cuando_valida_entonces_no_lo_informa(self):
+        bodega_ajena = Bodega.objects.create(nombre="Bodega Ajena", sede=self.otra_sede)
+        self.stock.bodega = bodega_ajena
+        self.stock._justificacion_auditoria = "Test bodega ajena"
+        self.stock.save()
+        resp = self.client.get(self.URL, {"sede_id": self.sede.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["peso_kg"])
+
+    def test_validate_lote_dado_codigo_repetido_en_otra_sede_cuando_valida_entonces_usa_el_de_su_sede(self):
+        op_ajena = OrdenProduccion.objects.create(
+            codigo="OP-AJENA",
+            producto_entrada=self.producto,
+            producto_salida=self.producto,
+            peso_neto_requerido=100,
+            sede=self.otra_sede,
+        )
+        LoteProduccion.objects.create(
+            orden_produccion=op_ajena,
+            codigo_lote="LOT-2026-001",
+            peso_neto_producido=10,
+            operario=self.operario,
+            maquina=self.maquina,
+            turno="mañana",
+            hora_inicio="2026-05-01T08:00:00Z",
+            hora_final="2026-05-01T16:00:00Z",
+        )
+        resp = self.client.get(self.URL, {"sede_id": self.sede.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["lote_id"], self.lote.id)
+
+    def test_validate_lote_dado_claim_de_sede_ajena_y_query_distinta_cuando_valida_entonces_403(self):
+        from internal_api.authentication import JWTServiceAuthentication
+
+        token = JWTServiceAuthentication.generate_token("scanning_service", ["lotes:read"], sede_id=self.otra_sede.id)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(self.client.get(self.URL, {"sede_id": self.sede.id}).status_code, 403)

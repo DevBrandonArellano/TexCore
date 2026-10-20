@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una venta sin cliente ni items / cliente e items válidos / un rechazo del
+ *   backend / un abono válido / "Es Anticipo" activo.
+ * - Análisis de valores límite (BVA): un monto vacío o inválido / un rango sin datos.
+ * - Caja blanca (CB): ramas de error — un rechazo del backend / un error 500 / un error distinto de 404.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

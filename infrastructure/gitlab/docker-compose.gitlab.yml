@@ -1,0 +1,90 @@
+# =============================================================================
+# TEXCORE — GITLAB CE AUTOALOJADO (CI/CD, Container Registry y runners)
+# La tesis (§5.3) define el pipeline en GitLab CI y las imágenes en el GitLab Container
+# Registry. Corre en el mismo equipo que el staging, dentro de la red de Interfibra.
+# Guía: docs/arquitectura/GUIA_GITLAB.md · Decisión: ADR-014.
+#
+# Uso, desde la raíz del repositorio:
+#   bash infrastructure/gitlab/generar_certificado.sh 192.168.1.55
+#   docker compose -f infrastructure/gitlab/docker-compose.gitlab.yml --env-file infrastructure/gitlab/.env up -d --wait
+# =============================================================================
+name: texcore-gitlab
+
+services:
+  gitlab:
+    # Versión y digest fijos: una actualización se hace a propósito (ver la guía).
+    image: gitlab/gitlab-ce:19.4.2-ce.0@sha256:b65c3ece044d125254b4c4a99b10676bbd2502f05f8c628cb60628f44f4df11b
+    restart: unless-stopped
+    hostname: ${GITLAB_HOST:-192.168.1.55}
+    shm_size: 256m
+    ports:
+      - "${GITLAB_HTTPS_PORT:-8929}:${GITLAB_HTTPS_PORT:-8929}"
+      - "${GITLAB_REGISTRY_PORT:-5050}:${GITLAB_REGISTRY_PORT:-5050}"
+      - "${GITLAB_SSH_PORT:-2224}:22"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://${GITLAB_HOST:-192.168.1.55}:${GITLAB_HTTPS_PORT:-8929}'
+        registry_external_url 'https://${GITLAB_HOST:-192.168.1.55}:${GITLAB_REGISTRY_PORT:-5050}'
+        gitlab_rails['gitlab_shell_ssh_port'] = ${GITLAB_SSH_PORT:-2224}
+        # Certificado propio (infrastructure/gitlab/certs, fuera de git).
+        nginx['ssl_certificate'] = '/etc/gitlab/ssl/gitlab.crt'
+        nginx['ssl_certificate_key'] = '/etc/gitlab/ssl/gitlab.key'
+        registry_nginx['ssl_certificate'] = '/etc/gitlab/ssl/gitlab.crt'
+        registry_nginx['ssl_certificate_key'] = '/etc/gitlab/ssl/gitlab.key'
+        # El equipo comparte memoria con el stack de TexCore (16 GB): se acota GitLab.
+        puma['worker_processes'] = 2
+        sidekiq['concurrency'] = 10
+        postgresql['shared_buffers'] = '256MB'
+        prometheus_monitoring['enable'] = false
+        # Respaldo diario por cron del contenedor y retención de 7 días.
+        gitlab_rails['backup_keep_time'] = 604800
+        gitlab_rails['backup_path'] = '/var/opt/gitlab/backups'
+        # Sin registro abierto: las cuentas las crea el administrador.
+        gitlab_rails['gitlab_signup_enabled'] = false
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+      - ./certs:/etc/gitlab/ssl:ro
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+    healthcheck:
+      test: ["CMD", "/opt/gitlab/bin/gitlab-healthcheck", "--fail", "--max-time", "10"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 300s
+
+  # Runner de integración: ejecutor Docker. Los jobs NO reciben el socket del host.
+  runner-ci:
+    image: gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    restart: unless-stopped
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - runner_ci_config:/etc/gitlab-runner
+      - ./certs:/etc/gitlab-runner/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Runner de release y staging: solo ramas protegidas. Los jobs reciben el socket del
+  # host para construir y levantar el staging efímero, y usan la red del host.
+  runner-staging:
+    image: gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    restart: unless-stopped
+    depends_on:
+      gitlab:
+        condition: service_healthy
+    volumes:
+      - runner_staging_config:/etc/gitlab-runner
+      - ./certs:/etc/gitlab-runner/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  runner_ci_config:
+  runner_staging_config:

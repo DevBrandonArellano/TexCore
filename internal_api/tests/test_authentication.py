@@ -1,4 +1,9 @@
-"""Tests para JWTServiceAuthentication. EP + BVA."""
+"""Tests para JWTServiceAuthentication. EP + BVA.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token valido / sin header / token expirado / tipo refresh.
+- Transición de estados (STT): token expirado.
+"""
 
 import uuid
 from datetime import UTC, datetime, timedelta

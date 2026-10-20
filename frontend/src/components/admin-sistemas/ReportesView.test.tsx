@@ -1,8 +1,14 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sedeId / sin sedeId / bodega seleccionada / bodega y fechas seleccionadas
+ *   / catalogo de productos.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ReportesView } from './ReportesView';
+import { ReportesView } from './ReportesView';
+
 import { Bodega, Producto } from '../../lib/types';
 import { parcial } from '../../testing/parcial';
 

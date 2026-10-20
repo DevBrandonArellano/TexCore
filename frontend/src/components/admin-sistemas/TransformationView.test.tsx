@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin productos ni bodegas / stock existente / formulario vacio / producto
+ *   sin stock disponible / cantidad mayor al stock disponible.
+ * - Análisis de valores límite (BVA): formulario vacio / producto sin stock disponible.
+ * - Caja blanca (CB): ramas de error — error de la API con mensaje / error de la API sin mensaje especifico.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';

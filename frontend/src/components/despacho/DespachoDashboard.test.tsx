@@ -1,9 +1,20 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): datos aun no resueltos / pedidos pendientes / sin pedidos pendientes /
+ *   error al cargar pedidos / un texto de busqueda.
+ * - Análisis de valores límite (BVA): un codigo de barras vacio.
+ * - Transición de estados (STT): pedidos pendientes / sin pedidos pendientes / mas de 20 pedidos pendientes /
+ *   un pedido con estado despachado parcial.
+ * - Caja blanca (CB): ramas de error — error al cargar pedidos / un error de red / un error del servidor
+ *   distinto de 409.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { DespachoDashboard } from './DespachoDashboard';
+import { DespachoDashboard } from './DespachoDashboard';
+
 import { PedidoVenta } from '../../lib/types';
 
 const mockGet = vi.fn();

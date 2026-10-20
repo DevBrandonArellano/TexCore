@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): procesos en el catálogo / nombre vacío / nombre y descripción / un proceso
+ *   / un proceso en uso.
+ * - Análisis de valores límite (BVA): nombre vacío.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

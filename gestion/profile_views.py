@@ -1,7 +1,9 @@
+from django.middleware.csrf import get_token
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .permissions import ve_todas_las_sedes
 from .serializers import CustomUserSerializer
 
 
@@ -48,4 +50,27 @@ class UserProfileView(APIView):
 
         profile_data = {"user": serializer.data, "role": role}
 
+        # El front pide el perfil al arrancar: aquí recibe la cookie `csrftoken` que
+        # axios reenvía en `X-CSRFToken` con cada escritura (CookieJWTAuthentication).
+        get_token(request)
         return Response(profile_data)
+
+
+class VerificarSesionView(APIView):
+    """
+    Verificación de sesión para el `auth_request` de nginx (OWASP API2).
+
+    El scanning_service no autentica usuarios: nginx consulta esta vista con la cookie
+    del navegador antes de pasarle la petición. Sin sesión válida responde 401 y nginx
+    corta ahí. Con sesión, 204 y la sede del usuario en cabeceras, que nginx reenvía al
+    servicio para acotar la consulta del lote (OWASP API1).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        resp = Response(status=204)
+        resp["X-Texcore-Sede-Id"] = str(user.sede_id or "")
+        resp["X-Texcore-Ve-Todas"] = "1" if ve_todas_las_sedes(user) else "0"
+        return resp

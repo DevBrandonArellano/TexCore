@@ -1,3 +1,10 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): produccion continua / parametros validos / operacion continua / proceso del
+  catalogo / operacion con desbalance.
+- Transición de estados (STT): corrida en proceso.
+"""
+
 from decimal import Decimal
 
 from django.test import TestCase

@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): bloque y filtros / disponibles en falso / datos sin certificado /
+ *   certificado / certificado y campos opcionales vacíos.
+ * - Análisis de valores límite (BVA): certificado y campos opcionales vacíos.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { inventarioApi } from './inventarioApi';
 

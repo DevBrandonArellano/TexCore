@@ -4,6 +4,10 @@ Fija el orden de prioridad del fallback por atributos antes y después de su ref
 
 Escrito con unittest (no pytest): la suite del backend corre con ``manage.py test``, que
 no colecta funciones sueltas de pytest, y el CI no instala pytest.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): objeto sin protocolo / atributo que falla.
+- Caja blanca (CB): ramas de error — atributo que falla.
 """
 
 from types import SimpleNamespace as NS

@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): selectedSedeId vacio / respuestas paginadas ({results}) / respuestas
+ *   planas (array) / respuesta sin data / error de red.
+ * - Análisis de valores límite (BVA): selectedSedeId vacio / sede vacia y sin sedes disponibles.
+ * - Caja blanca (CB): ramas de error — error de red.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useSedeSpecificData } from './useSedeSpecificData';

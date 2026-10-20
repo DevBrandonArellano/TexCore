@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un hijo que renderiza correctamente / un hijo que lanza un error durante
+ *   el render / un fallback personalizado.
+ * - Caja blanca (CB): ramas de error — un hijo que lanza un error durante el render.
+ */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';

@@ -17,6 +17,9 @@ asyncio.sleep(). Comparar contra una línea base medida en el mismo proceso
 entorno de test. Si el event loop estuviera bloqueado, paralelo tardaría ~=
 serie; con I/O verdaderamente async, paralelo debe ser sustancialmente
 más rápido.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: peticiones concurrentes.
 """
 
 import asyncio

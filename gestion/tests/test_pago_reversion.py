@@ -9,6 +9,11 @@ Valida:
 3. Saldo_pendiente se calcula correctamente post-reversión
 4. Reversión es transaccional (rollback en error)
 5. API endpoint requiere justificación
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): pago aplicado / sin justificacion / varios pagos / fallo intermedio /
+  justificacion vacia.
+- Análisis de valores límite (BVA): justificacion vacia.
 """
 
 from decimal import Decimal

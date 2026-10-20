@@ -2,7 +2,7 @@
 """
 Pruebas de humo de TexCore contra un stack levantado, a través de nginx.
 
-Las ejecuta el staging efímero del release (`.github/workflows/release.yml`) antes de
+Las ejecuta el staging efímero del release (`.gitlab-ci.yml`) antes de
 pedir la aprobación de producción, y sirven igual contra cualquier instalación:
 
     python3 scripts/smoke_test.py https://localhost:8443 --http http://localhost:8080

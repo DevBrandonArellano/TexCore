@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): peso y litros / peso o litros no positivos / error del servidor.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

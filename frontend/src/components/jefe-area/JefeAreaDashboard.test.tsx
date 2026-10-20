@@ -1,3 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el card de Estado de Máquinas / que las peticiones aun no resuelven / que
+ *   las peticiones resuelven / un error en alguna peticion / kpis cargados.
+ * - Análisis de valores límite (BVA): motivo vacío o en blanco.
+ * - Transición de estados (STT): el card de Estado de Máquinas / un error al cambiar el estado de una maquina
+ *   / ordenes pendientes / ninguna orden pendiente.
+ * - Caja blanca (CB): ramas de error — un error en alguna peticion / un error al cambiar el estado de una
+ *   maquina / un error al guardar la maquina editada.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

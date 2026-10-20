@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): lotes que juntos superan minimo / lotes que juntos no superan minimo.
+- Análisis de valores límite (BVA): lotes que juntos superan minimo / lotes que juntos no superan minimo.
+"""
+
 from decimal import Decimal
 
 from django.test import TestCase

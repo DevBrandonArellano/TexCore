@@ -1,4 +1,9 @@
-"""Tests para JWTTokenManager. EP + BVA."""
+"""Tests para JWTTokenManager. EP + BVA.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token fresco / token por expirar / sin token / 31s de vida / respuesta 200.
+- Caja blanca (CB): ramas de error — respuesta error.
+"""
 
 import time
 import uuid

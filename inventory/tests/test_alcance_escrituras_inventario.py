@@ -8,6 +8,11 @@ transformación es de la sede del origen. Ninguna escritura crea ni reutiliza
 lotes de producción ajenos, y la compra se registra solo por la recepción
 F0-001 (`materia-prima/registrar-entrada/`). Técnicas ISTQB: partición de
 equivalencia por bodega (asignada / no asignada / otra sede) y por rol.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): bodega no asignada / admin sede y bodega de otra sede / bodega asignada /
+  compra generica / lote codigo de otro lote.
+- Caja blanca (CB): ramas de error — error interno.
 """
 
 from decimal import Decimal

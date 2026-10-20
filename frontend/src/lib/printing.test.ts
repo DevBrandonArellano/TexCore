@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin valor guardado / valor pdf guardado / localStorage.getItem lanzando
+ *   excepcion / BrowserPrint ausente / getDefaultDevice con exito.
+ * - Transición de estados (STT): popup bloqueado (window.open retorna null).
+ * - Caja blanca (CB): ramas de error — localStorage.getItem lanzando excepcion / modo auto sin zebra y pdf
+ *   tambien falla.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
 import { parcial } from '../testing/parcial';
 import {
   printLabel,

@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gestion.models import LoteProduccion, PedidoVenta, Producto
-from gestion.permissions import filtrar_por_sede
+from gestion.permissions import filtrar_lotes_por_sede, filtrar_por_sede
 from gestion.utils import PrintingService
 from inventory.models import (
     DetalleHistorialDespacho,
@@ -344,10 +344,16 @@ class ValidateLoteAPIView(APIView):
         if not code:
             return Response({"valid": False, "reason": "Código no proporcionado"}, status=400)
 
-        # Buscar lote
-        try:
-            lote = LoteProduccion.objects.get(codigo_lote=code)
-        except LoteProduccion.DoesNotExist:
+        pedido_id = request.data.get("pedido_id") or request.query_params.get("pedido_id")
+        if pedido_id and not str(pedido_id).isdigit():
+            return Response({"valid": False, "reason": "pedido_id inválido"}, status=400)
+
+        # OWASP API1: solo los lotes de su sede. Uno de otra sede responde igual que uno
+        # inexistente, y el código (que no es único entre sedes) no da un 500 si se repite.
+        lote = (
+            filtrar_lotes_por_sede(LoteProduccion.objects.filter(codigo_lote=code), request.user).order_by("id").first()
+        )
+        if lote is None:
             return Response({"valid": False, "reason": "Lote no encontrado en el sistema"}, status=200)
 
         # Filas vendibles del lote (todas salvo la merma), con la de su producto primero.
@@ -361,7 +367,6 @@ class ValidateLoteAPIView(APIView):
             return Response({"valid": False, "reason": "Lote existe pero no tiene stock disponible (0 kg)"}, status=200)
         stock_item = filas[0]
 
-        pedido_id = request.data.get("pedido_id") or request.query_params.get("pedido_id")
         if pedido_id and lote.pedido_venta_reserva_id and lote.pedido_venta_reserva_id != int(pedido_id):
             return Response(
                 {

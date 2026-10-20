@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que monta el componente / sedes obtenidas sin sede en la url / una sede
+ *   seleccionada / respuestas en formato paginado ({results:[...]}) / datos aún no resueltos.
+ * - Caja blanca (CB): ramas de error — un error al obtener los datos de la sede / un error 403 / un error 401.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

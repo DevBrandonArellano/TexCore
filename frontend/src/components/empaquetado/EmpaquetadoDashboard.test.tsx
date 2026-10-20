@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): datos aun no resueltos / sin ordenes ni lotes / ordenes y lotes existentes
+ *   / click en una orden / una orden de producto tipo tela.
+ * - Análisis de valores límite (BVA): formulario vacio / unidades de empaque en cero / datos de balanza con
+ *   lineas vacias, sin newline aun, sin numero y en cero.
+ * - Caja blanca (CB): ramas de error — un error del backend / una falla al cargar datos iniciales / un error
+ *   al solicitar el puerto serial.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

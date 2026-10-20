@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario / un envio vacio / solo el usuario / credenciales validas /
+ *   credenciales invalidas.
+ * - Análisis de valores límite (BVA): un envio vacio.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

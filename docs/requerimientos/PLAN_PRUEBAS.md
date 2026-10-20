@@ -1,5 +1,7 @@
 # 🧪 Plan de Pruebas Técnico — TexCore — Sistema de gestión de órdenes de producción
 
+> **Registro histórico.** El plan de pruebas vigente es `PLAN_PRUEBAS_ISTQB.md` (20-oct-2026): niveles, técnicas, criterios de entrada y salida, entorno y trazabilidad. Este documento conserva los 112 casos `TC-xxx` de marzo a mayo de 2026.
+
 **Autor**: Senior SDET / QA Lead (ISTQB)
 **Fecha**: 2026-03-24
 **Proyecto**: TexCore — Sistema de gestión de órdenes de producción Textil

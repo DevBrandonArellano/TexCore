@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): código nulo / motivo y rechazo exitoso / rechazo fallido / un motivo
+ *   escrito.
+ * - Caja blanca (CB): ramas de error — motivo y rechazo exitoso / rechazo fallido.
+ */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

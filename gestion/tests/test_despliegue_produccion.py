@@ -7,7 +7,7 @@ tiene (`redis`, `web`, `scanning_service`, `printing_service`) y esperaban a SQL
 con un `DB_PASSWORD` que nunca cargaban: un despliegue nuevo fallaba en el paso 2. Al
 ejemplo de `.env.prod` le faltaban variables obligatorias del compose.
 
-El CD (`.github/workflows/cd.yml`) reescribía el `.env` del servidor solo con 9 variables:
+El CD (el `cd.yml` de GitHub Actions, retirado) reescribía el `.env` del servidor solo con 9 variables:
 faltaban los secretos de scanning y reporting, `TRAZABILIDAD_BASE_URL` y `MSSQL_PID`
 (producción quedaba con la edición Developer). Además respaldaba `backend:latest` y
 `nginx:latest`, etiquetas que no existen porque el compose usa `TAG=<SHA>`, así que el
@@ -26,19 +26,22 @@ no migra al iniciar; el despliegue respalda la base, aplica `preparar_bd.sh` con
 nueva y recién entonces levanta los servicios. Un rollback de imagen ya no encuentra un
 esquema migrado a medias. Desarrollo sigue migrando al arrancar.
 
-Release en `master` (Fases 3 y 4): `release.yml` reemplaza a `cd.yml`. Corre el CI completo,
-construye las 6 imágenes desde cero, las escanea, atestigua y firma, las prueba en un
-staging efímero con pruebas de humo y, con aprobación, las despliega por digest desde el
-runner propio del servidor (sin SSH). El rollback usa el mismo runner.
+Release en `master` (Fases 3 y 4): el `.gitlab-ci.yml` corre el CI completo, construye las
+6 imágenes desde cero hacia el GitLab Container Registry, las escanea, atestigua y firma con
+cosign, las prueba en un staging efímero con pruebas de humo y, con un clic manual de un
+Maintainer, las despliega por digest desde el runner propio del servidor (sin SSH). El
+rollback es otro job manual del mismo pipeline y usa el mismo runner. GitLab es la
+plataforma principal (ADR-014); GitHub Actions se retiró y GitHub queda como espejo.
 
 Las pruebas leen los archivos; el despliegue real se verifica con el stack en el equipo
 con Docker.
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): servicio del compose / inexistente; variable
-  obligatoria / opcional / sin uso.
+  obligatoria / opcional / sin uso; job automático / manual; imagen fijada por digest / no.
 """
 
+import json
 import os
 import re
 import stat
@@ -60,8 +63,9 @@ COMPOSE_DEV = BASE / "infrastructure" / "docker" / "docker-compose.yml"
 ENTRYPOINT = BASE / "infrastructure" / "docker" / "entrypoint.sh"
 PREPARAR_BD = BASE / "infrastructure" / "docker" / "preparar_bd.sh"
 RESPALDAR_BD = BASE / "scripts" / "respaldar_bd.sh"
-WORKFLOW_CI = BASE / ".github" / "workflows" / "ci.yml"
-DEPENDABOT = BASE / ".github" / "dependabot.yml"
+GITLAB_CI = BASE / ".gitlab-ci.yml"
+RENOVATE = BASE / "renovate.json"
+GITHUB = BASE / ".github"
 # Dockerfiles de las imágenes que se despliegan (las 6 del compose de producción).
 DOCKERFILES_PRODUCCION = {
     "backend": BASE / "infrastructure" / "docker" / "Dockerfile.prod",
@@ -72,11 +76,8 @@ DOCKERFILES_PRODUCCION = {
     "reporting_excel": BASE / "reporting_excel" / "Dockerfile",
 }
 SATELITES = ("printing", "scanning", "reporting_excel")
-WORKFLOWS = BASE / ".github" / "workflows"
-WORKFLOW_RELEASE = WORKFLOWS / "release.yml"
 DESPLEGAR_RELEASE = BASE / "scripts" / "desplegar_release.sh"
 STAGING_EFIMERO = BASE / "scripts" / "staging_efimero.sh"
-WORKFLOW_ROLLBACK = BASE / ".github" / "workflows" / "rollback.yml"
 
 # `docker compose ... <subcomando> [opciones] servicio...`
 _COMANDO = re.compile(r"docker compose\b(?P<resto>[^\n]*)")
@@ -183,55 +184,85 @@ class EjemploEnvProduccionTest(SimpleTestCase):
         self.assertEqual(_variables_del_ejemplo() - obligatorias - opcionales, set())
 
 
-def _workflow(ruta: Path) -> dict:
-    datos = yaml.safe_load(ruta.read_text(encoding="utf-8"))
-    datos["on"] = datos.pop(True, datos.get("on"))  # PyYAML lee la clave `on` como True
-    return datos
+def _pipeline() -> dict:
+    return yaml.safe_load(GITLAB_CI.read_text(encoding="utf-8"))
 
 
-def _pasos_run(trabajo: dict) -> str:
-    return "\n".join(paso.get("run", "") for paso in trabajo.get("steps", []))
+def _script(trabajo: dict) -> str:
+    """Todo lo que el job ejecuta: `before_script`, `script` y `after_script`."""
+    partes = []
+    for clave in ("before_script", "script", "after_script"):
+        partes.extend(str(linea) for linea in trabajo.get(clave, []))
+    return "\n".join(partes)
+
+
+def _imagen(trabajo: dict) -> str | None:
+    imagen = trabajo.get("image")
+    return imagen.get("name") if isinstance(imagen, dict) else imagen
+
+
+def _reglas(trabajo: dict) -> str:
+    return " ".join(str(r) for r in trabajo.get("rules", []))
 
 
 class ReleaseTest(SimpleTestCase):
-    def test_cd_dado_release_nuevo_cuando_se_busca_entonces_ya_no_existe(self):
-        self.assertFalse((WORKFLOWS / "cd.yml").exists())
-        self.assertFalse(
-            re.search(r"appleboy/ssh-action", "".join(p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml")))
-        )
+    def test_github_actions_dado_gitlab_principal_cuando_se_busca_entonces_ya_no_hay_workflows(self):
+        # ADR-014: un único pipeline. Dos pipelines divergieron antes (A-1 del plan del 5-oct).
+        self.assertEqual(list((GITHUB / "workflows").glob("*.y*ml")) if (GITHUB / "workflows").exists() else [], [])
+        self.assertFalse((GITHUB / "dependabot.yml").exists())
+        self.assertNotIn("appleboy/ssh-action", GITLAB_CI.read_text(encoding="utf-8"))
+
+    def test_pipeline_dado_la_tesis_cuando_se_lee_entonces_define_las_etapas_de_la_5_3(self):
+        self.assertEqual(_pipeline()["stages"], ["lint", "test", "build", "scan", "staging", "deploy", "rollback"])
 
     def test_release_dado_merge_a_master_cuando_dispara_entonces_corre_el_ci_completo(self):
-        release = _workflow(WORKFLOW_RELEASE)
-        self.assertEqual(release["on"], {"push": {"branches": ["master"]}})
-        self.assertIn("workflow_call", _workflow(WORKFLOW_CI)["on"])
-        self.assertEqual(release["jobs"]["ci"]["uses"], "./.github/workflows/ci.yml")
+        trabajos = _pipeline()
+        # Los jobs de lint y prueba corren en master y en las ramas; el release solo en master.
+        for nombre in ("lint:backend", "test:backend", "test:frontend", "audit:dependencias"):
+            with self.subTest(job=nombre):
+                self.assertNotIn('$CI_COMMIT_BRANCH == "master"', _reglas(trabajos[nombre]).replace("!=", "~"))
+        self.assertIn('$CI_COMMIT_BRANCH == "master"', _reglas(trabajos["build:imagenes"]))
+        self.assertIn("test:backend", trabajos["build:imagenes"]["needs"])
 
     def test_release_dado_build_cuando_construye_entonces_lo_hace_desde_cero_para_las_6_imagenes(self):
-        texto = WORKFLOW_RELEASE.read_text(encoding="utf-8")
-        build = _workflow(WORKFLOW_RELEASE)["jobs"]["build"]
-        nombres = {s["name"] for s in build["strategy"]["matrix"]["service"]}
+        build = _pipeline()["build:imagenes"]
+        nombres = {m["IMAGEN"] for m in build["parallel"]["matrix"]}
         self.assertEqual(nombres, set(_imagenes_del_compose().values()))
-        self.assertRegex(texto, r"no-cache: true")
-        self.assertRegex(texto, r"pull: true")
+        self.assertIn("--no-cache", _script(build))
+        self.assertIn("--pull", _script(build))
+        self.assertIn("$CI_REGISTRY_IMAGE", _script(build))
 
     def test_release_dado_imagenes_publicadas_cuando_las_certifica_entonces_atestigua_y_firma(self):
-        texto = WORKFLOW_RELEASE.read_text(encoding="utf-8")
-        self.assertIn("actions/attest-build-provenance@", texto)
-        self.assertIn("sigstore/cosign-installer@", texto)
-        self.assertRegex(texto, r"cosign sign --yes")
-        self.assertRegex(texto, r"cosign verify")
+        script = _script(_pipeline()["build:imagenes"])
+        self.assertIn("cosign sign --yes", script)
+        self.assertIn("cosign attest --yes", script)
+        self.assertIn("--type slsaprovenance", script)
+        self.assertIn("COSIGN_PRIVATE_KEY", script)
+        self.assertTrue((BASE / "cosign.pub").exists())
+        self.assertIn("cosign verify", _script(_pipeline()["deploy:produccion"]))
 
     def test_release_dado_staging_efimero_cuando_prueba_entonces_corre_humo_antes_de_aprobar(self):
-        trabajos = _workflow(WORKFLOW_RELEASE)["jobs"]
-        self.assertIn("scripts/staging_efimero.sh", _pasos_run(trabajos["staging"]))
+        trabajos = _pipeline()
+        self.assertIn("scripts/staging_efimero.sh", _script(trabajos["staging:efimero"]))
         self.assertIn("scripts/smoke_test.py", STAGING_EFIMERO.read_text(encoding="utf-8"))
-        self.assertIn("staging", trabajos["deploy"]["needs"])
+        self.assertIn("staging:efimero", trabajos["deploy:produccion"]["needs"])
+        self.assertEqual(trabajos["staging:efimero"]["environment"]["name"], "staging")
 
-    def test_release_dado_deploy_cuando_corre_entonces_usa_el_runner_propio_con_aprobacion(self):
-        deploy = _workflow(WORKFLOW_RELEASE)["jobs"]["deploy"]
-        self.assertEqual(deploy["runs-on"], ["self-hosted", "texcore-prod"])
+    def test_release_dado_deploy_cuando_corre_entonces_es_manual_solo_en_master_y_en_el_runner_propio(self):
+        deploy = _pipeline()["deploy:produccion"]
+        self.assertEqual(deploy["tags"], ["produccion"])
         self.assertEqual(deploy["environment"]["name"], "production")
-        self.assertIn("scripts/desplegar_release.sh", _pasos_run(deploy))
+        self.assertEqual(deploy["environment"]["url"], "https://$PRODUCCION_HOST")
+        self.assertIn("scripts/desplegar_release.sh", _script(deploy))
+        self.assertIn('$CI_COMMIT_BRANCH == "master"', _reglas(deploy))
+        self.assertIn("manual", _reglas(deploy))
+
+    def test_rollback_dado_un_clic_cuando_se_lanza_entonces_es_manual_en_el_runner_propio(self):
+        rollback = _pipeline()["rollback:produccion"]
+        self.assertEqual(rollback["tags"], ["produccion"])
+        self.assertEqual(rollback["environment"]["name"], "production")
+        self.assertIn("manual", _reglas(rollback))
+        self.assertIn('$CI_COMMIT_BRANCH == "master"', _reglas(rollback))
 
     def test_desplegar_release_dado_version_nueva_cuando_corre_entonces_respalda_migra_y_luego_levanta(self):
         texto = DESPLEGAR_RELEASE.read_text(encoding="utf-8")
@@ -252,17 +283,36 @@ class ReleaseTest(SimpleTestCase):
                 self.assertIn(f"{servicio}:{imagen}", texto)
 
     def test_rollback_dado_runner_propio_cuando_revierte_entonces_no_reescribe_env_y_espera_salud(self):
-        rollback = _workflow(WORKFLOWS / "rollback.yml")["jobs"]["execute-rollback"]
-        self.assertEqual(rollback["runs-on"], ["self-hosted", "texcore-prod"])
-        script = _pasos_run(rollback)
+        script = _script(_pipeline()["rollback:produccion"])
         self.assertNotRegex(script, r"sed -i[^\n]*\.env\b")
         self.assertRegex(script, r"up -d [^\n]*--wait\b")
+        self.assertIn("cosign verify", script)
 
-    def test_workflows_dado_host_de_produccion_cuando_lo_usan_entonces_sale_de_una_sola_variable(self):
+    def test_rollback_dado_motivo_escrito_por_una_persona_cuando_se_registra_entonces_llega_por_variable(self):
+        # El motivo lo escribe quien lanza el rollback: nunca se interpola dentro del script.
+        script = _script(_pipeline()["rollback:produccion"])
+        self.assertIn('"$ROLLBACK_MOTIVO"', script)
+        self.assertNotRegex(script, r"\$\{?\{?\s*ROLLBACK_MOTIVO[^\"\n]*\$\(")
+
+    def test_pipeline_dado_host_de_produccion_cuando_lo_usa_entonces_sale_de_una_sola_variable(self):
         # M-5: el health check usaba secrets.ALLOWED_HOSTS y el environment vars.ALLOWED_HOSTS.
-        texto = "".join(p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml"))
-        self.assertNotRegex(texto, r"(secrets|vars)\.ALLOWED_HOSTS")
-        self.assertIn("vars.PRODUCCION_HOST", texto)
+        texto = GITLAB_CI.read_text(encoding="utf-8")
+        self.assertNotRegex(texto, r"\$\{?ALLOWED_HOSTS")
+        self.assertIn("$PRODUCCION_HOST", texto)
+
+    def test_pipeline_dado_el_runner_de_produccion_cuando_corre_entonces_solo_en_ramas_protegidas(self):
+        # Los jobs con etiqueta `produccion` o `staging` tocan el socket de Docker del host:
+        # solo corren en master o staging, nunca en una rama de feature ni en un MR.
+        for nombre, trabajo in _pipeline().items():
+            if isinstance(trabajo, dict) and set(trabajo.get("tags", [])) & {"produccion", "staging"}:
+                with self.subTest(job=nombre):
+                    self.assertIn("$CI_COMMIT_BRANCH", _reglas(trabajo))
+                    self.assertNotIn("merge_request_event", _reglas(trabajo))
+
+    def test_pipeline_dado_el_politica_de_ramas_cuando_hay_mr_a_master_entonces_solo_acepta_staging(self):
+        regla = _pipeline()["ramas:politica"]
+        self.assertIn('$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"', _reglas(regla))
+        self.assertIn('"staging"', _script(regla))
 
 
 class UnicoCaminoDespliegueTest(SimpleTestCase):
@@ -340,26 +390,34 @@ class ContenedoresEndurecidosTest(SimpleTestCase):
                 self.assertNotIn("msodbcsql", DOCKERFILES_PRODUCCION[servicio].read_text(encoding="utf-8"))
 
     def test_ci_dado_sql_server_de_pruebas_cuando_corre_entonces_usa_una_cu_fija(self):
-        imagenes = re.findall(
-            r"image:\s*(mcr\.microsoft\.com/mssql/server\S*)", WORKFLOW_CI.read_text(encoding="utf-8")
-        )
+        imagenes = re.findall(r"name:\s*(mcr\.microsoft\.com/mssql/server\S*)", GITLAB_CI.read_text(encoding="utf-8"))
         self.assertTrue(imagenes)
         for imagen in imagenes:
             with self.subTest(imagen=imagen):
                 self.assertNotIn("latest", imagen)
                 self.assertRegex(imagen, r"@sha256:[0-9a-f]{64}$")
 
-    def test_dependabot_dado_imagenes_fijadas_cuando_revisa_entonces_cubre_cada_dockerfile(self):
-        config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
-        directorios = {
-            d
-            for u in config["updates"]
-            if u["package-ecosystem"] == "docker"
-            for d in u.get("directories", [u.get("directory")])
+    def test_ci_dado_imagenes_de_los_jobs_cuando_corren_entonces_estan_fijadas_por_digest(self):
+        # Evita el vector de `trivy:latest` (CVE-2026-33634): ninguna imagen de job es mutable.
+        # La imagen de herramientas `texcore/ci-tools` se construye en el propio equipo del runner.
+        pipeline = _pipeline()
+        imagenes = {_imagen(pipeline["default"])} | {
+            _imagen(t) for t in pipeline.values() if isinstance(t, dict) and _imagen(t)
         }
-        for servicio, dockerfile in DOCKERFILES_PRODUCCION.items():
-            with self.subTest(servicio=servicio):
-                self.assertIn("/" + str(dockerfile.parent.relative_to(BASE)), directorios)
+        imagenes.discard(None)
+        self.assertTrue(imagenes)
+        for imagen in imagenes:
+            with self.subTest(imagen=imagen):
+                if not imagen.startswith("texcore/ci-tools:"):
+                    self.assertRegex(imagen, r"@sha256:[0-9a-f]{64}$")
+
+    def test_renovate_dado_imagenes_fijadas_cuando_revisa_entonces_cubre_dockerfiles_compose_y_pipeline(self):
+        config = json.loads(RENOVATE.read_text(encoding="utf-8"))
+        self.assertEqual(config["baseBranches"], ["staging"])
+        for gestor in ("dockerfile", "docker-compose", "gitlabci", "pip_requirements", "npm"):
+            with self.subTest(gestor=gestor):
+                self.assertIn(gestor, config["enabledManagers"])
+        self.assertTrue(config["dockerfile"]["pinDigests"] if "dockerfile" in config else config["pinDigests"])
 
 
 def _entorno_backend(compose: Path) -> dict:
@@ -447,14 +505,19 @@ class MigracionesFueraDelArranqueTest(SimpleTestCase):
 
 
 class GobiernoTest(SimpleTestCase):
-    """Fase 6 del plan de CI/CD: Scorecard, métricas DORA y política de seguridad."""
+    """Fase 6 del plan de CI/CD: métricas DORA, auditoría semanal y política de seguridad."""
 
-    def test_gobierno_dado_rama_por_defecto_cuando_corre_semanal_entonces_mide_scorecard_y_dora(self):
-        gobierno = _workflow(WORKFLOWS / "gobierno.yml")
-        self.assertIn("schedule", gobierno["on"])
-        texto = (WORKFLOWS / "gobierno.yml").read_text(encoding="utf-8")
-        self.assertRegex(texto, r"ossf/scorecard-action@[0-9a-f]{40}")
-        self.assertIn("scripts/metricas_dora.py", texto)
+    def test_gobierno_dado_pipeline_programado_cuando_corre_semanal_entonces_mide_dora(self):
+        dora = _pipeline()["gobierno:dora"]
+        self.assertIn('$CI_PIPELINE_SOURCE == "schedule"', _reglas(dora))
+        self.assertIn("scripts/metricas_dora.py", _script(dora))
+        self.assertIn("GITLAB_TOKEN", _script(dora))
+
+    def test_seguridad_dado_pipeline_programado_cuando_corre_semanal_entonces_audita_dependencias_y_contenedores(self):
+        trabajos = _pipeline()
+        for nombre in ("seguridad:dependencias", "seguridad:contenedores"):
+            with self.subTest(job=nombre):
+                self.assertIn('$CI_PIPELINE_SOURCE == "schedule"', _reglas(trabajos[nombre]))
 
     def test_security_md_dado_politica_cuando_se_lee_entonces_cubre_reporte_rotacion_y_revision(self):
         texto = (BASE / "SECURITY.md").read_text(encoding="utf-8")

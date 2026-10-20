@@ -1,13 +1,16 @@
 """
 Métricas DORA (Fase 6 del plan de CI/CD) calculadas desde los despliegues del environment
-`production` de GitHub y las ejecuciones de `rollback.yml`.
+`production` de GitLab y los jobs `rollback:produccion`.
 
-Se prueba el cálculo puro de `scripts/metricas_dora.py`; la descarga de la API de GitHub
-solo arma esas listas.
+Se prueba el cálculo puro de `scripts/metricas_dora.py` y la traducción de las respuestas de
+la API de GitLab; la petición HTTP en sí solo arma esas listas.
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): despliegue exitoso / fallido; con y sin rollback.
 - Análisis de valor límite (BVA): periodo sin despliegues; un único despliegue.
+- Partición de equivalencia (EP) en la API de GitLab: despliegue con `success` / `failed` /
+  en curso o cancelado; con el commit en el propio despliegue / sin él; job de rollback
+  exitoso / de otro nombre / fuera del periodo.
 """
 
 import importlib.util
@@ -66,3 +69,44 @@ class MetricasDoraTest(SimpleTestCase):
         m = dora.calcular_metricas([_despliegue(1, exito=False)], [], periodo_dias=28)
         self.assertEqual(m.tasa_fallos, 1.0)
         self.assertIsNone(m.mttr_horas)
+
+
+class ApiGitLabTest(SimpleTestCase):
+    def _despliegue_api(self, estado, creado="2026-10-02T12:00:00.000Z", commit="2026-10-01T12:00:00.000Z"):
+        d = {"id": 7, "status": estado, "created_at": creado, "sha": "abc123"}
+        if commit:
+            d["deployable"] = {"commit": {"committed_date": commit}}
+        return d
+
+    def test_despliegue_dado_success_con_commit_cuando_se_traduce_entonces_exitoso_con_su_fecha(self):
+        d = dora.despliegue_de_gitlab(self._despliegue_api("success"), fecha_commit=None)
+        self.assertTrue(d.exitoso)
+        self.assertEqual(d.creado - d.fecha_commit, timedelta(days=1))
+
+    def test_despliegue_dado_failed_cuando_se_traduce_entonces_no_exitoso(self):
+        d = dora.despliegue_de_gitlab(self._despliegue_api("failed"), fecha_commit=None)
+        self.assertFalse(d.exitoso)
+
+    def test_despliegue_dado_en_curso_o_cancelado_cuando_se_traduce_entonces_no_cuenta(self):
+        for estado in ("running", "created", "blocked", "canceled"):
+            with self.subTest(estado=estado):
+                self.assertIsNone(dora.despliegue_de_gitlab(self._despliegue_api(estado), fecha_commit=None))
+
+    def test_despliegue_dado_sin_commit_en_la_respuesta_cuando_se_traduce_entonces_usa_el_que_se_le_da(self):
+        fecha = datetime(2026, 10, 1, 6, 0, tzinfo=UTC)
+        d = dora.despliegue_de_gitlab(self._despliegue_api("success", commit=None), fecha_commit=fecha)
+        self.assertEqual(d.fecha_commit, fecha)
+
+    def test_despliegue_dado_sin_ninguna_fecha_de_commit_cuando_se_traduce_entonces_pide_el_commit(self):
+        self.assertTrue(dora.necesita_commit(self._despliegue_api("success", commit=None)))
+        self.assertFalse(dora.necesita_commit(self._despliegue_api("success")))
+
+    def test_rollbacks_dado_jobs_cuando_se_filtran_entonces_solo_los_exitosos_del_periodo(self):
+        desde = datetime(2026, 10, 1, tzinfo=UTC)
+        jobs = [
+            {"name": "rollback:produccion", "status": "success", "created_at": "2026-10-05T10:00:00.000Z"},
+            {"name": "rollback:produccion", "status": "failed", "created_at": "2026-10-06T10:00:00.000Z"},
+            {"name": "deploy:produccion", "status": "success", "created_at": "2026-10-07T10:00:00.000Z"},
+            {"name": "rollback:produccion", "status": "success", "created_at": "2026-09-01T10:00:00.000Z"},
+        ]
+        self.assertEqual(dora.rollbacks_de_gitlab(jobs, desde), [datetime(2026, 10, 5, 10, 0, tzinfo=UTC)])

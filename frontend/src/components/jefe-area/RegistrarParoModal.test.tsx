@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el modal abierto / sin categoria seleccionada / categoria seleccionada e
+ *   inicio valido / un error del backend.
+ * - Caja blanca (CB): ramas de error — un error del backend.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

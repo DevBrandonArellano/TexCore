@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): productos / un producto seleccionado / click en el trigger / texto de
+ *   busqueda por codigo / texto de busqueda por descripcion sin tildes.
+ * - Análisis de valores límite (BVA): busqueda sin resultados.
+ */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';

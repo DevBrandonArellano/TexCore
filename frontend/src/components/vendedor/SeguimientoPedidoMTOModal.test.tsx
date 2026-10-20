@@ -1,9 +1,17 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un pedido nulo / un pedido sin cliente numero ni guia / un pedido sin
+ *   detalles / un renglon fabricado / un pedido anulado.
+ * - Transición de estados (STT): un pedido anulado / un renglon pendiente.
+ * - Caja blanca (CB): ramas de error — el backend rechaza generar la OP.
+ */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { SeguimientoPedidoMTOModal } from './SeguimientoPedidoMTOModal';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+
 import { parcial } from '../../testing/parcial';
 import { type PedidoVenta } from '../../lib/types';
 

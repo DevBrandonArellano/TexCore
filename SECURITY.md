@@ -17,21 +17,22 @@ Solo recibe correcciones la versión desplegada desde `master`. Las ramas de tra
 | Media (4,0–6,9) | 5 días hábiles | 30 días |
 | Baja (< 4,0) | 10 días hábiles | siguiente release |
 
-- La corrección entra por el flujo normal (PR a `staging` → PR a `master`), con su prueba de regresión, y queda registrada en `CHANGELOG.md` y en `docs/requerimientos/REGISTRO_RIESGOS.md`. Si la vulnerabilidad se está explotando, se aplica primero el rollback (`rollback.yml`) o la mitigación en nginx.
+- La corrección entra por el flujo normal (MR a `staging` → MR a `master`), con su prueba de regresión, y queda registrada en `CHANGELOG.md` y en `docs/requerimientos/REGISTRO_RIESGOS.md`. Si la vulnerabilidad se está explotando, se aplica primero el rollback (`rollback:produccion`) o la mitigación en nginx.
 
 ## Controles automáticos
 
 | Control | Dónde | Bloquea |
 |---|---|---|
-| Ruff (reglas `S`), Semgrep, mypy, detect-secrets | `ci.yml` | El merge |
-| pip-audit (4 servicios) y npm audit | `ci.yml`, `security.yml` | El merge / aviso semanal |
-| Trivy sobre las 6 imágenes | `release.yml`, `security.yml` | El despliegue |
-| actionlint y zizmor (seguridad de los workflows) | `ci.yml` | El merge |
-| Firma keyless (cosign) y procedencia SLSA, verificadas en el servidor | `release.yml` | El despliegue |
-| OpenSSF Scorecard y métricas DORA | `gobierno.yml` (semanal) | — (seguimiento) |
-| Dependabot (actions, pip, npm, imágenes base por digest) | `.github/dependabot.yml` | — (PR semanales) |
+| Ruff (reglas `S`), Semgrep, mypy, detect-secrets | `.gitlab-ci.yml` (`lint:backend`, `sast:semgrep`) | El merge |
+| pip-audit (4 servicios) y npm audit | `audit:*` y `seguridad:*` | El merge / aviso semanal |
+| Trivy sobre las 6 imágenes | `scan:trivy`, `seguridad:contenedores` | El despliegue |
+| yamllint y shellcheck (el pipeline y los scripts) | `lint:pipeline` | El merge |
+| Convención de pruebas ISTQB y rutas públicas fuera de la lista blanca (RNF-02) | `lint:istqb`, `lint:permisos` | El merge |
+| Firma con clave (cosign) y procedencia SLSA, verificadas en el servidor | `build:imagenes`, `deploy:produccion` | El despliegue |
+| Métricas DORA | `gobierno:dora` (semanal) | — (seguimiento) |
+| Renovate (pip, npm, imágenes base por digest, el pipeline) | `dependencias:renovate` y `renovate.json` | — (MR semanales a `staging`) |
 
-Las excepciones (`# noqa`, `# nosemgrep`, ignores de zizmor, entradas auditadas de detect-secrets) llevan su motivo en el mismo lugar y se revisan cada trimestre.
+Las excepciones (`# noqa`, `# nosemgrep`, entradas auditadas de detect-secrets) llevan su motivo en el mismo lugar y se revisan cada trimestre.
 
 ## Rotación de secretos
 
@@ -53,8 +54,8 @@ Los secretos de la aplicación viven solo en `.env.prod` del servidor (permisos 
 
 Cada trimestre (enero, abril, julio y octubre), el responsable del sistema:
 
-1. Revisa los resultados de Scorecard y de las métricas DORA de `gobierno.yml` y anota las acciones en el backlog.
-2. Actualiza las versiones fijadas que Dependabot no cubre: actionlint, zizmor, Ruff, Semgrep, Trivy y detect-secrets en `ci.yml`, `security.yml` y `.pre-commit-config.yaml`.
-3. Revisa cada excepción vigente de los linters y escáneres y retira las que ya no aplican (por ejemplo, la de `self-repository` en `.github/zizmor.yml`, cuando actionlint acepte la sintaxis `$/`).
+1. Revisa las métricas DORA de `gobierno:dora` y anota las acciones en el backlog.
+2. Actualiza las versiones fijadas que Renovate no cubre: Ruff, Semgrep, Trivy, cosign y detect-secrets en `.gitlab-ci.yml`, `infrastructure/gitlab/Dockerfile.ci-tools` y `.pre-commit-config.yaml`. Rota además el par de claves de cosign y el token de GitLab (`GUIA_GITLAB.md` §7).
+3. Revisa cada excepción vigente de los linters y escáneres y retira las que ya no aplican.
 4. Mide el tiempo del pipeline (CI y release) y corrige los pasos que más crecieron.
 5. Prueba una restauración del respaldo (`GUIA_DESPLIEGUE.md` §4.3) y un rollback en el staging efímero.

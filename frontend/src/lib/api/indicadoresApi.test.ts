@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): área / usuario / la lista de vendedores.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { indicadoresApi } from './indicadoresApi';
 

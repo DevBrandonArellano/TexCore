@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): valor vacio o nulo / solo espacios / fecha con T sin timezone / fecha con
+ *   T y Z / fecha con T y offset explicito.
+ * - Análisis de valores límite (BVA): valor vacio o nulo / lista vacia / cartera vencida en cero / cartera
+ *   vencida negativa.
+ */
 import { describe, it, expect } from 'vitest';
 import {
   parseFechaPedido, calculateItemsTotal, calcularDiasMora,

@@ -2,7 +2,7 @@ import logging
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
-from django.db.models import Count, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models import Count, Exists, IntegerField, OuterRef, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -18,7 +18,13 @@ from gestion.models import (
     PedidoVenta,
     Sede,
 )
-from gestion.permissions import IsSupervisorProduccion, IsSystemAdmin, es_jefe_area_de_linea, filtrar_por_sede
+from gestion.permissions import (
+    GRUPOS_TODAS_LAS_SEDES,
+    IsSupervisorProduccion,
+    IsSystemAdmin,
+    es_jefe_area_de_linea,
+    filtrar_por_sede,
+)
 from gestion.serializers import (
     AreaSerializer,
     CustomUserSerializer,
@@ -44,8 +50,16 @@ class GroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
 
 class SedeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
+        # OWASP API1: quien no ve todas las sedes solo ve la suya (con sus conteos); sin
+        # sede no ve ninguna. Es la regla de `ve_todas_las_sedes`, pero como subconsulta
+        # EXISTS de la misma consulta: el panel de Jefe de Planta no suma consultas.
+        sedes = Sede.objects.all()
+        user = self.request.user
+        if not user.is_superuser:
+            ve_todas = Exists(user.groups.filter(name__in=GRUPOS_TODAS_LAS_SEDES))
+            sedes = sedes.filter(Q(pk=user.sede_id) | ve_todas) if user.sede_id else sedes.filter(ve_todas)
         # Optimización: usando Subqueries en lugar de Count con JOINs (más eficiente para grandes volúmenes)
-        return Sede.objects.annotate(
+        return sedes.annotate(
             num_areas=Coalesce(
                 Subquery(Area.objects.filter(sede=OuterRef("pk")).values("sede").annotate(c=Count("id")).values("c")),
                 Value(0),

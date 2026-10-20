@@ -42,6 +42,7 @@ EXCLUIDAS = (
     re.compile(r"^api/health/$"),  # healthcheck de Docker
     re.compile(r"^api/(schema|docs)/$"),  # OpenAPI, herramienta de desarrollo
     re.compile(r"^api/(inventory/)?$"),  # raíz navegable del router
+    re.compile(r"^api/auth/verificar-sesion/$"),  # la consulta nginx (auth_request)
 )
 
 GRUPO = re.compile(r"\(\?P<[^>]+>(?:[^()]|\([^()]*\))*\)|<[^>]+>")

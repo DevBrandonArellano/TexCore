@@ -11,9 +11,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gestion.models import LoteProduccion
+from gestion.permissions import filtrar_lotes_de_sede
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication
 from internal_api.permissions import HasScope, IsInternalService
+from internal_api.views.reporting_views import resolve_sede_scope
 from inventory.models import StockBodega
 from inventory.utils import principal_primero, stock_vendible_del_lote
 
@@ -38,21 +40,30 @@ class ValidateLoteView(APIView):
             resource=codigo_barras[:64],  # Truncar por seguridad en logs
         )
 
-        try:
-            lote = LoteProduccion.objects.select_related("orden_produccion__producto_salida").get(
-                codigo_lote=codigo_barras
-            )
-        except LoteProduccion.DoesNotExist:
+        # OWASP API1: el scanning_service reenvía la sede del usuario que escaneó (nginx la
+        # verifica contra Django) o la trae el claim firmado del token. Sin sede (usuario que
+        # ve todas) no se acota. Un lote de otra sede responde igual que uno inexistente.
+        sede_id, error = resolve_sede_scope(request)
+        if error is not None:
+            return error
+        if sede_id is not None and not str(sede_id).isdigit():
+            return Response({"detail": "sede_id inválido."}, status=400)
+
+        lotes = LoteProduccion.objects.select_related("orden_produccion__producto_salida").filter(
+            codigo_lote=codigo_barras
+        )
+        stock = StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0)
+        if sede_id is not None:
+            lotes = filtrar_lotes_de_sede(lotes, sede_id)
+            stock = stock.filter(bodega__sede_id=sede_id)
+        # El código no es único entre sedes: sin acotar, el primero (antes, un 500).
+        lote = lotes.order_by("id").first()
+        if lote is None:
             return Response({"detail": "Lote no encontrado."}, status=404)
 
         # Filas vendibles con stock (todas salvo la merma vendible), la del producto del
         # lote primero: tomar la primera fila por lote devolvía a veces la merma.
-        filas = principal_primero(
-            stock_vendible_del_lote(
-                StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0), [lote]
-            ),
-            lote,
-        )
+        filas = principal_primero(stock_vendible_del_lote(stock, [lote]), lote)
         stock = filas[0] if filas else None
 
         op = lote.orden_produccion

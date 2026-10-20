@@ -11,7 +11,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gestion.models import Area, LoteProduccion, Maquina, OrdenProduccion, TransferenciaInterarea
-from gestion.permissions import IsJefePlantaOrAdmin, filtrar_por_sede, ve_todas_las_sedes
+from gestion.permissions import (
+    IsJefePlantaOrAdmin,
+    IsPanelEjecutivo,
+    filtrar_por_sede,
+    ve_todas_las_sedes,
+)
 from gestion.services.oee_service import OeeService
 from gestion.services.produccion_kpi_service import ProduccionKPIService
 from gestion.utils import PrintingService
@@ -23,6 +28,8 @@ logger = logging.getLogger("gestion.views")
 
 
 class KPIAreaView(APIView):
+    # Sin rol a propósito: quien no es admin solo ve los indicadores de su propia área
+    # (y sin área, 403), así que la autorización la da el área del usuario.
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -247,7 +254,7 @@ class KpiEjecutivoView(APIView):
     RUP — Caso de Uso: CU-EJ-01 Ver Resumen Ejecutivo
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         sede_id = self._parsear_sede(request)
@@ -308,7 +315,7 @@ class ProduccionResumenView(APIView):
     RUP — Caso de Uso: CU-EJ-02 Ver Resumen de Producción
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         sede_id = KpiEjecutivoView._parsear_sede(request)
@@ -342,7 +349,7 @@ class ProduccionTendenciaView(APIView):
     RUP — Caso de Uso: CU-EJ-03 Ver Tendencia de Producción
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         sede_id = KpiEjecutivoView._parsear_sede(request)
@@ -397,7 +404,7 @@ class ProduccionPorProductoView(APIView):
     RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         fecha_inicio, fecha_fin, error = _parsear_rango_fechas(request)
@@ -431,7 +438,7 @@ class ProduccionHistorialProductoView(APIView):
     RUP — Caso de Uso: CU-EJ-09 Ver Historial de Producción de un Producto
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         try:
@@ -463,7 +470,7 @@ class ProduccionPorProductoImprimirView(APIView):
     RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto (impresión)
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsPanelEjecutivo]
 
     def get(self, request):
         fecha_inicio, fecha_fin, error = _parsear_rango_fechas(request)

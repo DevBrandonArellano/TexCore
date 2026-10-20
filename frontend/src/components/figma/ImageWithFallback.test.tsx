@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un src y alt válidos / que la imagen falla al cargar / un className.
+ * - Caja blanca (CB): ramas de error — que la imagen falla al cargar.
+ */
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ImageWithFallback } from './ImageWithFallback';

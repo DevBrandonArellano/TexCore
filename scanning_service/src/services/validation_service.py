@@ -7,6 +7,7 @@ No conoce HTTP, no conoce FastAPI, no conoce SQLAlchemy.
 
 import logging
 
+from ..domain.models import AlcanceSede
 from ..repositories.base import ILoteRepository
 from ..schemas.validate import LoteInfo, ProductoLote, ValidateResponse
 
@@ -24,19 +25,25 @@ class LoteValidationService:
     def __init__(self, repository: ILoteRepository) -> None:
         self._repo = repository
 
-    def validate(self, codigo: str) -> ValidateResponse:
+    def validate(self, codigo: str, alcance: AlcanceSede) -> ValidateResponse:
         """
         Valida un código de lote escaneado.
 
         Args:
             codigo: Código del lote ya limpiado (strip) por el schema Pydantic.
+            alcance: Sede del usuario que escanea; un lote de otra sede no se encuentra.
 
         Returns:
             ValidateResponse con valid=True y datos del lote, o valid=False con razón.
         """
         logger.info("Iniciando validación de lote", extra={"sd": {"code": codigo[:8]}})
 
-        lote = self._repo.get_lote_by_codigo(codigo)
+        # Sin sede y sin ver todas, el usuario no ve ningún lote: ni se consulta a Django.
+        if alcance.sede_id is None and not alcance.ve_todas:
+            logger.warning("Usuario sin sede", extra={"sd": {"code": codigo[:8]}})
+            return ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
+
+        lote = self._repo.get_lote_by_codigo(codigo, alcance)
         if lote is None:
             logger.warning("Lote no encontrado", extra={"sd": {"code": codigo[:8]}})
             return ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")

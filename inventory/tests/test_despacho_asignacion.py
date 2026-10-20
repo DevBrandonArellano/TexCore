@@ -1,5 +1,11 @@
 """Caracterización de los pasos de ProcessDespachoAPIView._procesar extraídos por C901:
-asignación de cada lote a un pedido y filas que salen del lote escaneado."""
+asignación de cada lote a un pedido y filas que salen del lote escaneado.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): lote reservado mto / varios pedidos / excedente escaneado / producto que
+  ningun pedido pidio / codigo inexistente.
+- Análisis de valores límite (BVA): excedente escaneado.
+"""
 
 from decimal import Decimal
 from types import SimpleNamespace as NS

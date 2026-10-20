@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP), clase válida: el rol admin de sede.
+ */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AdminSedeDashboard } from './AdminSedeDashboard';

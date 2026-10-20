@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una fecha / fecha fin en el pasado y estado no finalizada / fecha fin hoy
+ *   y estado no finalizada / orden finalizada / sin fecha fin planificada.
+ * - Análisis de valores límite (BVA): justificacion vacia / campos opcionales vacios / fechas vacias /
+ *   formulario vacio en modo creacion.
+ * - Transición de estados (STT): fecha fin en el pasado y estado no finalizada / fecha fin hoy y estado no
+ *   finalizada / orden finalizada / estado %s.
+ */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import {

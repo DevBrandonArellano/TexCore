@@ -1,3 +1,8 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): cada rol / usuario anonimo.
+"""
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase

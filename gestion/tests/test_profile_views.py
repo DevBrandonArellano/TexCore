@@ -95,3 +95,47 @@ class UserProfileViewTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["role"], "bodeguero")
         self.assertEqual(resp.data["user"]["username"], user.username)
+
+
+class VerificarSesionViewTestCase(TestCase):
+    """
+    `GET /api/auth/verificar-sesion/` lo consulta nginx (`auth_request`) antes de pasar
+    una petición al scanning_service, que no autentica usuarios (OWASP API2). Responde
+    204 con la sede del usuario en cabeceras, que nginx reenvía al servicio (API1).
+    Técnicas ISTQB: EP (anónimo / cookie inválida / usuario de una sede / sin sede /
+    usuario que ve todas las sedes).
+    """
+
+    URL = "/api/auth/verificar-sesion/"
+
+    def _con_cookie(self, user):
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        client = APIClient()
+        client.cookies["access_token"] = str(AccessToken.for_user(user))
+        return client
+
+    def test_verificar_dado_anonimo_cuando_consulta_entonces_401(self):
+        self.assertEqual(APIClient().get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_verificar_dado_cookie_invalida_cuando_consulta_entonces_401(self):
+        client = APIClient()
+        client.cookies["access_token"] = "no-es-un-jwt"
+        self.assertEqual(client.get(self.URL).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_verificar_dado_usuario_de_una_sede_cuando_consulta_entonces_204_con_su_sede(self):
+        user = CustomUserFactory(groups=["despacho"])
+        resp = self._con_cookie(user).get(self.URL)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp["X-Texcore-Sede-Id"], str(user.sede_id))
+        self.assertEqual(resp["X-Texcore-Ve-Todas"], "0")
+
+    def test_verificar_dado_usuario_sin_sede_cuando_consulta_entonces_sede_vacia(self):
+        resp = self._con_cookie(CustomUserFactory(sede=None, groups=["despacho"])).get(self.URL)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp["X-Texcore-Sede-Id"], "")
+        self.assertEqual(resp["X-Texcore-Ve-Todas"], "0")
+
+    def test_verificar_dado_ejecutivo_cuando_consulta_entonces_ve_todas(self):
+        resp = self._con_cookie(CustomUserFactory(groups=["ejecutivo"])).get(self.URL)
+        self.assertEqual(resp["X-Texcore-Ve-Todas"], "1")

@@ -1,6 +1,10 @@
 """
 Tests unitarios para src/schemas/report_params.py.
 EP + BVA sobre validadores Pydantic de cada schema.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): parametros minimos / formato csv / formato invalido / todos los campos /
+  fechas validas.
 """
 
 from datetime import date

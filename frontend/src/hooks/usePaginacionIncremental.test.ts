@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): montaje / bloque cargado / la última página del bloque / salto a una
+ *   página lejana / el último bloque.
+ * - Caja blanca (CB): ramas de error — error sin respuesta / 400 con error de campo.
+ */
 import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { usePaginacionIncremental } from './usePaginacionIncremental';

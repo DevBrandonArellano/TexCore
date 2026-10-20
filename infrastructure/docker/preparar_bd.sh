@@ -5,7 +5,7 @@
 #
 # Desarrollo lo ejecuta en cada arranque (entrypoint.sh). Producción lo ejecuta una sola
 # vez por despliegue, después del respaldo y antes de levantar la versión nueva
-# (scripts/deploy_production.sh, .github/workflows/release.yml).
+# (scripts/deploy_production.sh, .gitlab-ci.yml).
 set -e
 
 echo "Ensuring database exists..."

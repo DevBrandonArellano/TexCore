@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): open en false / open en true y movimientoId / movimientoId nulo / una
+ *   peticion en curso / sin registros de auditoria.
+ * - Caja blanca (CB): ramas de error — un error en la peticion.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

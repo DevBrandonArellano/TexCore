@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): carga inicial / sin transferencias / transferencias existentes / areaId /
+ *   error al cargar.
+ * - Caja blanca (CB): ramas de error — error al cargar / error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

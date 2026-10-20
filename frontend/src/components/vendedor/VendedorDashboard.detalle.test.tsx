@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que la carga inicial de datos falla con un error genérico / un pedido
+ *   pendiente / que la API rechaza la edición / el modal de edición abierto / el modal de anulación abierto.
+ * - Transición de estados (STT): un pedido pendiente / el modal de reversión de pago abierto.
+ * - Caja blanca (CB): ramas de error — que la carga inicial de datos falla con un error genérico / que la API
+ *   rechaza la edición / un error con data.detail.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

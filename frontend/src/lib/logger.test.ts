@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un mensaje info / un mensaje error / un mensaje critical / un mensaje
+ *   warning / un mensaje notice.
+ * - Análisis de valores límite (BVA): sin datos estructurados.
+ * - Caja blanca (CB): ramas de error — un mensaje error / que sendBeacon lanza excepcion.
+ */
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { createLogger, Severity } from './logger';
 

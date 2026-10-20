@@ -1,9 +1,17 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): pedido null / pedido cargado sin cambios / un cambio pero motivo menor a
+ *   10 caracteres / un cambio y motivo valido / marcar como pagado.
+ * - Análisis de valores límite (BVA): un cambio pero motivo menor a 10 caracteres.
+ * - Caja blanca (CB): ramas de error — error sin detalle.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditarPedidoModal } from './EditarPedidoModal';
-import type { PedidoVenta } from '../../lib/types';
+import type { PedidoVenta } from '../../lib/types';
+
 import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora.

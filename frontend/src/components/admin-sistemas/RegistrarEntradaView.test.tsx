@@ -1,7 +1,15 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): campos obligatorios vacíos / datos completos y certificado / error del
+ *   servidor.
+ * - Análisis de valores límite (BVA): campos obligatorios vacíos.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { RegistrarEntradaView } from './RegistrarEntradaView';
+import { RegistrarEntradaView } from './RegistrarEntradaView';
+
 import { parcial } from '../../testing/parcial';
 import { type Producto } from '../../lib/types';
 

@@ -7,6 +7,11 @@ const logger = createLogger('texcore-axios');
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
+  // El backend exige el token CSRF en cada escritura hecha con la cookie JWT
+  // (CookieJWTAuthentication). Django lo deja en la cookie `csrftoken` al pedir el
+  // perfil o iniciar sesión; axios lo copia en la cabecera en peticiones al mismo origen.
+  xsrfCookieName: 'csrftoken',
+  xsrfHeaderName: 'X-CSRFToken',
 });
 
 apiClient.interceptors.response.use(

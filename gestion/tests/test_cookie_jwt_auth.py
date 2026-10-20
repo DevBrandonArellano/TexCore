@@ -71,3 +71,53 @@ class CookieJWTAuthenticationTestCase(TestCase):
         req = self._request_with_cookie(token_custom=token)
         user, _ = self.backend.authenticate(req)
         self.assertEqual(user, self.user)
+
+
+class CookieJWTCsrfTestCase(TestCase):
+    """
+    Zero Trust de la cookie (OWASP A01, NIST SP 800-207): el navegador envía la cookie
+    JWT sola en cualquier petición a la API, también desde otra página. Una escritura con
+    la cookie exige además el token CSRF en la cabecera `X-CSRFToken`; las lecturas no.
+    Técnicas ISTQB: EP (método seguro / inseguro, con token / sin token / token errado).
+    """
+
+    URL = "/api/token/logout/"
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.user = User.objects.create_user(username="csrf_user", password="x")
+        self.client = APIClient(enforce_csrf_checks=True)
+        self.client.cookies[COOKIE_NAME] = str(AccessToken.for_user(self.user))
+
+    def _token_csrf(self):
+        """El token que el front lee de la cookie `csrftoken` que fija la API."""
+        resp = self.client.get("/api/profile/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("csrftoken", resp.cookies)
+        return resp.cookies["csrftoken"].value
+
+    def test_escritura_dado_cookie_sin_token_csrf_cuando_post_entonces_403_con_motivo_legible(self):
+        resp = self.client.post(self.URL)
+        self.assertEqual(resp.status_code, 403)
+        self.assertNotIn("HttpResponse", str(resp.data))
+
+    def test_escritura_dado_token_csrf_errado_cuando_post_entonces_403(self):
+        self._token_csrf()
+        self.assertEqual(self.client.post(self.URL, HTTP_X_CSRFTOKEN="token-falso").status_code, 403)
+
+    def test_escritura_dado_cookie_y_token_csrf_cuando_post_entonces_no_es_403(self):
+        token = self._token_csrf()
+        self.assertNotEqual(self.client.post(self.URL, HTTP_X_CSRFTOKEN=token).status_code, 403)
+
+    def test_lectura_dado_cookie_sin_token_csrf_cuando_get_entonces_200(self):
+        self.assertEqual(self.client.get("/api/profile/").status_code, 200)
+
+    def test_login_dado_credenciales_validas_cuando_post_entonces_fija_la_cookie_csrf(self):
+        from rest_framework.test import APIClient
+
+        resp = APIClient(enforce_csrf_checks=True).post(
+            "/api/token/", {"username": "csrf_user", "password": "x"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("csrftoken", resp.cookies)

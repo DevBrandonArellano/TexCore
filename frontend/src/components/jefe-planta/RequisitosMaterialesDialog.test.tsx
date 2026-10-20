@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una orden / un material con stock suficiente / un material con stock
+ *   insuficiente / un químico ya descargado / advertencias del cálculo.
+ * - Caja blanca (CB): ramas de error — un error al consultar.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

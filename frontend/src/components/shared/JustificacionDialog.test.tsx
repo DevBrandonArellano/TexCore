@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): cerrado / 9 caracteres / 10 caracteres / solo espacios / justificación
+ *   válida y éxito.
+ * - Análisis de valores límite (BVA): 9 caracteres / 10 caracteres.
+ */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

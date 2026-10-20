@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): bodeguero con su bodega / bodeguero con bodega ajena / admin / catalogo de
+  productos / usuario con sede y sede ajena.
+"""
+
 from unittest.mock import patch
 
 import httpx

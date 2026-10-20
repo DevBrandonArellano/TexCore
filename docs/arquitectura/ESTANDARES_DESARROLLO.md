@@ -148,11 +148,11 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 
 ## 7. CI/CD y Calidad
 
-### Gates de calidad (`.github/workflows/ci.yml`)
+### Gates de calidad (`.gitlab-ci.yml`)
 
-Flujo de ramas: rama de trabajo → PR a `staging` → PR de `staging` a `master` (producción). `master` solo acepta
-PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasar el job `quality-gate` («Quality Gate · Barrera de Calidad»), que exige que pasen todos estos jobs:
-1. **Workflows**: `actionlint` y `zizmor`. Workflows válidos y sin hallazgos de seguridad: actions fijadas por SHA, sin inyección por plantillas, permisos mínimos.
+Flujo de ramas: rama de trabajo → MR a `staging` → MR de `staging` a `master` (producción). `master` solo acepta
+MR desde `staging` (job `ramas:politica`). Ningún MR puede fusionarse a `staging` o `master` sin que el pipeline termine en verde («Los pipelines deben tener éxito»), que exige estos jobs:
+1. **Pipeline y scripts**: `lint:pipeline` (yamllint del `.gitlab-ci.yml` y shellcheck de los scripts). Las imágenes de los jobs van fijadas por digest.
 2. **Lint y análisis estático del backend**:
    - **Ruff** en 0 sobre todo el Python del repo, con las reglas de `pyproject.toml`. Incluye las reglas de seguridad `S` (reemplazan a bandit), Django (`DJ`) y complejidad ciclomática ≤ 15 (`C901`). Detalle de la migración a Ruff: `CHANGELOG.md`, 5-oct-2026 (etapas 1 a 4) y 14-oct-2026 (etapa 5, el formateador).
    - **`ruff format --check`**: el formato lo decide el formateador, no cada quien. `ruff format .` deja el código como lo exige el gate; el espaciado y las líneas en blanco ya no se revisan con reglas de lint. Los Markdown están excluidos: sus bloques de código son fragmentos sueltos y el formateador les cambiaría el significado.
@@ -163,7 +163,9 @@ PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasa
 5. **Tests de los 3 microservicios**, cada uno con su umbral de cobertura.
 6. **SCA**: `pip-audit` (backend y microservicios) y `npm audit` del frontend sin vulnerabilidades conocidas.
 7. **Frontend**: `tsc --noEmit`, Vitest con sus umbrales de cobertura y el build de React.
-8. **En PRs hacia `master`**: la rama de origen es `staging` y las imágenes Docker se construyen.
+8. **Convención de pruebas ISTQB** (`lint:istqb`, `scripts/auditar_convencion_pruebas.py`): cada prueba sigue `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]` y cada archivo declara las técnicas que aplica.
+9. **Control de acceso** (`lint:permisos`, `scripts/auditar_permisos_backend.py`): ninguna ruta es pública fuera de la lista blanca.
+10. **En `staging` y `master`**: las imágenes Docker se construyen (`build:validacion` y `build:imagenes`).
 
 Una función que supera la complejidad 15 se divide en pasos con nombre (extraer métodos o servicios, SRP), cubiertos antes con pruebas de caracterización. No se excluye con `noqa` salvo que el motivo quede escrito.
 

@@ -62,3 +62,7 @@ graphify-out/.graphify_labels.json
 scratch/
 replace_modals.py
 _rsa_env_snippet.txt
+# GitLab autoalojado: certificados y variables locales
+infrastructure/gitlab/certs/
+infrastructure/gitlab/.env
+infrastructure/gitlab/secretos/

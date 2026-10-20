@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que carga / sin quimicos / quimicos existentes / un quimico sin alerta /
+ *   un quimico con alerta.
+ * - Caja blanca (CB): ramas de error — error en la peticion / error en la peticion de historial.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

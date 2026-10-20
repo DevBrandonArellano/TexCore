@@ -54,7 +54,7 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_c
         await test_engine.dispose()
 
 
-def test_get_session_factory_cuando_llama_entonces_retorna_la_fabrica_del_modulo():
+def test_get_session_factory_dado_modulo_inicializado_cuando_llama_entonces_retorna_la_fabrica_del_modulo():
     factory = get_session_factory()
     assert factory is engine_module._session_factory
 

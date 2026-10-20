@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un pedido pendiente / un pedido anulado / el modal de anulación / un
+ *   motivo menor a 10 caracteres / un motivo de 10 o más caracteres.
+ * - Análisis de valores límite (BVA): un motivo menor a 10 caracteres.
+ * - Transición de estados (STT): un pedido pendiente / un pedido anulado.
+ * - Caja blanca (CB): ramas de error — un error de la API.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

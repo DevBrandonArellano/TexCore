@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): ordenes existentes / una orden sin datos de bano / sin ordenes / error del
+ *   backend / un filtro de fecha desde.
+ * - Análisis de valores límite (BVA): una orden sin datos de bano.
+ * - Transición de estados (STT): seleccionar un estado.
+ * - Caja blanca (CB): ramas de error — error del backend / error al cargar descargas.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

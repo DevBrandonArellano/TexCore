@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import httpx
 
-from ..domain.models import Bodega, LineaStock, LoteProduccion, OrdenProduccion, Producto, StockBodega
+from ..domain.models import AlcanceSede, Bodega, LineaStock, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from .jwt_token_manager import JWTTokenManager
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class DjangoApiClient:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token_manager.get_valid_token()}"}
 
-    def get_lote_by_codigo(self, codigo: str) -> LoteProduccion | None:
+    def get_lote_by_codigo(self, codigo: str, alcance: AlcanceSede) -> LoteProduccion | None:
         # codigo viene tal cual del escáner: si alguien apunta por error al QR
         # de trazabilidad de la etiqueta en vez del código de barras, el valor
         # escaneado es una URL completa (con '/'). Sin codificar, esos '/'
@@ -45,8 +45,12 @@ class DjangoApiClient:
         # encuentra ese "código" y responde 404 (lote no válido), como
         # cualquier otro código inexistente.
         url = f"{self._base_url}/api/internal/v1/lotes/{quote(codigo, safe='')}/validate/"
+        # OWASP API1: la internal_api acota el lote y su stock a la sede del usuario.
+        if not alcance.ve_todas and alcance.sede_id is None:
+            return None
+        params = {} if alcance.ve_todas else {"sede_id": alcance.sede_id}
         try:
-            response = httpx.get(url, headers=self._headers(), timeout=5.0)
+            response = httpx.get(url, params=params, headers=self._headers(), timeout=5.0)
             self._error_count = 0  # reset en éxito
         except httpx.TimeoutException:
             self._error_count += 1

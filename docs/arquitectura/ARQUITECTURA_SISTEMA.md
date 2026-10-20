@@ -1408,108 +1408,108 @@ printing (independiente)
 
 ### 8.2 Estrategia de Imagenes Docker
 
-| Servicio | Registro | Tag |
+| Servicio | Imagen en el GitLab Container Registry | Tag |
 |----------|----------|-----|
-| backend | `ghcr.io/<owner>/texcore/backend:<SHA>` | SHA commit |
-| nginx | `ghcr.io/<owner>/texcore/nginx:<SHA>` | SHA commit |
-| scanning | `ghcr.io/<owner>/texcore/scanning_service:<SHA>` | SHA commit |
-| reporting_excel | `ghcr.io/<owner>/texcore/reporting_excel:<SHA>` | SHA commit |
-| printing | `ghcr.io/<owner>/texcore/printing_service:<SHA>` | SHA commit |
+| backend | `<host>:5050/<grupo>/texcore/backend:<SHA>` | SHA commit |
+| nginx | `<host>:5050/<grupo>/texcore/nginx:<SHA>` | SHA commit |
+| scanning | `<host>:5050/<grupo>/texcore/scanning_service:<SHA>` | SHA commit |
+| reporting_excel | `<host>:5050/<grupo>/texcore/reporting_excel:<SHA>` | SHA commit |
+| printing | `<host>:5050/<grupo>/texcore/printing_service:<SHA>` | SHA commit |
 
 Las imagenes son **inmutables por SHA** — el mismo SHA siempre corresponde al mismo binario. En el registro, `latest` apunta a la ultima imagen publicada. En el servidor, antes de cada deploy, el CD etiqueta como `:backup` las cinco imagenes en ejecucion; `rollback.yml` las usa si no se le indica un SHA.
 
 **Despliegue sin CI/CD:** `scripts/deploy_production.sh` (o `.ps1`) construye las imagenes en el servidor con `CI_REGISTRY_IMAGE`/`TAG` de `.env.prod`. Ver `GUIA_DESPLIEGUE.md`.
 
-### 8.3 CI/CD — GitHub Actions
+### 8.3 CI/CD — GitLab CI
 
-**Flujo de ramas** (el job `branch-policy` exige que los PR a `master` vengan de `staging`):
+GitLab CE autoalojado es la plataforma principal del CI/CD y del registro de imagenes (§5.3 de la tesis; decision en `ADR_014_GITLAB_CI_AUTOALOJADO.md`). GitHub es un espejo del codigo y no ejecuta nada. Instalacion, runners y variables: `GUIA_GITLAB.md`.
+
+**Flujo de ramas** (el job `ramas:politica` exige que los MR a `master` vengan de `staging`):
 
 ```
-feature/* ─── push ──► staging ─── (CI pasa) ──► PR staging → master
-                         CI                              CI re-corre
+feature/* ─── MR ──► staging ─── (CI pasa) ──► MR staging → master
+                        CI                             CI re-corre
                                                           │
                                                     merge a master
                                                           │
-                                                     CD despliega
+                                       build → scan → staging efimero
+                                                          │
+                                  deploy:produccion (manual, un clic)
 ```
 
-**Archivo `ci.yml` — Jobs y dependencias:**
+**Archivo `.gitlab-ci.yml` — Etapas:** `lint → test → build → scan → staging → deploy → rollback`.
 
 ```
-workflow-lint (actionlint + zizmor) ─────────────────────────┐
-branch-policy ───────────────────────────────────────────────┤
-backend-lint (Ruff, detect-secrets, mypy) ───────────────────┤
-sast-semgrep ────────────────────────────────────────────────┤
-backend-test (needs: backend-lint; SQL Server 2022) ─────────┤
-reporting-excel-test ────────────────────────────────────────┤→ quality-gate
-printing-service-test ───────────────────────────────────────┤
-scanning-service-test ───────────────────────────────────────┤
-dependency-audit ────────────────────────────────────────────┤
-frontend-test (tsc, ESLint, Vitest con cobertura) ───────────┤
-docker-build-validation (solo en push o PR a master) ────────┘
+ramas:politica · lint:pipeline (yamllint + shellcheck) ───────┐
+lint:backend (Ruff, detect-secrets, mypy) ────────────────────┤
+lint:istqb (convencion de nombres y tecnicas ISTQB) ──────────┤
+lint:permisos (auditor de rutas, RNF-02) ─────────────────────┤
+sast:semgrep ─────────────────────────────────────────────────┤
+test:backend (needs: lint:backend; SQL Server 2022 como service) ┤
+test:scanning · test:printing · test:reporting ───────────────┤→ build (solo master)
+test:frontend (tsc, ESLint, Vitest con cobertura, build) ─────┤
+audit:dependencias (pip-audit) · audit:npm ───────────────────┘
+build:validacion (solo staging: construye backend y nginx sin publicar)
 ```
+
+**Runners** (`infrastructure/gitlab/`): `texcore-ci` (sin etiqueta, sin socket de Docker), `texcore-staging` (etiqueta `staging`, protegido: construye y levanta el staging efimero) y `texcore-produccion` (etiqueta `produccion`, en la VM, protegido). Un job de feature nunca llega a un runner con socket.
 
 **Herramientas de analisis estatico:**
 
 | Herramienta | Proposito | Bloquea merge? |
 |-------------|-----------|----------------|
-| Ruff 0.16.10 | Estilo, errores y reglas de seguridad `S` (reemplaza a flake8 y bandit) | Si |
+| Ruff 0.16.10 | Estilo, errores y reglas de seguridad `S` (reemplaza a flake8 y bandit; ADR-015) | Si |
 | Semgrep 1.179.0 | SAST (`p/django`, `p/python`, `p/secrets`, `p/jwt`), severidad ERROR | Si |
 | detect-secrets 1.5.0 | Credenciales expuestas; la linea base debe estar auditada por completo | Si |
 | mypy 1.15.0 | Tipos estaticos de `gestion`, `inventory` e `internal_api` | Si |
-| actionlint + zizmor | Sintaxis y seguridad de los workflows | Si |
-| pip-audit 2.10.1 | CVEs en las dependencias de los 4 servicios (con SBOM) | Si (`security.yml`) |
-| `npm audit` | CVEs en dependencias JS: moderada+ en produccion, critica en desarrollo | Si (`security.yml`) |
-| Trivy | CVEs en las 6 imagenes Docker | Si (`release.yml`, `security.yml`) |
+| yamllint + shellcheck | Sintaxis del pipeline y de los scripts | Si |
+| `auditar_convencion_pruebas.py` | Convencion de nombres ISTQB y tecnica declarada en cada archivo de prueba | Si |
+| `auditar_permisos_backend.py` | Ruta publica fuera de la lista blanca (RNF-02) | Si |
+| pip-audit 2.10.1 | CVEs en las dependencias de los 4 servicios | Si (`audit:dependencias`, `seguridad:dependencias`) |
+| `npm audit` | CVEs en dependencias JS: moderada+ en produccion, critica en desarrollo | Si (`audit:npm`, `seguridad:npm`) |
+| Trivy 0.75.0 | CVEs en las 6 imagenes Docker, por digest | Si (`scan:trivy`, `seguridad:contenedores`) |
 
-**Archivo `release.yml` — Etapas** (reemplaza al `cd.yml`, eliminado el 13-oct-2026; se dispara en el push a `master`, es decir en el merge del PR `staging -> master`):
-
-```
-ci (ci.yml completo via workflow_call, sobre el commit de master)
-    │
-build (6 imagenes sin cache y con bases actualizadas; push a GHCR;
-       attest-build-provenance + firma keyless con cosign)
-    │
-imagenes (fija la referencia por digest: imagenes.env, una linea por servicio)
-    │
-scan (Trivy en matriz sobre las 6 imagenes, SARIF a Security)
-    │
-staging (scripts/staging_efimero.sh: las 6 imagenes + SQL Server desechable,
-         base desde cero, siembra y scripts/smoke_test.py con los 11 roles)
-    │
-deploy (runner propio `texcore-prod`, environment `production` con aprobacion:
-        cosign verify -> scripts/desplegar_release.sh: respaldo :backup de las
-        6 imagenes, pull por digest, respaldo de la BD, preparar_bd.sh y
-        up -d --wait)
-    │
-health-check (GET https://<host>/api/health/ y /api/scanning/health, 15 intentos)
-    │
-notify (webhook opcional Slack/Teams)
-```
-
-Las imagenes se construyen **una sola vez**: la misma, por digest, es la que se escanea, se prueba en staging, se firma y se despliega. Las migraciones salieron del `entrypoint.sh` (`MIGRAR_AL_INICIAR=0` en produccion): corren una vez por despliegue, despues del respaldo.
-
-**Archivo `rollback.yml`** (`workflow_dispatch`): vuelve a las imagenes de un SHA anterior o a las `:backup`. Exige escribir `ROLLBACK` y un motivo. Corre en el mismo runner propio que el deploy (sin SSH), no toca `.env.prod` y espera a que los servicios esten sanos.
-
-**Archivo `security.yml`:** cada lunes y en cada push a `master`, pip-audit, npm audit, Trivy y Semgrep.
-
-**Archivo `gobierno.yml`:** cada lunes, OpenSSF Scorecard (SARIF a Security) y metricas DORA (`scripts/metricas_dora.py`) en el resumen del run.
-
-**Configuracion requerida en GitHub** (los secretos de la aplicacion no pasan por GitHub: viven en el `.env.prod` del servidor, y el deploy ya no usa SSH sino un runner propio):
+**Release en `master`** (se dispara en el merge del MR `staging -> master`):
 
 ```
-vars.PRODUCCION_HOST       # Dominio o IP del servidor (URL del environment)
-vars.TEXCORE_DIR           # Directorio del servidor con .env.prod, nginx/certs y respaldos/
-secrets.DEPLOY_NOTIFY_WEBHOOK  # (Opcional) webhook de notificaciones
-environment `production`   # Con revisores obligatorios
-runner self-hosted         # Etiqueta `texcore-prod` (GUIA_DESPLIEGUE.md §5)
+build:imagenes (matriz de 6 imagenes sin cache y con bases actualizadas; push al
+                GitLab Container Registry; cosign attest (SLSA) + cosign sign con clave)
+    │
+imagenes:unir (fija la referencia por digest: imagenes.env, una linea por servicio)
+    │
+scan:trivy (las 6 imagenes por digest; reporte JSON como artefacto)
+    │
+staging:efimero (scripts/staging_efimero.sh: las 6 imagenes + SQL Server desechable,
+                 base desde cero, siembra y scripts/smoke_test.py con los 11 roles)
+    │
+deploy:produccion (MANUAL, runner `texcore-produccion`, environment `production`:
+                   cosign verify --key cosign.pub -> scripts/desplegar_release.sh:
+                   respaldo :backup de las 6 imagenes, pull por digest, respaldo de la
+                   BD, preparar_bd.sh y up -d --wait; luego GET https://<host>/api/health/
+                   y /api/scanning/health, 15 intentos; aviso por webhook opcional)
 ```
 
-### 8.4 GitLab CI (retirado)
+Las imagenes se construyen **una sola vez**: la misma, por digest, es la que se escanea, se prueba en staging, se firma y se despliega. Las migraciones salieron del `entrypoint.sh` (`MIGRAR_AL_INICIAR=0` en produccion): corren una vez por despliegue, despues del respaldo de la base y antes de levantar los servicios.
 
-El pipeline paralelo de GitLab (`.gitlab-ci.yml`) se eliminó el 5-oct-2026: el repositorio vive en GitHub y
-GitLab no se usaba, pero su configuración ya divergía (Node 20 frente a 24, escaneo de satélites solo en GitLab).
-GitHub Actions es la única fuente de verdad del CI/CD; ver el `CHANGELOG.md` del 5-oct, 13-oct y 14-oct-2026 (modernización del CI/CD, 7 fases).
+**`rollback:produccion`** (manual, «un solo clic»): vuelve a las imagenes de un SHA anterior (`ROLLBACK_SHA`, verificando su firma) o a las `:backup`. El motivo (`ROLLBACK_MOTIVO`) llega por variable y solo se usa como argumento de `jq`. Corre en el mismo runner propio que el deploy (sin SSH), no toca `.env.prod` y espera a que los servicios esten sanos.
+
+**Pipelines programados** (lunes): `seguridad` (pip-audit, npm audit y Trivy de las imagenes `latest`), `gobierno` (metricas DORA con `scripts/metricas_dora.py` sobre la API de GitLab) y `dependencias` (Renovate, MR hacia `staging`).
+
+**Configuracion requerida en GitLab** (los secretos de la aplicacion no pasan por GitLab: viven en el `.env.prod` del servidor, y el deploy no usa SSH sino un runner propio):
+
+```
+COSIGN_PRIVATE_KEY / COSIGN_PASSWORD  # firma de las imagenes (protegidas); cosign.pub va en el repositorio
+GITLAB_CA_CRT                         # CA del certificado propio (archivo)
+PRODUCCION_HOST                       # Dominio o IP del servidor (URL del environment)
+TEXCORE_DIR                           # Directorio del servidor con .env.prod, nginx/certs y respaldos/
+GITLAB_TOKEN · RENOVATE_TOKEN         # DORA (read_api) y Renovate
+DEPLOY_NOTIFY_WEBHOOK                 # (Opcional) webhook de notificaciones
+runner `texcore-produccion`           # Etiqueta `produccion` (GUIA_GITLAB.md §6)
+```
+
+### 8.4 GitHub (espejo)
+
+El 5-oct-2026 se retiro un primer `.gitlab-ci.yml` porque el repositorio vivia en GitHub y los dos pipelines divergian (Node 20 frente a 24, escaneo de satelites solo en GitLab). El 20-oct-2026 se invirtio la decision (ADR-014): GitLab es la plataforma principal, como pide la tesis, y los workflows de GitHub Actions y Dependabot se eliminaron en el mismo cambio. GitHub conserva una copia del codigo por *push mirror*; no ejecuta nada. Ver el `CHANGELOG.md` del 5-oct, 13-oct, 14-oct y 20-oct-2026.
 
 ### 8.5 Despliegue y operacion manual
 
@@ -1605,23 +1605,23 @@ fail_under = 90
 ### 9.5 Entorno de Test CI
 
 ```yaml
-# Configuracion del servicio SQL Server en GitHub Actions CI
+# Servicio SQL Server en GitLab CI (.gitlab-ci.yml, job test:backend)
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    env:
+  - name: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2...
+    alias: sqlserver
+    variables:
+      ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "CI_Pass1234!"
       MSSQL_PID: "Developer"
-    ports:
-      - 1433:1433
 
 # Settings especificos para CI
 DJANGO_SETTINGS_MODULE: TexCore.settings_test
 DB_ENGINE: mssql
 DB_NAME: texcore_ci
+DB_HOST: sqlserver
 ```
 
-El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ejecutar los tests.
+El job instala `ODBC Driver 18 for SQL Server` en la imagen Debian del runner antes de ejecutar los tests.
 
 ### 9.6 Estandares de Calidad
 
@@ -1629,7 +1629,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 |----------|-----------|
 | **ISO/IEC 25010** | Cobertura minima 90 % (backend y servicios), analisis de tipos (mypy) |
 | **ISO/IEC 27001 A.14.2.1** | SAST con Ruff (reglas `S`) y Semgrep en cada CI |
-| **OWASP DevSecOps** | Shift-left security: Ruff `S`, Semgrep, detect-secrets, pip-audit, npm audit, Trivy, zizmor |
+| **OWASP DevSecOps** | Shift-left security: Ruff `S`, Semgrep, detect-secrets, pip-audit, npm audit, Trivy, yamllint |
 | **Conventional Commits** | Trazabilidad de cambios en commits y PRs |
 | **PEP 8** | Ruff (configuracion en `pyproject.toml`), excluye migrations |
 

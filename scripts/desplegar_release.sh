@@ -1,13 +1,13 @@
 #!/bin/bash
 # =============================================================================
 # TEXCORE — DESPLIEGUE DE UN RELEASE (runner propio del servidor)
-# Lo ejecuta el job `deploy` de .github/workflows/release.yml en el runner `texcore-prod`,
+# Lo ejecuta el job `deploy:produccion` de .gitlab-ci.yml en el runner `texcore-produccion`,
 # con las imágenes ya firmadas y verificadas. No usa SSH ni hace `git checkout` en el
 # servidor: corre desde el workspace del runner y toma del servidor solo .env.prod,
 # los certificados y el directorio de respaldos.
 #
 # Uso, desde la raíz del repositorio:
-#   TEXCORE_DIR=/opt/texcore IMAGE_BASE=ghcr.io/org/texcore bash scripts/desplegar_release.sh <imagenes.env>
+#   TEXCORE_DIR=/opt/texcore IMAGE_BASE=192.168.1.55:5050/grupo/texcore bash scripts/desplegar_release.sh <imagenes.env>
 # <imagenes.env>: una línea por servicio del compose, servicio=imagen@sha256:...
 # =============================================================================
 set -euo pipefail
@@ -42,7 +42,7 @@ done < "$IMAGENES"
 
 compose() { docker compose -p "$PROYECTO" -f "$COMPOSE_FILE" -f "$OVERRIDE" --env-file "$ENV_FILE" "$@"; }
 
-echo "[1/6] Respaldando como :backup las imágenes en ejecución (para rollback.yml)..."
+echo "[1/6] Respaldando como :backup las imágenes en ejecución (para rollback:produccion)..."
 # servicio del compose:nombre de su imagen
 for par in db:db backend:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel; do
     servicio="${par%%:*}"; imagen="${par#*:}"

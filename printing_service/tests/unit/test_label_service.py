@@ -1,6 +1,9 @@
 """
 Tests unitarios de LabelService.
 No requieren HTTP ni WeasyPrint — solo qrcode/python-barcode.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): lote valido / mismo lote / data valida / data distinta / request valido.
 """
 
 import base64

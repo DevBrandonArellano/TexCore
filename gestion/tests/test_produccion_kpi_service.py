@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): ops por estado / lotes en rango / sin lotes / sede id / dias sin lotes.
+- Transición de estados (STT): ops por estado.
+"""
+
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch

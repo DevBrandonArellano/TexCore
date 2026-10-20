@@ -1,3 +1,11 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): pedidos y pagos / varios pagos / plazo de credito / plazos 8 45 y 60 dias /
+  cliente moroso.
+- Análisis de valores límite (BVA): lote sin stock.
+- Transición de estados (STT): pedidos pendientes.
+"""
+
 from decimal import Decimal
 
 from django.contrib.auth.models import Group, Permission

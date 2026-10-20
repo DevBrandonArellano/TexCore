@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el cliente creado / una respuesta exitosa / una respuesta exitosa sin
+ *   method ni url en config / DEV en false / un 401 en un endpoint distinto de token/profile.
+ * - Transición de estados (STT): un 401 ya reintentado ( retry=true).
+ * - Caja blanca (CB): ramas de error — que el refresh tambien falla / un error 500 / un error de red (sin
+ *   response).
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import type { AxiosResponse } from 'axios';
 import { parcial } from '../testing/parcial';
 
@@ -9,6 +18,7 @@ const mockPost = vi.fn();
 const mockApiClientCall = vi.fn();
 
 let responseSuccessHandler: (response: AxiosResponse) => AxiosResponse;
+let createConfig: Record<string, unknown> | undefined;
 let responseErrorHandler: (error: unknown) => Promise<unknown>;
 
 vi.mock('axios', () => {
@@ -25,7 +35,10 @@ vi.mock('axios', () => {
   });
   return {
     default: {
-      create: () => instance,
+      create: (config: Record<string, unknown>) => {
+        createConfig = config;
+        return instance;
+      },
     },
   };
 });
@@ -46,6 +59,15 @@ describe('apiClient (axios interceptor)', () => {
     mockPost.mockReset();
     mockApiClientCall.mockReset();
     await import('./axios');
+  });
+
+  it('dado el cliente creado cuando se configura entonces envía la cookie csrftoken de Django en X-CSRFToken', () => {
+    // CookieJWTAuthentication exige el token CSRF en cada escritura con la cookie JWT.
+    expect(createConfig).toMatchObject({
+      withCredentials: true,
+      xsrfCookieName: 'csrftoken',
+      xsrfHeaderName: 'X-CSRFToken',
+    });
   });
 
   it('dado una respuesta exitosa cuando pasa por el interceptor entonces la retorna sin cambios', () => {

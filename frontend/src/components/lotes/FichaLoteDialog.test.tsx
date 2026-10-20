@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): rol %s / lote nulo / lote / cambio a Movimientos / cambio a Materias
+ *   primas.
+ * - Análisis de valores límite (BVA): movimientos vacíos.
+ * - Caja blanca (CB): ramas de error — error del servidor en el resumen.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

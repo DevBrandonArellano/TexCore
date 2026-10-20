@@ -1,9 +1,10 @@
 # Matriz de Trazabilidad de Pruebas — TexCore
 
-> **Última actualización:** 5-oct-2026, tras la Etapa 4 de Ruff (Django, simplificaciones y complejidad).
-> Backend: **1530 pruebas** (SQLite local, `settings_test_local`), cobertura **91,8 %** (`fail_under = 90`); la última
-> corrida en SQL Server 2022 fue la del 1-oct (1441). Frontend: **1888 pruebas** en 129 archivos, cobertura
-> 95,67 / 90,16 / 93,62 / 96,61 % (statements / branches / functions / lines).
+> **Última actualización:** 20-oct-2026. Plan vigente: `docs/requerimientos/PLAN_PRUEBAS_ISTQB.md`.
+> Backend: **1918 pruebas** en SQL Server 2022 (1931 con el gate ISTQB en SQLite), cobertura **92,5 %** (`fail_under = 90`).
+> Frontend: **1981 pruebas** en 138 archivos. Microservicios: `scanning_service` 66, `printing_service` 114 y `reporting_excel` 76.
+> Cada archivo de prueba declara sus técnicas ISTQB y cada nombre sigue la convención; lo verifica
+> `scripts/auditar_convencion_pruebas.py`.
 
 > **Estándares aplicados:** PMBOK (Gestión de la Calidad — *Planificar / Gestionar /
 > Controlar la Calidad* y *Matriz de Trazabilidad de Requisitos*) e ISTQB
@@ -222,6 +223,36 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | El puerto 80 redirige con 301 a HTTPS solo en producción (`NGINX_REDIRIGIR_HTTP=1` en `docker-compose.prod.yml`, no en desarrollo); la plantilla solo sustituye variables `NGINX_*`; el `HEALTHCHECK` de nginx sondea por HTTPS † | `gestion/tests/test_nginx_redireccion_https.py` | EP | ✅ |
 | Despliegue: los scripts y los workflows de CD/rollback solo usan servicios del compose de producción, esperan con `up --wait`, no reescriben `.env.prod`, respaldan las 5 imágenes; `.env.prod.example` define exactamente las variables del compose; un único script despliega producción † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
 | Cookies de sesión, CSRF y JWT con `Secure` cuando `DEBUG=0`, y sin exigir HTTPS en desarrollo † | `gestion/tests/test_cookies_seguras_produccion.py` | EP | ✅ |
+
+### RNF-02 / OWASP API1 y API2 — acceso no autorizado en todas las rutas (20-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Auditor de rutas: cada ruta `api/` con su permiso (de clase o por acción) y su filtro de sede; falla si una ruta es pública fuera de la lista blanca de 6, si la lista nombra una ruta que no existe o si una ruta no declara permiso † | `gestion/tests/test_auditoria_permisos_script.py` | EP, CB | ✅ |
+| Anónimo: 401/403 a GET y POST en todas las rutas no públicas, recorriendo el resolver (API2) † | `gestion/tests/test_acceso_no_autorizado_global.py` | EP, CB-D | ✅ |
+| Objeto de otra sede: en cada ruta de objeto de un ViewSet (detalle y acciones), los 9 roles acotados a una sede reciben 403/404 al leer, modificar, borrar o accionar, y el objeto sigue intacto (API1) † | `gestion/tests/test_acceso_no_autorizado_global.py` | EP, CB-D | ✅ |
+| `SedeViewSet`: lista y detalle acotados a la propia sede; sin sede, ninguna; el Ejecutivo ve todas † | `gestion/tests/test_control_acceso_sede.py` | EP | ✅ |
+| Panel ejecutivo (KPI, resumen, tendencia, producción por producto e impresión): 403 a los roles operativos; Ejecutivo y administradores acceden † | `gestion/tests/test_control_acceso_sede.py` | EP | ✅ |
+| Validación de lote (Django): un lote de otra sede responde igual que uno inexistente; código repetido entre sedes sin 500; `pedido_id` no numérico 400 † | `inventory/tests/test_control_acceso_bodegas.py` | EP | ✅ |
+| Alertas de stock: `sede_id` y `bodega_id` ajenos no abren el stock de otra sede ni el de una bodega no asignada † | `inventory/tests/test_control_acceso_bodegas.py` | EP | ✅ |
+| Escaneo de despacho: verificación de sesión para el `auth_request` de nginx (401 sin cookie o con cookie inválida; 204 con la sede) † | `gestion/tests/test_profile_views.py` | EP | ✅ |
+| `scanning_service`: 401 sin las cabeceras de sesión de nginx; alcance de sede al servicio y a la `internal_api`; usuario sin sede no consulta † | `scanning_service/tests/integration/test_validate_endpoint.py`, `scanning_service/tests/unit/test_validation_service.py`, `scanning_service/tests/test_django_client.py` | EP | ✅ |
+| `internal_api`: lote y stock acotados al `sede_id` (o al claim); sede ajena 404 como inexistente; claim de otra sede 403 † | `internal_api/tests/test_scanning_views.py` | EP | ✅ |
+| CSRF: escritura con la cookie JWT sin token o con token errado 403 con motivo legible; con token, permitida; lectura sin token 200; login y perfil emiten `csrftoken`; axios lo envía en `X-CSRFToken` † | `gestion/tests/test_cookie_jwt_auth.py`, `frontend/src/lib/axios.test.ts` | EP | ✅ |
+| Relay de logs público: `msgid` acotado, mensaje y `sd` en una línea y recortados, `source`/`ip` del backend, 429 por encima del límite † | `gestion/tests/test_system_views.py` | EP, BVA | ✅ |
+
+### Pipeline en GitLab CI y gate ISTQB (20-oct-2026, ADR-014 y ADR-015)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| El pipeline define las etapas de la §5.3; GitHub Actions y Dependabot ya no existen † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Release en `master`: 6 imágenes sin caché hacia el GitLab Container Registry, atestación SLSA y firma con cosign, staging efímero antes del deploy † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Deploy y rollback manuales, solo en `master`, en el runner de producción; el motivo del rollback llega por variable; los jobs con etiqueta `staging` o `produccion` nunca corren en un MR † | `gestion/tests/test_despliegue_produccion.py` | EP, TD | ✅ |
+| Imágenes de los jobs y SQL Server de pruebas fijados por digest; Renovate cubre Dockerfiles, compose y el pipeline † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Pipelines programados de seguridad y métricas DORA † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Métricas DORA sobre la API de GitLab: despliegue `success` / `failed` / en curso, commit propio o pedido aparte, rollbacks del periodo † | `gestion/tests/test_metricas_dora.py` | EP, BVA | ✅ |
+| Gate ISTQB: convención de nombres en Python y en el frontend (`it`/`test`/`it.each`), técnica declarada en cada archivo, y 0 hallazgos en el repositorio † | `gestion/tests/test_auditoria_convencion_script.py` | EP, CB | ✅ |
+| Auditor de rutas: ninguna ruta pública fuera de la lista blanca † | `gestion/tests/test_auditoria_permisos_script.py` | EP, CB | ✅ |
 
 ### TEX-26 — alertas de stock del bodeguero: filtro por bodega y búsqueda (13-oct-2026)
 

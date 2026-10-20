@@ -1,3 +1,11 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): fechas invalidas / producto de otra sede / cantidad invalida / plan borrador /
+  plan aprobado.
+- Análisis de valores límite (BVA): stock bajo minimo.
+- Transición de estados (STT): plan aprobado.
+"""
+
 from datetime import date, timedelta
 from decimal import Decimal
 

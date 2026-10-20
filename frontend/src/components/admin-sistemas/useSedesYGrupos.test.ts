@@ -1,6 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): respuestas planas (array) / respuestas paginadas ({results}) / sin sede
+ *   seleccionada y hay sedes / sede ya seleccionada / error de red.
+ * - Caja blanca (CB): ramas de error — error de red.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useSedesYGrupos } from './useSedesYGrupos';
+import { useSedesYGrupos } from './useSedesYGrupos';
+
 import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();

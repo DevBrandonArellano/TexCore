@@ -1,3 +1,8 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): despacho / filtros / usuario anonimo.
+"""
+
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model

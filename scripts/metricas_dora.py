@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Métricas DORA de TexCore a partir de GitHub: los despliegues del environment `production`
-(los registra el job `deploy` de release.yml) y las ejecuciones de rollback.yml.
+Métricas DORA de TexCore a partir de GitLab: los despliegues del environment `production`
+(los registra el job `deploy:produccion` de .gitlab-ci.yml) y los jobs `rollback:produccion`.
 
-    GITHUB_TOKEN=... python3 scripts/metricas_dora.py org/TexCore --dias 28
+    GITLAB_TOKEN=... python3 scripts/metricas_dora.py grupo/texcore --dias 28
+
+Dentro del pipeline usa CI_API_V4_URL y el token de proyecto GITLAB_TOKEN (permiso read_api).
+Con el certificado propio de GitLab, GITLAB_CA_FILE apunta a su CA.
 
 - Frecuencia de despliegue: despliegues exitosos por semana.
 - Lead time de cambios: mediana de horas entre el commit y su despliegue.
@@ -11,20 +14,20 @@ Métricas DORA de TexCore a partir de GitHub: los despliegues del environment `p
 - Tiempo de recuperación (MTTR): mediana de horas entre un fallo y el siguiente despliegue
   exitoso o rollback.
 
-El workflow semanal gobierno.yml lo ejecuta y publica el resultado en el resumen del run.
+El pipeline programado `gobierno` lo ejecuta y publica el resultado en el log del job.
 Solo usa la biblioteca estándar.
 """
 
 import argparse
 import json
 import os
+import ssl
 import statistics
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-
-API = "https://api.github.com"
 
 
 @dataclass(frozen=True)
@@ -71,48 +74,61 @@ def calcular_metricas(despliegues: list[Despliegue], rollbacks: list[datetime], 
 
 
 # ---------------------------------------------------------------------------
-# Descarga desde la API de GitHub
+# Descarga desde la API de GitLab
 # ---------------------------------------------------------------------------
+
+ESTADOS_FINALES = {"success": True, "failed": False}
 
 
 def _fecha(texto: str) -> datetime:
     return datetime.fromisoformat(texto.replace("Z", "+00:00"))
 
 
-def _get(ruta: str, token: str):
-    # La URL siempre se arma con la constante API (https://api.github.com): esquema fijo.
-    peticion = urllib.request.Request(  # noqa: S310
-        API + ruta,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
+def necesita_commit(despliegue: dict) -> bool:
+    """True si la respuesta no trae la fecha del commit y hay que pedirla aparte."""
+    return not ((despliegue.get("deployable") or {}).get("commit") or {}).get("committed_date")
+
+
+def despliegue_de_gitlab(despliegue: dict, fecha_commit: datetime | None) -> Despliegue | None:
+    """Traduce un despliegue de la API (`/deployments`); None si sigue en curso o se canceló."""
+    if despliegue["status"] not in ESTADOS_FINALES:
+        return None
+    propia = ((despliegue.get("deployable") or {}).get("commit") or {}).get("committed_date")
+    return Despliegue(
+        creado=_fecha(despliegue["created_at"]),
+        exitoso=ESTADOS_FINALES[despliegue["status"]],
+        fecha_commit=_fecha(propia) if propia else fecha_commit,
     )
-    with urllib.request.urlopen(peticion, timeout=30) as respuesta:  # noqa: S310
+
+
+def rollbacks_de_gitlab(jobs: list[dict], desde: datetime) -> list[datetime]:
+    """Fechas de los jobs `rollback:produccion` exitosos dentro del periodo."""
+    fechas = (_fecha(j["created_at"]) for j in jobs if j["name"] == "rollback:produccion" and j["status"] == "success")
+    return [f for f in fechas if f >= desde]
+
+
+def _get(api: str, ruta: str, token: str):
+    # `api` sale de CI_API_V4_URL o de --api (https del GitLab propio); el esquema se valida en main().
+    peticion = urllib.request.Request(api + ruta, headers={"PRIVATE-TOKEN": token})  # noqa: S310
+    contexto = ssl.create_default_context(cafile=os.environ.get("GITLAB_CA_FILE"))
+    with urllib.request.urlopen(peticion, timeout=30, context=contexto) as respuesta:  # noqa: S310
         return json.load(respuesta)
 
 
-def descargar(repo: str, token: str, desde: datetime) -> tuple[list[Despliegue], list[datetime]]:
+def descargar(api: str, proyecto: str, token: str, desde: datetime) -> tuple[list[Despliegue], list[datetime]]:
+    pid = urllib.parse.quote(proyecto, safe="")
     despliegues = []
-    for d in _get(f"/repos/{repo}/deployments?environment=production&per_page=100", token):
-        creado = _fecha(d["created_at"])
-        if creado < desde:
+    for d in _get(api, f"/projects/{pid}/deployments?environment=production&per_page=100&order_by=created_at", token):
+        if _fecha(d["created_at"]) < desde:
             continue
-        estados = _get(f"/repos/{repo}/deployments/{d['id']}/statuses?per_page=1", token)
-        if not estados or estados[0]["state"] not in ("success", "failure", "error"):
-            continue  # en curso o esperando aprobación
-        commit = _get(f"/repos/{repo}/commits/{d['sha']}", token)
-        despliegues.append(
-            Despliegue(
-                creado=creado,
-                exitoso=estados[0]["state"] == "success",
-                fecha_commit=_fecha(commit["commit"]["committer"]["date"]),
-            )
-        )
-    ejecuciones = _get(f"/repos/{repo}/actions/workflows/rollback.yml/runs?status=success&per_page=100", token)
-    rollbacks = [_fecha(r["created_at"]) for r in ejecuciones["workflow_runs"] if _fecha(r["created_at"]) >= desde]
-    return despliegues, rollbacks
+        fecha_commit = None
+        if necesita_commit(d) and d["status"] in ESTADOS_FINALES:
+            fecha_commit = _fecha(_get(api, f"/projects/{pid}/repository/commits/{d['sha']}", token)["committed_date"])
+        traducido = despliegue_de_gitlab(d, fecha_commit)
+        if traducido is not None:
+            despliegues.append(traducido)
+    jobs = _get(api, f"/projects/{pid}/jobs?scope[]=success&per_page=100", token)
+    return despliegues, rollbacks_de_gitlab(jobs, desde)
 
 
 def informe(m: Metricas, periodo_dias: int) -> str:
@@ -135,15 +151,19 @@ def informe(m: Metricas, periodo_dias: int) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("repo", help="owner/repo")
+    parser.add_argument("proyecto", help="ruta del proyecto (grupo/texcore) o su id numérico")
     parser.add_argument("--dias", type=int, default=28)
+    parser.add_argument("--api", default=os.environ.get("CI_API_V4_URL"), help="URL de la API v4 (https://host/api/v4)")
     args = parser.parse_args(argv)
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get("GITLAB_TOKEN")
     if not token:
-        print("Falta GITHUB_TOKEN", file=sys.stderr)
+        print("Falta GITLAB_TOKEN", file=sys.stderr)
+        return 2
+    if not args.api or not args.api.startswith("https://"):
+        print("Falta --api (o CI_API_V4_URL) con esquema https", file=sys.stderr)
         return 2
     desde = datetime.now(UTC) - timedelta(days=args.dias)
-    despliegues, rollbacks = descargar(args.repo, token, desde)
+    despliegues, rollbacks = descargar(args.api.rstrip("/"), args.proyecto, token, desde)
     print(informe(calcular_metricas(despliegues, rollbacks, args.dias), args.dias))
     return 0
 
