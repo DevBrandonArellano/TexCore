@@ -253,6 +253,7 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Métricas DORA sobre la API de GitLab: despliegue `success` / `failed` / en curso, commit propio o pedido aparte, rollbacks del periodo † | `gestion/tests/test_metricas_dora.py` | EP, BVA | ✅ |
 | Gate ISTQB: convención de nombres en Python y en el frontend (`it`/`test`/`it.each`), técnica declarada en cada archivo, y 0 hallazgos en el repositorio † | `gestion/tests/test_auditoria_convencion_script.py` | EP, CB | ✅ |
 | Auditor de rutas: ninguna ruta pública fuera de la lista blanca † | `gestion/tests/test_auditoria_permisos_script.py` | EP, CB | ✅ |
+| Panel de Jefe de Planta (RNF-03): techo de 35 consultas en la primera apertura y menos de 3 s en la mejor de 3 aperturas, con 500 órdenes; también en el runner compartido de GitLab con SQL Server 2022 † | `gestion/tests/test_produccion_kpi_service.py` | RND, BVA | ✅ |
 
 ### TEX-26 — alertas de stock del bodeguero: filtro por bodega y búsqueda (13-oct-2026)
 
