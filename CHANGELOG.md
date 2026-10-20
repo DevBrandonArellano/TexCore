@@ -57,6 +57,39 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 19 de Octubre de 2026 (noche) — RS-19: logs, lotes y normalización única; migraciones consolidadas de 14 a 6 (sin commitear)
+
+Pedido del usuario, tras la revisión del commit de cifrado contra SOLID, manejo de errores y logs: «ejecuta el mejoramiento» (logs, partir `_procesar` y leer por lotes, unificar la normalización) y «consolidar las migraciones en menos».
+
+| Defecto | Hallazgo | Corrección | Prueba |
+|---|---|---|---|
+| 70 | `crypto.py`, `model_fields.py` y el comando no tenían `logger`: un dato ilegible fallaba sin traza, y una sola fila mala tumbaba el listado con un 500 sin contexto | `gestion.crypto` registra el fallo (ERROR, con la traza, **sin token ni valor**); `gestion.model_fields` registra `Modelo.campo` (Django no entrega la pk en `from_db_value`); el comando registra `Modelo.campo pk=<id>` en ERROR (ilegible), WARNING (en claro, índice desfasado) e INFO (corregida). `descifrar(registrar=False)` evita el falso error cuando el comando espera el fallo. Una fila ilegible **sigue lanzando** `ErrorDeCifrado`: no se entrega el dato crudo | 5 pruebas con `assertLogs`/`assertNoLogs` que comprueban que ni el valor ni el token aparecen en el registro |
+| 71 | `_procesar` (≈50 líneas) mezclaba leer, clasificar, escribir e informar; leía la tabla entera con `fetchall()` dentro de **una sola transacción** | `_procesar` es un orquestador; `_leer_por_lotes` (500 filas, paginado por pk con un cursor por lote, portable a SQL Server y SQLite), `_tratar_fila`, `_diagnosticar`, `_hay_que_escribir`, `_escribir`, `_informar`, y dos `dataclass` (`_Resumen`, `_Diagnostico`). Una transacción **por lote** | `LOTE` parcheado a 2 con 5 filas: las corrige todas y la verificación posterior queda limpia |
+| 72 | `str(x).strip()` repetido en el manager (×2), `Cliente.clean()` e `indice_ciego`; `clean()` llamaba a `_meta.get_field(...).calcular(self)`; `ValidationError` se importaba dentro de un método | `normalizar_identificacion()` única en `crypto.py`; `clean()` usa `indice_ciego` directo; import al módulo | 2 pruebas de la función |
+| 73 | 14 migraciones (`gestion` 10, `inventory` 3, `internal_api` 1) | `squashmigrations`: `gestion` 0003–0009 → `0003_squashed_0009_paromaquina_origen`, `inventory` 0001–0003 → `0001_squashed_0003_mrp_por_sede`. **Quedan 6.** `gestion.0001` y `0002` no se fusionan: la 0002 depende de `token_blacklist`, que depende del usuario que crea la 0001 (dependencia circular). `0010` queda aparte (cifrado, irreversible) y ahora depende del squash. `replaces` se conserva siempre. Los tres `RunPython` se copiaron dentro del squash, que pasa a ser **atómico** (la 0005 era no atómica para lotes de ~1 M de filas; el squash solo corre sobre tablas vacías, porque toda base existente ya tenía aplicadas las originales). Se omiten los dos índices que la 0004 creaba y la 0008 retiraba | Ver verificación |
+
+**Verificación (SQL Server 2022):**
+- **Equivalencia de esquema:** una base migrada con el árbol viejo y otra con el nuevo, comparadas en columnas, índices, restricciones `CHECK` y claves foráneas: **1274 elementos idénticos** (tras normalizar los sufijos aleatorios que SQL Server pone a los nombres de `PK`, `UQ` y `CK`).
+- **Base ya migrada:** una base llevada a `gestion.0009` con el árbol viejo reconoce el squash como aplicado y aplica solo la `0010`; su esquema final es idéntico. El stack de desarrollo (en `0010`) cierra el registro de los squashes con un plan vacío y `cifrar_datos_personales` verifica en verde.
+- `makemigrations --check`: sin cambios. Backend: **1871 pruebas OK** (1863 + 8 nuevas), cobertura 92,4 %. `ruff check .` en 0 y `mypy` (1.15.0, plugins de Django y DRF) en 0 sobre 307 archivos.
+- Las dos pruebas que importaban `0005` y `0006` apuntan al squash. La convención quedó en `ESTANDARES_DESARROLLO.md`; los documentos que citan las migraciones por número recibieron el nombre nuevo solo donde apuntaban a un archivo inexistente (las mediciones y ADR conservan su historia).
+
+**Lo que queda dicho, no supuesto:** borrar los originales es seguro solo si toda base existente tiene aplicadas al menos `gestion.0009` e `inventory.0003` (el usuario lo confirmó: producción y los volúmenes de desarrollo lo están); una base atrasada no podría migrar. Los respaldos `texcore_db_pre_*.bak` restauran con el árbol nuevo gracias a `replaces`. Pendiente sin tocar: `from_db_value` no puede registrar la pk (limitación de Django); el comando la localiza.
+
+### 19 de Octubre de 2026 (noche) — Stack de desarrollo desde Windows: `node_modules` en la imagen del frontend (sin commitear)
+
+Pedido del usuario: traer `MES`, levantar Docker y correr las pruebas en un equipo Windows.
+
+| Defecto | Hallazgo | Corrección |
+|---|---|---|
+| 67 | `frontend/` no tenía `.dockerignore`: el `COPY . .` de `Dockerfile.dev` metía el `node_modules` del host en la imagen Linux. En Windows trae los shims `.bin/vite` de `node.exe` y el contenedor salía con código 127 («node.exe: not found»); el volumen nombrado `frontend_node_modules` se inicializa con ese contenido y `npm install` lo daba por bueno | `frontend/.dockerignore` (`node_modules`, `coverage`, `dist`, `test_output.txt`, `.vite`) |
+| 68 | `gunicorn.ctl`, el socket de control que crea el backend de desarrollo en la raíz al montar el repo, aparecía como archivo sin seguir | Entrada en `.gitignore` (ya estaba en `.dockerignore`) |
+| 69 | En una base vacía, `backend` y `celery_worker` ejecutaban `migrate` a la vez desde el mismo entrypoint y SQL Server abortaba uno por interbloqueo (error 1205); `restart: on-failure` lo tapaba tras varios reinicios | `celery_worker` fija `MIGRAR_AL_INICIAR=0` (el mismo mecanismo de producción) y espera a que `backend` esté `healthy`, es decir, migrado |
+
+**Verificación (SQL Server 2022 en Docker, stack `texcore-mes`):** backend **1863 pruebas OK**, cobertura 92,4 % (gate 90 %); `scanning_service` 58, `reporting_excel` 76 y `printing_service` 114 pasan; frontend 1979 pasan (138 archivos) y `tsc` en 0. Los 8 contenedores del compose de desarrollo quedan sanos y `gestion.0010` aplicada.
+
+**Verificación del defecto 69:** arranque desde cero con volúmenes nuevos: 0 errores 1205, 0 reinicios de `backend` y de `celery_worker`, los 8 servicios sanos. Las claves `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` se añadieron además al `.env` local (no versionado) con los valores de desarrollo del compose, para poder correr Django fuera de Docker.
+
 ### 19 de Octubre de 2026 — RS-19: cifrado de los datos personales en reposo (LOPDP) — sin commitear
 
 Pedido del usuario: resolver **RS-19**, el único ❌ del contraste con la tesis, con un enfoque mixto — cifrar de verdad los datos (opción **a** del riesgo) **y** precisar la redacción de la tesis (opción **c**), en lugar de usar la corrección del texto para rebajar la afirmación. TDE (opción **b**) se descarta como medida única: depende de la edición de SQL Server que licencie la organización (**RS-18**) y no protege frente a quien tenga credenciales de lectura; queda como complementaria.

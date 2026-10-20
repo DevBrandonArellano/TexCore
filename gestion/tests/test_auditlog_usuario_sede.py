@@ -67,10 +67,10 @@ class AuditLogUsuarioSedeTestCase(TestCase):
 
 
 class RellenoUsuarioSedeTestCase(TestCase):
-    """Caja blanca del RunPython de la migración 0005 (localmente se corre --nomigrations)."""
+    """Caja blanca del RunPython de la migración 0005, hoy dentro de `0003_squashed_0009`."""
 
     def setUp(self):
-        self.migracion = importlib.import_module("gestion.migrations.0005_rellenar_auditlog_usuario_sede")
+        self.migracion = importlib.import_module("gestion.migrations.0003_squashed_0009_paromaquina_origen")
 
     def test_relleno_dado_logs_previos_sin_sede_cuando_corre_entonces_copia_la_del_usuario(self):
         usuario = CustomUserFactory()

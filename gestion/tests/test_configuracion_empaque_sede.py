@@ -110,10 +110,10 @@ class LoteProduccionPresentacionEmpaqueTestCase(TestCase):
 
 
 class RellenoConfiguracionEmpaqueTestCase(TestCase):
-    """Caja blanca del RunPython de la migración 0006 (localmente se corre --nomigrations)."""
+    """Caja blanca del RunPython de la migración 0006, hoy dentro de `0003_squashed_0009`."""
 
     def test_relleno_dado_sedes_existentes_cuando_corre_entonces_crea_15_15_sin_pisar_las_configuradas(self):
-        migracion = importlib.import_module("gestion.migrations.0006_configuracion_empaque_explicita")
+        migracion = importlib.import_module("gestion.migrations.0003_squashed_0009_paromaquina_origen")
         sin_config = SedeFactory()
         configurada = SedeFactory()
         ConfiguracionEmpaqueSede.objects.create(sede=configurada, fundas_por_bano=10, conos_por_funda=10)

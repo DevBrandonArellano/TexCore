@@ -483,7 +483,7 @@ DATABASES = {
 | `V5__optimizacion_indices_mes.sql` | Índices del MES: corridas activas por sede, genealogía de lotes en ambos sentidos, operaciones por corrida, reservas de lotes, stock comprometido, planes por sede y estado |
 | `V6__drop_obsolete_stored_procedures.sql` | Elimina los 21 stored procedures de reportes que dejaron de usarse: los reportes se sirven desde el ORM y `internal_api` |
 
-**Restricciones e índices declarados en los modelos** (viajan con las migraciones): 23 `CheckConstraint` (por ejemplo, cantidades, saldos y stock comprometido no negativos, y porcentajes de mezcla entre 0 y 100), 9 `UniqueConstraint` (por ejemplo, stock único por bodega y producto con o sin lote, y una sola versión oficial por fórmula) e índices compuestos como `idx_mov_bodega_fecha_incl` del Kardex y los de auditoría por fecha y sede (`gestion/0004` y `0008`, ADR-010).
+**Restricciones e índices declarados en los modelos** (viajan con las migraciones): 23 `CheckConstraint` (por ejemplo, cantidades, saldos y stock comprometido no negativos, y porcentajes de mezcla entre 0 y 100), 9 `UniqueConstraint` (por ejemplo, stock único por bodega y producto con o sin lote, y una sola versión oficial por fórmula) e índices compuestos como `idx_mov_bodega_fecha_incl` del Kardex y los de auditoría por fecha y sede (`gestion/0004` y `0008`, hoy dentro de `0003_squashed_0009_paromaquina_origen`; ADR-010).
 
 **Healthcheck:**
 

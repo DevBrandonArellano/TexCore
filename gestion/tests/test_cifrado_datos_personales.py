@@ -18,6 +18,7 @@ Técnicas ISTQB aplicadas:
 """
 
 import datetime
+from unittest.mock import patch
 
 from django.core.exceptions import FieldError, ValidationError
 from django.core.management import CommandError, call_command
@@ -27,7 +28,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from gestion.crypto import ErrorDeCifrado, cifrar, descifrar, generar_clave, indice_ciego
+from gestion.crypto import ErrorDeCifrado, cifrar, descifrar, generar_clave, indice_ciego, normalizar_identificacion
 from gestion.models import Cliente, CustomUser
 from gestion.signals import _get_user_audit_data
 from gestion.tests.factories import ClienteFactory, CustomUserFactory, SedeFactory
@@ -250,6 +251,38 @@ class PrimitivasDeCifradoTestCase(TestCase):
         self.assertEqual(len(con_otra_clave), 64)
         self.assertNotEqual(con_otra_clave, "")
 
+    def test_normalizar_identificacion_dado_texto_con_espacios_cuando_se_normaliza_entonces_lo_recorta(self):
+        self.assertEqual(normalizar_identificacion(f"  {RUC_PRUEBA}\t"), RUC_PRUEBA)
+
+    def test_normalizar_identificacion_dado_un_numero_cuando_se_normaliza_entonces_devuelve_texto(self):
+        self.assertEqual(normalizar_identificacion(912345678), "912345678")
+
+    def test_descifrar_dado_un_token_ilegible_cuando_falla_entonces_registra_el_error_sin_el_valor(self):
+        with self.assertLogs("gestion.crypto", level="ERROR") as registro, self.assertRaises(ErrorDeCifrado):
+            descifrar(RUC_PRUEBA)
+
+        self.assertNotIn(RUC_PRUEBA, "\n".join(registro.output))
+
+    def test_descifrar_dado_registrar_falso_cuando_falla_entonces_no_deja_error_en_el_registro(self):
+        with self.assertNoLogs("gestion.crypto", level="ERROR"), self.assertRaises(ErrorDeCifrado):
+            descifrar(RUC_PRUEBA, registrar=False)
+
+
+class LogsDelCampoCifradoTestCase(TestCase):
+    """RS-19: un dato ilegible deja traza con el modelo y el campo, nunca con el valor."""
+
+    def test_cliente_dado_una_fila_ilegible_cuando_se_lee_entonces_registra_modelo_y_campo_sin_el_valor(self):
+        cliente = ClienteFactory(ruc_cedula=RUC_PRUEBA, sede=SedeFactory())
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE gestion_cliente SET ruc_cedula = %s WHERE id = %s", ["0912345678", cliente.pk])
+
+        with self.assertLogs("gestion.model_fields", level="ERROR") as registro, self.assertRaises(ErrorDeCifrado):
+            Cliente.objects.get(pk=cliente.pk)
+
+        salida = "\n".join(registro.output)
+        self.assertIn("Cliente.ruc_cedula", salida)
+        self.assertNotIn("0912345678", salida)
+
 
 class RotacionDeClavesTestCase(TestCase):
     """RS-19: `FIELD_ENCRYPTION_KEYS` es una lista para poder rotar sin parar el sistema."""
@@ -320,6 +353,47 @@ class ComandoCifrarDatosPersonalesTestCase(TestCase):
         call_command("cifrar_datos_personales", "--recalcular-indices")
 
         self.assertEqual(Cliente.objects.por_identificacion(RUC_PRUEBA).count(), 1)
+
+    @patch("gestion.management.commands.cifrar_datos_personales.LOTE", 2)
+    def test_comando_dado_mas_filas_que_el_tamano_del_lote_cuando_repara_entonces_las_corrige_todas(self):
+        rucs = ["0912345671", "0912345672", "0912345673", "0912345674", "0912345675"]
+        for ruc in rucs:
+            self._escribir_en_claro(ClienteFactory(ruc_cedula=RUC_PRUEBA, sede=SedeFactory()), ruc)
+
+        call_command("cifrar_datos_personales", "--reparar")
+
+        for ruc in rucs:
+            self.assertEqual(Cliente.objects.por_identificacion(ruc).count(), 1)
+        call_command("cifrar_datos_personales")  # verificación posterior limpia
+
+    def test_comando_dado_una_fila_en_claro_cuando_repara_entonces_registra_la_clave_primaria_sin_el_valor(self):
+        cliente = ClienteFactory(ruc_cedula=RUC_PRUEBA, sede=self.sede)
+        self._escribir_en_claro(cliente, "0912345678")
+
+        with self.assertLogs("gestion.management.commands.cifrar_datos_personales", level="INFO") as registro:
+            call_command("cifrar_datos_personales", "--reparar")
+
+        salida = "\n".join(registro.output)
+        self.assertIn(f"pk={cliente.pk}", salida)
+        self.assertIn("Cliente.ruc_cedula", salida)
+        self.assertNotIn("0912345678", salida)
+
+    def test_comando_dado_un_token_de_clave_retirada_cuando_verifica_entonces_registra_error_con_pk(self):
+        cliente = ClienteFactory(ruc_cedula=RUC_PRUEBA, sede=self.sede)
+        with override_settings(FIELD_ENCRYPTION_KEYS=[generar_clave()]):
+            token_ajeno = cifrar("0912345678")
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE gestion_cliente SET ruc_cedula = %s WHERE id = %s", [token_ajeno, cliente.pk])
+
+        with (
+            self.assertLogs("gestion.management.commands.cifrar_datos_personales", level="ERROR") as registro,
+            self.assertRaises(CommandError),
+        ):
+            call_command("cifrar_datos_personales")
+
+        salida = "\n".join(registro.output)
+        self.assertIn(f"pk={cliente.pk}", salida)
+        self.assertNotIn(token_ajeno, salida)
 
 
 class ApiClientesConRucCifradoTestCase(TestCase):

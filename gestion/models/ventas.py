@@ -1,11 +1,12 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import DecimalField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 
-from gestion.crypto import indice_ciego
+from gestion.crypto import indice_ciego, normalizar_identificacion
 from gestion.model_fields import BlindIndexField, EncryptedCharField
 
 from .catalogo import Producto
@@ -72,7 +73,7 @@ class ClienteManager(models.Manager):
         `ruc_cedula` está cifrado, así que no admite `filter(ruc_cedula=...)`: la
         búsqueda va por el índice ciego, que tiene su propio índice en la base.
         """
-        return self.filter(ruc_cedula_hash=indice_ciego(str(ruc_cedula).strip()), **extra)
+        return self.filter(ruc_cedula_hash=indice_ciego(ruc_cedula), **extra)
 
     def obtener_o_crear_por_identificacion(self, ruc_cedula, defaults=None, **extra):
         """
@@ -81,7 +82,7 @@ class ClienteManager(models.Manager):
         Equivale a `get_or_create(ruc_cedula=...)`, que ya no es posible: la búsqueda
         va por el índice ciego y el valor en claro se escribe solo al crear.
         """
-        ruc_cedula = str(ruc_cedula).strip()
+        ruc_cedula = normalizar_identificacion(ruc_cedula)
         valores = dict(defaults or {})
         valores["ruc_cedula"] = ruc_cedula
         return self.get_or_create(
@@ -138,13 +139,11 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
         # `validate_unique()` corre antes de eso dentro de `full_clean()`: sin esta
         # línea, un duplicado llegaría a la base y daría un 500 en vez de un 400.
         if self.ruc_cedula:
-            self.ruc_cedula = self.ruc_cedula.strip()
-        self.ruc_cedula_hash = Cliente._meta.get_field("ruc_cedula_hash").calcular(self)
+            self.ruc_cedula = normalizar_identificacion(self.ruc_cedula)
+        self.ruc_cedula_hash = indice_ciego(self.ruc_cedula) if self.ruc_cedula else ""
 
     def unique_error_message(self, model_class, unique_check):
         if set(unique_check) == {"ruc_cedula_hash", "sede"}:
-            from django.core.exceptions import ValidationError
-
             return ValidationError(
                 "Ya existe un cliente con esa identificación en esta sede.",
                 code="unique_together",

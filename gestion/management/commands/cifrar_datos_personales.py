@@ -14,13 +14,28 @@ herramienta de operación posterior:
 
 Lee las columnas con SQL directo a propósito: el ORM descifra al leer y lanzaría
 `ErrorDeCifrado` en la primera fila en claro, que es justo la que hay que encontrar.
+
+Cada hallazgo y cada corrección se registra con el modelo, el campo y la clave primaria
+de la fila; nunca con el valor, que es el dato personal que se está protegiendo.
 """
+
+import logging
+from dataclasses import dataclass
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
 from gestion.crypto import ErrorDeCifrado, cifrar, descifrar, indice_ciego
 from gestion.models import Cliente, CustomUser
+
+logger = logging.getLogger(__name__)
+
+# Filas por lote y por transacción: acota la memoria y el tiempo que se mantienen los
+# bloqueos en tablas grandes. Mismo valor que usa la migración `gestion/0010`.
+LOTE = 500
+
+# Los tokens Fernet empiezan por 'gAAAAA' (versión 0x80 en base64 urlsafe).
+_PREFIJO_FERNET = "gAAAAA"
 
 
 class _Campo:
@@ -37,11 +52,38 @@ class _Campo:
     def pk_columna(self):
         return self.modelo._meta.pk.column
 
+    @property
+    def columnas(self):
+        columnas = [self.pk_columna, self.columna]
+        if self.columna_indice:
+            columnas.append(self.columna_indice)
+        return columnas
+
 
 CAMPOS = [
     _Campo(Cliente, "ruc_cedula", "ruc_cedula_hash"),
     _Campo(CustomUser, "date_of_birth"),
 ]
+
+
+@dataclass
+class _Resumen:
+    en_claro: int = 0
+    indices_malos: int = 0
+    ilegibles: int = 0
+    corregidos: int = 0
+
+    @property
+    def problemas(self):
+        return self.en_claro + self.indices_malos + self.ilegibles
+
+
+@dataclass
+class _Diagnostico:
+    claro: str
+    estaba_cifrado: bool
+    indice_esperado: str | None
+    indice_desfasado: bool
 
 
 class Command(BaseCommand):
@@ -86,14 +128,90 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.SUCCESS("Todos los datos personales están cifrados y bien indexados."))
 
-    def _leer(self, campo):
-        columnas = [campo.pk_columna, campo.columna]
-        if campo.columna_indice:
-            columnas.append(campo.columna_indice)
-        sql = f"SELECT {', '.join(columnas)} FROM {campo.tabla}"  # noqa: S608 — identificadores de _meta, no de entrada
-        with connection.cursor() as cursor:
-            cursor.execute(sql)
-            yield from cursor.fetchall()
+    def _procesar(self, campo, *, reparar, recalcular):
+        """Recorre el campo por lotes; cada lote es una transacción propia."""
+        resumen = _Resumen()
+        for lote in self._leer_por_lotes(campo):
+            with transaction.atomic():
+                for fila in lote:
+                    self._tratar_fila(campo, fila, resumen, reparar=reparar, recalcular=recalcular)
+        self._informar(campo, resumen)
+        return resumen.corregidos if (reparar or recalcular) else resumen.problemas
+
+    def _leer_por_lotes(self, campo):
+        """
+        Lotes de a `LOTE` filas, paginados por clave primaria.
+
+        Cada lote usa un cursor nuevo y lo cierra antes de devolverlo, así que escribir
+        mientras se recorre no choca con un resultado abierto en la misma conexión.
+        """
+        ultimo = None
+        while True:
+            condicion = "" if ultimo is None else f" WHERE {campo.pk_columna} > %s"
+            columnas = ", ".join(campo.columnas)
+            # Los identificadores salen de `_meta`, no de la entrada.
+            sql = f"SELECT {columnas} FROM {campo.tabla}{condicion} ORDER BY {campo.pk_columna}"  # noqa: S608
+            with connection.cursor() as cursor:
+                cursor.execute(sql, [] if ultimo is None else [ultimo])
+                lote = cursor.fetchmany(LOTE)
+            if not lote:
+                return
+            yield lote
+            if len(lote) < LOTE:
+                return
+            ultimo = lote[-1][0]
+
+    def _tratar_fila(self, campo, fila, resumen, *, reparar, recalcular):
+        pk, guardado = fila[0], fila[1]
+        indice_guardado = fila[2] if campo.columna_indice else None
+        if guardado in (None, ""):
+            return
+
+        diagnostico = self._diagnosticar(campo, guardado, indice_guardado)
+        if diagnostico is None:
+            resumen.ilegibles += 1
+            mensaje = (
+                f"{campo.etiqueta} pk={pk}: parece cifrado pero ninguna clave activa lo descifra. "
+                f"Falta una clave en FIELD_ENCRYPTION_KEYS."
+            )
+            logger.error(mensaje)
+            self.stderr.write(self.style.ERROR(f"  {mensaje}"))
+            return
+
+        if not diagnostico.estaba_cifrado:
+            resumen.en_claro += 1
+            logger.warning("%s pk=%s: dato personal sin cifrar.", campo.etiqueta, pk)
+        elif diagnostico.indice_desfasado:
+            resumen.indices_malos += 1
+            logger.warning("%s pk=%s: índice ciego desfasado.", campo.etiqueta, pk)
+
+        if self._hay_que_escribir(diagnostico, reparar=reparar, recalcular=recalcular):
+            # Si ya estaba cifrado se reescribe con la clave activa, que es lo que se
+            # quiere tras una rotación.
+            self._escribir(campo, pk, cifrar(diagnostico.claro), diagnostico.indice_esperado)
+            resumen.corregidos += 1
+            logger.info("%s pk=%s: dato cifrado e indexado con las claves activas.", campo.etiqueta, pk)
+
+    @staticmethod
+    def _diagnosticar(campo, guardado, indice_guardado):
+        """`None` si el valor parece un token pero ninguna clave activa lo descifra."""
+        try:
+            claro, estaba_cifrado = descifrar(guardado, registrar=False), True
+        except ErrorDeCifrado:
+            # Puede ser texto en claro (reparable) o un token de una clave que ya no está
+            # en FIELD_ENCRYPTION_KEYS (no reparable: falta la clave).
+            claro, estaba_cifrado = str(guardado), False
+            if claro.startswith(_PREFIJO_FERNET):
+                return None
+
+        indice_esperado = indice_ciego(claro) if campo.columna_indice else None
+        indice_desfasado = bool(campo.columna_indice) and indice_guardado != indice_esperado
+        return _Diagnostico(claro, estaba_cifrado, indice_esperado, indice_desfasado)
+
+    @staticmethod
+    def _hay_que_escribir(diagnostico, *, reparar, recalcular):
+        repara = reparar and (not diagnostico.estaba_cifrado or diagnostico.indice_desfasado)
+        return repara or (recalcular and diagnostico.indice_desfasado)
 
     def _escribir(self, campo, pk, valor_cifrado, indice):
         asignaciones = [f"{campo.columna} = %s"]
@@ -108,60 +226,8 @@ class Command(BaseCommand):
         with connection.cursor() as cursor:
             cursor.execute(sql, parametros)
 
-    def _procesar(self, campo, *, reparar, recalcular):
-        en_claro = 0
-        indices_malos = 0
-        ilegibles = 0
-        corregidos = 0
-
-        with transaction.atomic():
-            for fila in self._leer(campo):
-                pk, guardado = fila[0], fila[1]
-                indice_guardado = fila[2] if campo.columna_indice else None
-
-                if guardado in (None, ""):
-                    continue
-
-                try:
-                    claro = descifrar(guardado)
-                    estaba_cifrado = True
-                except ErrorDeCifrado:
-                    # Puede ser texto en claro (reparable) o un token de una clave que
-                    # ya no está en FIELD_ENCRYPTION_KEYS (no reparable: falta la clave).
-                    claro = str(guardado)
-                    estaba_cifrado = False
-                    if self._parece_token_fernet(claro):
-                        ilegibles += 1
-                        self.stderr.write(
-                            self.style.ERROR(
-                                f"  {campo.etiqueta} pk={pk}: parece cifrado pero ninguna clave activa "
-                                f"lo descifra. Falta una clave en FIELD_ENCRYPTION_KEYS."
-                            )
-                        )
-                        continue
-                    en_claro += 1
-
-                indice_esperado = indice_ciego(claro) if campo.columna_indice else None
-                indice_desfasado = campo.columna_indice and indice_guardado != indice_esperado
-                if indice_desfasado and estaba_cifrado:
-                    indices_malos += 1
-
-                hay_que_escribir = (reparar and (not estaba_cifrado or indice_desfasado)) or (
-                    recalcular and indice_desfasado
-                )
-                if hay_que_escribir:
-                    # Si ya estaba cifrado se reescribe con la clave activa, que es lo
-                    # que se quiere tras una rotación.
-                    self._escribir(campo, pk, cifrar(claro), indice_esperado)
-                    corregidos += 1
-
+    def _informar(self, campo, resumen):
         self.stdout.write(
-            f"{campo.etiqueta}: {en_claro} en claro, {indices_malos} con índice desfasado, "
-            f"{ilegibles} ilegibles, {corregidos} corregidos."
+            f"{campo.etiqueta}: {resumen.en_claro} en claro, {resumen.indices_malos} con índice desfasado, "
+            f"{resumen.ilegibles} ilegibles, {resumen.corregidos} corregidos."
         )
-        return corregidos if (reparar or recalcular) else en_claro + indices_malos + ilegibles
-
-    @staticmethod
-    def _parece_token_fernet(valor: str) -> bool:
-        """Los tokens Fernet empiezan por 'gAAAAA' (versión 0x80 en base64 urlsafe)."""
-        return valor.startswith("gAAAAA")

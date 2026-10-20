@@ -162,7 +162,7 @@ nombre original. Se hace así, y no con un `AlterField` sobre la columna existen
 porque el `ALTER COLUMN` dejaría el texto en claro dentro de la columna nueva y la
 conversión de `date` a texto en SQL Server depende del estilo de `CONVERT`.
 
-**La marcha atrás (`migrate gestion 0009`) descifra los datos pero no puede recrear las
+**La marcha atrás (`migrate gestion 0003_squashed_0009_paromaquina_origen`) descifra los datos pero no puede recrear las
 columnas que borró**: para volver atrás hay que restaurar el respaldo del paso 1.
 
 ## 6. El comando de operación
@@ -177,6 +177,26 @@ columnas que borró**: para volver atrás hay que restaurar el respaldo del paso
 
 Lee las columnas con SQL directo a propósito: el ORM descifra al leer y lanzaría
 `ErrorDeCifrado` en la primera fila en claro, que es justo la que hay que encontrar.
+
+**Lotes y transacciones.** Recorre cada tabla de a 500 filas, paginando por clave primaria,
+y confirma una transacción por lote: la memoria no crece con el volumen y los bloqueos
+duran lo que un lote. Si falla a mitad, lo ya corregido queda confirmado y se puede repetir.
+
+### Registro (logs)
+
+El código de cifrado usa `logging` con el nombre del módulo, y **nunca escribe el valor
+cifrado, el token ni el dato personal**:
+
+| Logger | Nivel | Cuándo | Contenido |
+|---|---|---|---|
+| `gestion.crypto` | ERROR | Un dato no se descifra con ninguna clave activa, o una clave Fernet es inválida | Solo el hecho (con la traza de la excepción) |
+| `gestion.model_fields` | ERROR | El ORM no puede leer un campo cifrado | `Modelo.campo`; Django no entrega la clave primaria en ese punto |
+| `gestion.management.commands.cifrar_datos_personales` | ERROR / WARNING / INFO | Token ilegible / fila en claro o índice desfasado / fila corregida | `Modelo.campo pk=<id>` |
+
+Para localizar la fila de un error de `gestion.model_fields`, se ejecuta el comando en
+modo verificación: devuelve la clave primaria. Una fila ilegible sigue lanzando
+`ErrorDeCifrado` (no se entrega el dato crudo), de modo que la vista que la lea responde
+con error hasta que se repare o se restaure la clave que falta.
 
 ## 7. Qué queda fuera
 

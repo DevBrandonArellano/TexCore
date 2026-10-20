@@ -26,7 +26,7 @@ La prueba de carga con 3 años de operación simulada (4 empresas, ~1 M de audit
 * Dos índices compuestos: `(object_sede_id, -fecha_hora)` y `(usuario_sede_id, -fecha_hora)`, uno por cada rama del OR. Se retira el índice simple de `object_sede_id`, que el compuesto ya cubre. **Reemplazados el 8-oct por un índice cubriente por fecha** (ver la revisión más abajo).
 * El listado filtra `Q(usuario_sede_id=X) | Q(object_sede_id=X)` sin unir con el usuario. Los grupos del usuario se leen una sola vez.
 * **Migraciones:**
-  - `gestion/0004` agrega el campo y los índices.
+  - `gestion/0004` agrega el campo y los índices (las migraciones 0003 a 0009 de `gestion` están hoy consolidadas en `0003_squashed_0009_paromaquina_origen`).
   - `gestion/0005` rellena las filas existentes en bloques de 10 000 (`atomic = False`, se puede repetir) con la sede **actual** del usuario, la única disponible para esas filas.
 * Además se implementó el `search` que `AuditLogViewer` ya enviaba y el backend ignoraba: busca por usuario, tabla o id del registro.
 
