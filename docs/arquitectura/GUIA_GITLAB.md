@@ -27,7 +27,7 @@ Los puertos 80 y 443 son del stack de TexCore y no se tocan. El archivo es `infr
 
 ## 0. Estado de la instalación (20-oct-2026)
 
-Ya hecho en este equipo: GitLab y el registro en marcha, grupo `interfibra` y proyecto `interfibra/texcore` (privado), ajustes del proyecto, `master` y `staging` protegidas, los dos runners registrados y en línea, la CA de confianza en Docker, las variables de CI de la tabla del §7 (salvo las marcadas como pendientes) y la programación semanal. Lo que queda es del usuario: **el primer push** (§4), las variables `PRODUCCION_HOST` y `TEXCORE_DIR`, el espejo hacia GitHub y el runner de producción.
+Ya hecho en este equipo: GitLab y el registro en marcha, grupo `interfibra` y proyecto `interfibra/texcore` (privado), ajustes del proyecto, `master` y `staging` protegidas, los dos runners registrados y en línea, la CA de confianza en Docker, las variables de CI de la tabla del §7 (salvo las marcadas como pendientes) y la programación semanal. Desde entonces el usuario hizo el primer push (pipeline #6 en verde), `master` es la rama por defecto y el MR #1 (`MES` → `staging`) está en curso. Lo que queda es del usuario: cerrar el push directo (§4), crear swap (§1), las variables `PRODUCCION_HOST` y `TEXCORE_DIR`, el espejo hacia GitHub y el runner de producción.
 
 ## 2. Instalación (una sola vez)
 

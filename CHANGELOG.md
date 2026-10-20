@@ -46,9 +46,9 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 16. **Al desplegar `MES`:** generar `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` de producción **antes** de `migrate` (la `0010` no arranca sin ellas), respaldo previo, y `manage.py cifrar_datos_personales` para verificar. Guardar `FIELD_ENCRYPTION_KEYS` fuera del servidor: sin ella los datos cifrados no se recuperan (`docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §5).
 17. Al final: staging, TEX-54 y el resto de la corrección del texto de la tesis (`CORRECCIONES_TESIS.md` §1, §2 y §5: flake8 y bandit por Ruff, y las cifras de las Tablas 46 y 47).
 18. ✅ ~~Seguridad de la API: RNF-02 y OWASP API1/API2~~ (20-oct), ✅ ~~GitLab CE levantado y configurado~~ (20-oct, runners en línea, variables de CI y programación), ✅ ~~Gate ISTQB, plan de pruebas formal y ADR de Ruff~~ (20-oct).
-19. **Primer commit y push a GitLab** (del usuario): `git push gitlab master staging MES`. Después: cambiar la rama por defecto de `main` a `master` y poner el push directo de `master` y `staging` en «Nadie» (`GUIA_GITLAB.md` §4).
+19. ✅ ~~Primer commit y push a GitLab~~ (20-oct): `MES`, `staging` y `master` subidas, `master` por defecto, pipeline #6 en verde y MR #1 (`MES` → `staging`) con fusión automática. Falta poner el push directo de `master` y `staging` en «Nadie» (`GUIA_GITLAB.md` §4).
 20. **Variables y servicios pendientes de GitLab:** `PRODUCCION_HOST` y `TEXCORE_DIR`, espejo hacia GitHub (necesita un token), runner `texcore-produccion` en la VM, guardar fuera del equipo y borrar `infrastructure/gitlab/secretos/`, y cambiar la contraseña de `root`.
-21. **Revisar el primer pipeline** en GitLab (`lint:*`, `test:*`, `audit:*`) y, en `master`, `build:imagenes` → `scan:trivy` → `staging:efimero`. El pipeline todavía no corrió; es donde suelen aparecer los ajustes finos. Probar una restauración del respaldo de GitLab (RS-23).
+21. ✅ ~~Primer pipeline de integración~~ (pipeline #6 en verde). **Falta el primer release en `master`:** `build:imagenes` → `scan:trivy` → `staging:efimero`; es donde se esperan los ajustes finos. Antes, **crear swap** (RS-25). Probar una restauración del respaldo de GitLab (RS-23). Detalle en «Cierre de la sesión del 20-oct».
 
 #### Estado del entorno Linux (20-oct) — reemplaza al del 14-oct
 
@@ -128,9 +128,9 @@ Pedido del usuario: resolver **RS-19**, el único ❌ del contraste con la tesis
 
 **Texto para la tesis:** `CORRECCIONES_TESIS.md` §3 (párrafo para pegar, el enunciado del RNF-01 y las fronteras del alcance que conviene declarar).
 
-### 20 de Octubre de 2026 — Resumen del día (sin commitear)
+### 20 de Octubre de 2026 — Resumen del día y cierre de la sesión
 
-Cuatro bloques de trabajo, en orden. El detalle de cada uno está en las entradas que siguen.
+Seis bloques de trabajo, en orden. El detalle de cada uno está en las entradas que siguen. El estado en que queda todo y los pendientes del 21-oct están al final de este resumen.
 
 | # | Bloque | Resultado |
 |---|---|---|
@@ -138,6 +138,8 @@ Cuatro bloques de trabajo, en orden. El detalle de cada uno está en las entrada
 | 2 | **Migración `gestion.0010` en el stack `texcore-prod`** | Las migraciones consolidadas se registran solas por su lista `replaces`. Antes de migrar: respaldo `texcore_db_pre_cifrado_2026-10-20.bak` (1,2 GB, con `CHECKSUM`) en el volumen `mssql_data`, y generación de `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` local (copia previa en `.env.bak-pre-cifrado`, ambos fuera de git). Backend reconstruido (`mes-1018`) y `migrate` aplicó la `0010`. Verificado: 160 clientes con el RUC cifrado en la base, 0 sin índice ciego y el ORM los descifra; 0 usuarios con fecha de nacimiento (no se contaron antes de migrar, probablemente ya eran nulas). **Si se pierden las claves, los datos cifrados no se recuperan** |
 | 3 | **Seguridad de la API (RNF-02, OWASP API1/API2)** | 7 hallazgos corregidos y 6 pruebas globales nuevas (entrada «Seguridad de la API»). Imágenes `mes-1019` y stack recreado con ellas. En el front: aviso del RUC duplicado del Vendedor |
 | 4 | **GitLab CI, ISTQB y Ruff** | `.gitlab-ci.yml`, GitLab CE levantado y configurado en este equipo, GitHub Actions retirado, gate ISTQB, plan de pruebas formal y ADR de Ruff (entrada «GitLab CI como plataforma principal») |
+| 5 | **Estabilización del CI: pipelines #1 a #6** | El usuario empujó `MES` al GitLab del servidor y el pipeline se corrigió en cinco vueltas hasta quedar completo en verde (12 jobs, 12 min, cobertura media 95,8 %): marcador de `detect-secrets`, 7 errores de `mypy`, línea base de `detect-secrets` sin commitear, prueba de rendimiento del RNF-03 (mejor de 3 aperturas) y Vitest con 4 procesos. Registro abierto de GitLab cerrado |
+| 6 | **Incidente de memoria y MR #1** | El OOM killer cerró Firefox y el escritorio; se bajó el runner a 1 job y se pusieron topes de memoria (RS-25). Se subió `master`, se abrió el MR #1 de `MES` a `staging` y quedó con fusión automática al pasar su pipeline |
 
 **Tesis.** El PDF del anteproyecto no se modificó. Lo que cambió es la evidencia del repositorio: el RNF-02 y API1/API2 se **sostienen sin corrección** (`CORRECCIONES_TESIS.md` §4, con las precisiones de alcance); «GitLab CI» y «GitLab Container Registry» pasan a «se cumple»; queda **una sola corrección de redacción** del pipeline, flake8 y bandit por Ruff (§5, con el párrafo para pegar y los motivos); y siguen vigentes el cifrado (§3) y las demás filas de §1 y §2.
 
@@ -157,10 +159,35 @@ Cuatro bloques de trabajo, en orden. El detalle de cada uno está en las entrada
 **Estado del entorno al cierre.**
 - `texcore-prod`: 6 contenedores `healthy` con las imágenes `mes-1019` (código de seguridad). Los cambios posteriores de ISTQB y GitLab no tocan código de producción.
 - GitLab: `texcore-gitlab` en `https://192.168.1.55:8929`, registro en `:5050` y SSH en `:2224`; `gitlab` sano y los dos runners en línea. Datos en los volúmenes `gitlab_config`, `gitlab_logs` y `gitlab_data`.
+- GitLab: ramas `master` (por defecto), `staging` y `MES`, las tres protegidas; `master` y `staging` con push directo aún permitido a Maintainers. Programación semanal creada (lunes 06:00). Registro de usuarios cerrado.
 - Fuera de git: `infrastructure/gitlab/.env`, `certs/` (certificado propio de 825 días) y `secretos/` (clave privada de cosign y su contraseña, ya cargadas en GitLab).
 - En el equipo: imagen `texcore/ci-tools:1`; la CA de GitLab en `/etc/docker/certs.d/192.168.1.55:5050/ca.crt` (escrita con un contenedor, sin `sudo`); remoto git `gitlab` con la CA configurada solo en este repositorio.
-- Credenciales: el token temporal de `root` usado para configurar GitLab se revocó y los tokens de runner se borraron del directorio de trabajo. La contraseña de `root` se compartió por el chat: conviene cambiarla.
-- **Nada está commiteado** (259 archivos entre nuevos, modificados y eliminados, sin contar el grafo).
+- Credenciales: los tokens temporales de `root` usados para configurar GitLab y para el MR se revocaron y los tokens de runner se borraron del directorio de trabajo. La contraseña de `root` se compartió por el chat: conviene cambiarla.
+- Memoria: 16 GB **sin swap**; el runner `texcore-ci` corre 1 job a la vez con topes de 4 GB por job y 3 GB por servicio.
+- Git: el usuario commiteó y empujó el trabajo del día a GitLab (`fd304a6`, `e6e926d`, `3110891`, `3c4cb4c`, `685c5a1` en `MES`). Quedan sin commitear solo `CHANGELOG.md` y `CHECKLIST_EVIDENCIA_MANUAL.md` (esta documentación).
+
+#### Cierre de la sesión del 20-oct: estado y pendientes para el 21-oct
+
+**Estado exacto al cerrar.**
+- **Pipeline #6** de `MES` en verde (12 jobs). Coberturas: `test:backend` 92,5 %, `test:scanning` 94,0 %, `test:printing` 98,6 %, `test:reporting` 98,3 %, `test:frontend` 95,4 %.
+- **MR #1** (`MES` → `staging`): abierto, pipeline #8 corriendo, con la **fusión automática de GitLab activada** («al pasar el pipeline», sin borrar `MES`). Si el pipeline falla no se fusiona nada y hay que revisarlo.
+- **`master`** subida y rama por defecto, pero con el contenido **antiguo** (`b0d981a`, anterior al 5-oct). Su push disparó el pipeline #7, que falló con `config_error` (0 jobs) porque ese `master` aún trae el `.gitlab-ci.yml` viejo, retirado el 5-oct, con un error en `lint:backend:script`. No es un fallo del pipeline actual: desaparece al fusionar `staging` en `master`, que lo reemplaza por el nuevo. Hasta entonces no hay pipeline de release.
+- **Sin probar todavía:** `build:imagenes`, `scan:trivy`, `staging:efimero` y `deploy:produccion`/`rollback:produccion` (este último espera la VM).
+
+**Qué ocurrirá solo al fusionarse el MR #1.** Se dispara el pipeline de la rama `staging`: los 12 jobs de integración más `build:validacion`, que construye las imágenes del backend y de nginx en el Docker del host. Esos builds **no** llevan el tope de memoria de los demás jobs, y el equipo sigue sin swap: es el punto más probable de un nuevo OOM.
+
+**Pendientes, en orden.**
+1. **Crear swap** (`sudo`, comandos en `GUIA_GITLAB.md` §1) antes del release.
+2. Revisar el resultado del MR #1 y del pipeline de `staging` (`build:validacion`).
+3. MR de `staging` a `master` y revisar el **primer release**: firma con cosign, Trivy (CVE con parche en las 6 imágenes), registro de imágenes y staging efímero con el humo de los 11 roles. Es donde se esperan los siguientes ajustes.
+4. Poner el push directo de `master` y `staging` en «Nadie».
+5. Variables `PRODUCCION_HOST` y `TEXCORE_DIR`, espejo hacia GitHub (token), runner `texcore-produccion` (cuando exista la VM).
+6. Guardar fuera del equipo y borrar `infrastructure/gitlab/secretos/`; cambiar la contraseña de `root`.
+7. Tomar las capturas de la evidencia (integración ya disponible con el pipeline #6; release después del paso 3) y, si se quiere, un script que descargue logs y artefactos a `docs/gestion-proyecto/evidencia/gitlab/`.
+8. Probar una restauración del respaldo de GitLab (RS-23) y volver a correr `scripts/run_backend_tests.sh` para tener la cifra final en SQL Server (1944 pruebas, 92,5 %, ya medida el 20-oct).
+9. Texto de la tesis: aplicar la única corrección del pipeline (flake8 y bandit por Ruff, `CORRECCIONES_TESIS.md` §5) y las cifras de las Tablas 46 y 47.
+
+**Lecciones del día** (para no repetirlas): correr en local `ruff`, `mypy` y `detect-secrets-hook` antes de empujar y commitear `.secrets.baseline` si el hook lo actualiza; no cargar el equipo con builds y pruebas a la vez; las pruebas de tiempo se miden en la mejor corrida, no en la primera; y GitLab 19 ya no deja iniciar sesión por contraseña en la API.
 
 ### 20 de Octubre de 2026 (tarde) — GitLab CI como plataforma principal, gate ISTQB y Ruff documentado (sin commitear)
 
@@ -186,6 +213,8 @@ Pedido del usuario: «si la tesis nos pide GitLab lo tenemos que usar» y cumpli
 **Incidente de memoria (20-oct, tarde).** Con el pipeline corriendo, el kernel activó el OOM killer y cerró Firefox y `plasmashell` (el escritorio). El equipo tiene 16 GB **sin swap** y compartía: GitLab (3,8 GB), el stack `texcore-prod` (~2,5 GB), un job de Node/Vitest (3,2 GB) y un SQL Server de CI sin tope. Mi aporte: había subido el runner a 2 jobs en paralelo. `texcore-prod` y GitLab no fueron tocados por el OOM. Medidas: (1) `concurrent = 1` en el runner `texcore-ci`; (2) tope de 4 GB por job y 3 GB por servicio (`memory` y `service_memory` en el `config.toml` del runner), para que un exceso falle ese job y no el escritorio; (3) `MSSQL_MEMORY_LIMIT_MB=2048` en el SQL Server del job `test:backend` y en `scripts/run_backend_tests.sh` (sin tope, SQL Server reserva hasta el 80 % de la memoria del equipo); (4) `NODE_OPTIONS=--max-old-space-size=2048` en `test:frontend`. Riesgo **RS-25**. Pendiente del usuario: crear swap o zram (requiere `sudo`, ver `GUIA_GITLAB.md` §1).
 
 **Cuarto intento (pipeline #5).** `test:backend` **pasó** (494 s) con la medición de la mejor de 3 aperturas, y también `lint:*`, `test:scanning`, `test:printing`, `test:reporting` y `audit:dependencias`. `test:frontend` falló: 21 de 1981 pruebas (14 archivos), 14 por «Test timed out in 20000ms» y el resto por la misma lentitud; en local pasan todas. Causa: Vitest lanza un proceso por núcleo (16 en este equipo), el job usó 3,2 GB y competía con el SQL Server de `test:backend` (el log marca `import 196s`). Corrección: `--maxWorkers=4` en `.gitlab-ci.yml` (en local, 1981 pruebas en 123 s y cobertura sobre los umbrales; en el runner tardaba 208 s y fallaba). Además se regeneró `.secrets.baseline` (un número de línea movido por las líneas nuevas del pipeline).
+
+**Quinto intento (pipeline #6, rama `MES`): primer pipeline completo en verde.** Los 12 jobs pasaron en 12 minutos (720 s): `lint:*` (5 jobs), `test:backend` (262 s, SQL Server 2022, cobertura 92,5 %), `test:scanning` (94,0 %), `test:printing` (98,6 %), `test:reporting` (98,3 %), `test:frontend` (174 s, 95,4 %), `audit:dependencias` y `audit:npm`. Cobertura media del pipeline: 95,8 %. Quedan por correr, y solo lo harán en `master`, `build:imagenes`, `imagenes:unir`, `scan:trivy`, `staging:efimero` y `deploy:produccion` (manual). Con el runner a 1 job, el pipeline es más lento (12 min) pero estable. Cinco correcciones salieron del camino (todas anotadas arriba): marcador de `detect-secrets`, errores de `mypy`, actualización de la línea base, medición del panel RNF-03 y topes de memoria y procesos.
 
 **Pendiente del usuario** (`GUIA_GITLAB.md` §0): el primer push de `master`, `staging` y `MES` (y luego cerrar el push directo y fijar `master` como rama por defecto), las variables `PRODUCCION_HOST` y `TEXCORE_DIR`, el espejo hacia GitHub (necesita un token de GitHub) y el runner de producción cuando exista la VM. El runner de producción se registra cuando exista la VM; hasta entonces `deploy:produccion` queda esperando.
 
