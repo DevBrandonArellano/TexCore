@@ -20,6 +20,16 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-local-only")
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
 
+# RS-19: claves de cifrado en reposo. Deterministas y solo de prueba.
+os.environ.setdefault(
+    "FIELD_ENCRYPTION_KEYS",
+    "dwh7QzsrN1sGwqaYI4L_uE_KyxtOZ7XyJ4KS6qljFmA=",  # pragma: allowlist secret
+)
+os.environ.setdefault(
+    "BLIND_INDEX_KEY",
+    "Slp7cvUFBcFzchQ5hXNVMCPl-v7ExwFySsj5xHRZ7Dw",  # pragma: allowlist secret
+)
+
 # DATABASES también es Fail Fast en settings.py (barrido de higiene Fase 5.7) —
 # aunque este módulo sobreescribe DATABASES a SQLite justo debajo, la ejecución
 # de settings.py completa primero vía `from TexCore.settings import *`, así que

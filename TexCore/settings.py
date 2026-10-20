@@ -39,6 +39,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = get_env_variable("SECRET_KEY")
 
+# ---------------------------------------------------------------------------
+# RS-19 — Cifrado de datos personales en reposo (LOPDP 2021, ISO/IEC 27001)
+# ---------------------------------------------------------------------------
+# Fail-fast, igual que SECRET_KEY: sin estas claves el sistema no puede leer los
+# datos personales ya guardados, y arrancar «a medias» los dejaría ilegibles sin
+# avisar. Ver gestion/crypto.py y docs/arquitectura/CIFRADO_DATOS_PERSONALES.md.
+#
+# FIELD_ENCRYPTION_KEYS: lista separada por comas. La primera cifra; todas descifran,
+# lo que permite rotar la clave sin parar el sistema (MultiFernet).
+FIELD_ENCRYPTION_KEYS = [
+    clave.strip() for clave in get_env_variable("FIELD_ENCRYPTION_KEYS").split(",") if clave.strip()
+]
+# BLIND_INDEX_KEY: estable. Si cambia, hay que recalcular los índices ciegos con
+# `manage.py cifrar_datos_personales --recalcular-indices`.
+BLIND_INDEX_KEY = get_env_variable("BLIND_INDEX_KEY")
+
 # SECURITY WARNING: don't run with debug turned on in production!
 # Acepta: 1, true, yes (case-insensitive). Cualquier otro valor = False.
 DEBUG = os.environ.get("DEBUG", "0").lower() in ("1", "true", "yes")

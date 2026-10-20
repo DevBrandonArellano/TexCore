@@ -83,11 +83,17 @@ trap cleanup EXIT
 # 4. Ejecutar tests + cobertura dentro del contenedor de test
 # ---------------------------------------------------------------------------
 echo "==> Ejecutando suite ..."
+# RS-19: claves de cifrado en reposo solo para la suite, las mismas que ci.yml.
+# No protegen nada real; van en variables para poder marcarlas ante detect-secrets.
+CLAVE_CIFRADO_TEST="XlejxlU-TjcZMY6ub4Qy9Y2sSvQcp17J3DBw0uh6fv8=" # pragma: allowlist secret
+CLAVE_INDICE_TEST="-xCQ08_ZmqAiZIQIPIOegGJZj1XY09_QZJX7LNuqzfM" # pragma: allowlist secret
 docker run --rm --network "$NETWORK" \
   -v "$PROJECT_DIR":/app -w /app \
   -e DJANGO_SETTINGS_MODULE="TexCore.settings_test" \
   -e DEBUG="0" \
   -e SECRET_KEY="ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx" \
+  -e FIELD_ENCRYPTION_KEYS="$CLAVE_CIFRADO_TEST" \
+  -e BLIND_INDEX_KEY="$CLAVE_INDICE_TEST" \
   -e CORS_ALLOWED_ORIGINS="http://localhost:3000" \
   -e CSRF_TRUSTED_ORIGINS="http://localhost:3000" \
   -e DB_ENGINE="mssql" \

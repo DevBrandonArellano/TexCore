@@ -5,6 +5,9 @@ from django.db import models
 from django.db.models import DecimalField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 
+from gestion.crypto import indice_ciego
+from gestion.model_fields import BlindIndexField, EncryptedCharField
+
 from .catalogo import Producto
 from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 from .produccion import LoteProduccion
@@ -62,6 +65,31 @@ class ClienteManager(models.Manager):
             )
         )
 
+    def por_identificacion(self, ruc_cedula, **extra):
+        """
+        Clientes con esa identificación exacta (RS-19).
+
+        `ruc_cedula` está cifrado, así que no admite `filter(ruc_cedula=...)`: la
+        búsqueda va por el índice ciego, que tiene su propio índice en la base.
+        """
+        return self.filter(ruc_cedula_hash=indice_ciego(str(ruc_cedula).strip()), **extra)
+
+    def obtener_o_crear_por_identificacion(self, ruc_cedula, defaults=None, **extra):
+        """
+        `get_or_create` buscando por identificación (RS-19).
+
+        Equivale a `get_or_create(ruc_cedula=...)`, que ya no es posible: la búsqueda
+        va por el índice ciego y el valor en claro se escribe solo al crear.
+        """
+        ruc_cedula = str(ruc_cedula).strip()
+        valores = dict(defaults or {})
+        valores["ruc_cedula"] = ruc_cedula
+        return self.get_or_create(
+            ruc_cedula_hash=indice_ciego(ruc_cedula),
+            defaults=valores,
+            **extra,
+        )
+
 
 class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
     # Lo agrega el manager por defecto (annotate): saldo de la cartera del cliente.
@@ -70,7 +98,12 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ["limite_credito", "plazo_credito_dias", "nivel_precio", "is_active"]
     requiere_justificacion_auditoria = True
     NIVEL_PRECIO_CHOICES = [("mayorista", "Mayorista"), ("normal", "Normal")]
-    ruc_cedula = models.CharField(max_length=20)
+    # RS-19: dato personal de identificación. Cifrado en reposo (LOPDP 2021); la
+    # unicidad y las búsquedas por igualdad van por `ruc_cedula_hash`.
+    ruc_cedula = EncryptedCharField(max_length=20, verbose_name="RUC o cédula")
+    ruc_cedula_hash = BlindIndexField(
+        source_field="ruc_cedula", db_index=True, verbose_name="índice de la identificación"
+    )
     nombre_razon_social = models.CharField(max_length=255)
     direccion_envio = models.CharField(max_length=500)
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
@@ -91,10 +124,32 @@ class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 condition=models.Q(limite_credito__gte=0), name="gestion_cliente_limite_credito_positivo"
             )
         ]
-        unique_together = ("ruc_cedula", "sede")
+        # Sobre el índice ciego y no sobre `ruc_cedula`: el texto cifrado de una misma
+        # identificación es distinto en cada escritura, así que una restricción sobre la
+        # columna cifrada no detectaría ningún duplicado.
+        unique_together = ("ruc_cedula_hash", "sede")
 
     def __str__(self):
         return self.nombre_razon_social
+
+    def clean(self):
+        super().clean()
+        # El índice ciego lo recalcula `BlindIndexField.pre_save()` al escribir, pero
+        # `validate_unique()` corre antes de eso dentro de `full_clean()`: sin esta
+        # línea, un duplicado llegaría a la base y daría un 500 en vez de un 400.
+        if self.ruc_cedula:
+            self.ruc_cedula = self.ruc_cedula.strip()
+        self.ruc_cedula_hash = Cliente._meta.get_field("ruc_cedula_hash").calcular(self)
+
+    def unique_error_message(self, model_class, unique_check):
+        if set(unique_check) == {"ruc_cedula_hash", "sede"}:
+            from django.core.exceptions import ValidationError
+
+            return ValidationError(
+                "Ya existe un cliente con esa identificación en esta sede.",
+                code="unique_together",
+            )
+        return super().unique_error_message(model_class, unique_check)
 
     def get_audit_sede_id(self):
         return self.sede_id

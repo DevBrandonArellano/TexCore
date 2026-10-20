@@ -742,8 +742,8 @@ class Command(BaseCommand):
             vendedores_sede = [v for v in e.vendedores if v.sede_id == sede_cli.id]
             vendedor_default = random.choice(vendedores_sede) if vendedores_sede else random.choice(e.vendedores)
             de_la_cartera_demo = bool(vendedor_demo) and i < 12
-            c, _created_cli = Cliente.objects.get_or_create(
-                ruc_cedula=ruc,
+            c, _created_cli = Cliente.objects.obtener_o_crear_por_identificacion(
+                ruc,
                 defaults={
                     "nombre_razon_social": f"Cliente Stress {i + 1} S.A.",
                     "direccion_envio": f"Calle {i + 1}, Av. Principal",

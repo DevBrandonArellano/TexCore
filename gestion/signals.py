@@ -79,6 +79,21 @@ CAMPOS_AUDITABLES_USER = [
     "date_of_birth",
 ]
 
+# RS-19: datos personales que se auditan sin guardar su valor. `AuditLog` es
+# inmutable y no está cifrado, así que escribir la fecha de nacimiento en claro ahí
+# anularía el cifrado del campo. Se guarda su HMAC: cambia cuando el dato cambia
+# —que es lo que la auditoría necesita demostrar— y no revela la fecha.
+CAMPOS_USER_SIN_VALOR_EN_AUDITORIA = frozenset({"date_of_birth"})
+
+
+def _valor_redactado(val):
+    """HMAC truncado del valor, para auditar el cambio sin registrar el dato."""
+    from gestion.crypto import indice_ciego
+
+    if val is None:
+        return None
+    return f"hmac:{indice_ciego(str(val))[:16]}"
+
 
 def _get_user_audit_data(instance):
     """Extrae datos auditables del usuario (solo PKs para FKs)."""
@@ -86,7 +101,9 @@ def _get_user_audit_data(instance):
     for field in CAMPOS_AUDITABLES_USER:
         try:
             val = getattr(instance, field, None)
-            if val is not None and hasattr(val, "pk"):
+            if field in CAMPOS_USER_SIN_VALOR_EN_AUDITORIA:
+                data[field] = _valor_redactado(val)
+            elif val is not None and hasattr(val, "pk"):
                 data[field] = val.pk
             elif hasattr(val, "isoformat"):  # date/datetime
                 data[field] = str(val)

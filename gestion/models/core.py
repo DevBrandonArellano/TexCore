@@ -12,6 +12,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 
 from gestion.middleware import get_cascade_justification, get_current_ip, get_current_user
+from gestion.model_fields import EncryptedDateField
 
 logger = logging.getLogger(__name__)
 
@@ -404,7 +405,9 @@ class Area(models.Model):
 class CustomUser(AbstractUser):
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
-    date_of_birth = models.DateField(null=True, blank=True)
+    # RS-19: dato personal. Cifrado en reposo (LOPDP 2021). No admite filtros ni
+    # ordenación en la base; la auditoría registra que cambió, no el valor.
+    date_of_birth = EncryptedDateField(null=True, blank=True)
     superior = models.ManyToManyField("self", symmetrical=False, related_name="inferiors_set", blank=True)
     bodegas_asignadas: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
         "Bodega", blank=True, related_name="usuarios_asignados"

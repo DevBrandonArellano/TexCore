@@ -285,6 +285,8 @@ REST_FRAMEWORK = {
 | Variable | Descripcion |
 |----------|-------------|
 | `SECRET_KEY` | Django secret key (produccion) |
+| `FIELD_ENCRYPTION_KEYS` | Claves Fernet del cifrado de datos personales en reposo (RS-19); lista separada por comas, la primera cifra |
+| `BLIND_INDEX_KEY` | Clave HMAC del indice ciego de la identificacion (RS-19) |
 | `DB_PASSWORD` | Contraseña de `sa` en SQL Server |
 | `ALLOWED_HOSTS` | Dominio(s) separados por coma; el primero lo usa el `HEALTHCHECK` |
 | `TRAZABILIDAD_BASE_URL` | URL base del QR de cada lote |
@@ -1800,6 +1802,7 @@ El unico archivo que se edita es `.env.prod` en el servidor; su plantilla es `.e
 |----------|-------------|-----|
 | `CI_REGISTRY_IMAGE`, `TAG` | Si | Nombre y etiqueta de las imagenes (el CD las sobrescribe con el registro y el SHA) |
 | `SECRET_KEY` | Si | Django |
+| `FIELD_ENCRYPTION_KEYS`, `BLIND_INDEX_KEY` | Si | Cifrado de los datos personales en reposo y su indice ciego (RS-19). Sin ellas el backend no arranca; si se pierde la primera, los datos cifrados no se recuperan |
 | `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` | Si | Host y origenes `https://` del servidor |
 | `TRAZABILIDAD_BASE_URL` | Si | URL base del QR de los lotes |
 | `DB_PASSWORD` | Si | Cuenta `sa` de SQL Server (backend y db) |

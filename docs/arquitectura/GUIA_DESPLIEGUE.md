@@ -73,6 +73,8 @@ Completa cada valor del archivo. Cada variable está comentada en el propio ejem
 | Valor | Cómo generarlo |
 |---|---|
 | `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `FIELD_ENCRYPTION_KEYS` | `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` — **guárdala también fuera del servidor: sin ella los datos personales cifrados no se recuperan** |
+| `BLIND_INDEX_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` — estable; cambiarla obliga a `manage.py cifrar_datos_personales --recalcular-indices` |
 | `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY` | `docker run --rm -v "$PWD":/app -w /app python:3.12-slim sh -c "pip install -q cryptography && python scripts/generate_rsa_keys.py"` |
 | `SCANNING_SERVICE_SECRET` / `REPORTING_SERVICE_SECRET` | `python3 -c "import secrets; print(secrets.token_urlsafe(40))"`, uno distinto para cada servicio |
 | `DB_PASSWORD` | Contraseña fuerte para la cuenta `sa` de SQL Server |
@@ -128,6 +130,14 @@ En **cada arranque**, el backend ejecuta `infrastructure/docker/entrypoint.sh`:
 4. `register_services`: credenciales de `scanning_service` y `reporting_excel`.
 
 Todo es idempotente. Los archivos estáticos se recolectan al construir la imagen.
+
+> **Al actualizar una base que ya tiene datos:** la migración `gestion/0010` cifra los
+> datos personales en reposo (RS-19). Exige `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY`
+> en el entorno —sin ellas el backend no arranca— y **borra las columnas en claro**, así
+> que la marcha atrás requiere restaurar el respaldo. Tómalo antes
+> (`scripts/respaldar_bd.sh`) y comprueba el resultado después con
+> `tc exec backend python manage.py cifrar_datos_personales`, que no escribe nada y falla
+> si quedó algo sin cifrar. Detalle en `CIFRADO_DATOS_PERSONALES.md` §5.
 
 Las sedes y las áreas **no se precargan**: el Administrador de Sistemas las crea en su primer ingreso. Después, cada Administrador de Sede registra las equivalencias de empaque de su sede.
 
