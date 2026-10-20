@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): formulario vacio / cantidad cero o negativa / producto y bodega origen sin
+ *   stock disponible / lote id especificado sin stock para ese lote / lote id que coincide con stock
+ *   disponible.
+ * - Análisis de valores límite (BVA): formulario vacio / cantidad cero o negativa / producto y bodega origen
+ *   sin stock disponible / lote id especificado sin stock para ese lote.
+ */
 import { describe, it, expect } from 'vitest';
 import { validateTransfer } from './inventoryUtils';
 

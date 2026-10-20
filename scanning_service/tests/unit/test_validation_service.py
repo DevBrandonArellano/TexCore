@@ -8,8 +8,11 @@ Convención ISTQB: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resu
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-from src.domain.models import Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
+from src.domain.models import AlcanceSede, Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from src.services.validation_service import LoteValidationService
+
+# Usuario que ve todas las sedes: las pruebas de reglas de negocio no dependen del alcance.
+TODAS = AlcanceSede(sede_id=None, ve_todas=True)
 
 # ---------------------------------------------------------------------------
 # Helpers para construir objetos mock del dominio
@@ -67,18 +70,18 @@ def _make_repo(lote=None, stock=None) -> MagicMock:
 class TestLoteValidationService_LoteNoEncontrado:
     def test_validate_dado_codigo_inexistente_cuando_validar_entonces_retorna_invalido(self):
         service = LoteValidationService(_make_repo(lote=None))
-        result = service.validate("LOTE-INEXISTENTE")
+        result = service.validate("LOTE-INEXISTENTE", TODAS)
         assert result.valid is False
         assert "no encontrado" in result.reason.lower()
 
     def test_validate_dado_codigo_inexistente_cuando_validar_entonces_consulta_repositorio_con_codigo(self):
         repo = _make_repo(lote=None)
-        LoteValidationService(repo).validate("LOTE-ABC")
-        repo.get_lote_by_codigo.assert_called_once_with("LOTE-ABC")
+        LoteValidationService(repo).validate("LOTE-ABC", TODAS)
+        repo.get_lote_by_codigo.assert_called_once_with("LOTE-ABC", TODAS)
 
     def test_validate_dado_codigo_inexistente_cuando_validar_entonces_no_consulta_stock(self):
         repo = _make_repo(lote=None)
-        LoteValidationService(repo).validate("LOTE-ABC")
+        LoteValidationService(repo).validate("LOTE-ABC", TODAS)
         repo.get_stock_activo_por_lote.assert_not_called()
 
 
@@ -91,7 +94,7 @@ class TestLoteValidationService_LoteSinOrden:
     def test_validate_dado_lote_sin_orden_cuando_validar_entonces_retorna_invalido(self):
         lote = _make_lote()
         lote.orden_produccion = None
-        result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001", TODAS)
         assert result.valid is False
         assert result.reason is not None
 
@@ -99,14 +102,14 @@ class TestLoteValidationService_LoteSinOrden:
         orden = _make_orden()
         orden.producto = None
         lote = _make_lote(orden=orden)
-        result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001", TODAS)
         assert result.valid is False
 
     def test_validate_dado_lote_sin_orden_cuando_validar_entonces_no_consulta_stock(self):
         lote = _make_lote()
         lote.orden_produccion = None
         repo = _make_repo(lote=lote)
-        LoteValidationService(repo).validate("LOTE-00001")
+        LoteValidationService(repo).validate("LOTE-00001", TODAS)
         repo.get_stock_activo_por_lote.assert_not_called()
 
 
@@ -118,7 +121,7 @@ class TestLoteValidationService_LoteSinOrden:
 class TestLoteValidationService_LoteSinStock:
     def test_validate_dado_lote_sin_stock_cuando_validar_entonces_retorna_invalido(self):
         lote = _make_lote()
-        result = LoteValidationService(_make_repo(lote=lote, stock=None)).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=None)).validate("LOTE-00001", TODAS)
         assert result.valid is False
         assert "stock" in result.reason.lower()
 
@@ -126,7 +129,7 @@ class TestLoteValidationService_LoteSinStock:
         lote = _make_lote()
         lote.id = 42
         repo = _make_repo(lote=lote, stock=None)
-        LoteValidationService(repo).validate("LOTE-00001")
+        LoteValidationService(repo).validate("LOTE-00001", TODAS)
         repo.get_stock_activo_por_lote.assert_called_once_with(42)
 
 
@@ -139,19 +142,21 @@ class TestLoteValidationService_LoteValido:
     def test_validate_dado_lote_con_stock_cuando_validar_entonces_retorna_valido(self):
         lote = _make_lote("LOTE-00001")
         stock = _make_stock(cantidad=25)
-        result = LoteValidationService(_make_repo(lote=lote, stock=stock)).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=stock)).validate("LOTE-00001", TODAS)
         assert result.valid is True
         assert result.lote is not None
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_codigo_en_respuesta(self):
         lote = _make_lote("LOTE-00001")
-        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001", TODAS)
         assert result.lote.codigo == "LOTE-00001"
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_retorna_nombre_bodega_correcto(self):
         bodega = _make_bodega(id=10, nombre="Bodega Sur")
         lote = _make_lote()
-        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock(bodega=bodega))).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock(bodega=bodega))).validate(
+            "LOTE-00001", TODAS
+        )
         assert result.lote.bodega_nombre == "Bodega Sur"
         assert result.lote.bodega_id == 10
 
@@ -159,19 +164,19 @@ class TestLoteValidationService_LoteValido:
         producto = _make_producto(id=5, descripcion="Hilo Texturizado")
         orden = _make_orden(producto=producto)
         lote = _make_lote(orden=orden)
-        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001", TODAS)
         assert result.lote.producto_id == 5
         assert result.lote.producto_nombre == "Hilo Texturizado"
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_peso_es_string_de_cantidad(self):
         stock = _make_stock(cantidad=37.5)
         lote = _make_lote()
-        result = LoteValidationService(_make_repo(lote=lote, stock=stock)).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=stock)).validate("LOTE-00001", TODAS)
         assert result.lote.peso == "37.5"
 
     def test_validate_dado_lote_valido_cuando_validar_entonces_lote_sin_razon(self):
         lote = _make_lote()
-        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001")
+        result = LoteValidationService(_make_repo(lote=lote, stock=_make_stock())).validate("LOTE-00001", TODAS)
         assert result.reason is None
 
 
@@ -196,7 +201,7 @@ class _RealDomainRepo:
         self._lote = lote
         self._stock = stock
 
-    def get_lote_by_codigo(self, codigo: str):
+    def get_lote_by_codigo(self, codigo: str, alcance: AlcanceSede):
         return self._lote
 
     def get_stock_activo_por_lote(self, lote_id: int):
@@ -212,7 +217,7 @@ class TestLoteValidationService_ConDominioReal:
         stock = StockBodega(id=1, cantidad=Decimal("25.500"), bodega=bodega)
         repo = _RealDomainRepo(lote=lote, stock=stock)
 
-        result = LoteValidationService(repo).validate("LOTE-00001")
+        result = LoteValidationService(repo).validate("LOTE-00001", TODAS)
 
         assert result.valid is True
         assert result.lote.producto_id == 5
@@ -242,7 +247,7 @@ class TestLoteValidationService_ProductosDelLote:
         )
         stock = StockBodega(id=1, cantidad=Decimal("25.500"), bodega=central)
 
-        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("LOTE-00001")
+        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("LOTE-00001", TODAS)
 
         assert result.lote.peso == "25.500"
         assert result.lote.peso_total == "30.000"
@@ -258,6 +263,26 @@ class TestLoteValidationService_ProductosDelLote:
         )
         stock = StockBodega(id=1, cantidad=Decimal("1.000"), bodega=Bodega(id=1, nombre="B"))
 
-        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("L-1")
+        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("L-1", TODAS)
 
         assert (result.lote.peso_total, result.lote.productos) == (None, [])
+
+
+# ---------------------------------------------------------------------------
+# OWASP API1: alcance por sede del usuario que escanea
+# ---------------------------------------------------------------------------
+
+
+class TestLoteValidationService_AlcanceSede:
+    def test_validate_dado_sede_del_usuario_cuando_valida_entonces_la_pasa_al_repositorio(self):
+        repo = _make_repo(lote=None)
+        alcance = AlcanceSede(sede_id=3, ve_todas=False)
+        LoteValidationService(repo).validate("LOTE-ABC", alcance)
+        repo.get_lote_by_codigo.assert_called_once_with("LOTE-ABC", alcance)
+
+    def test_validate_dado_usuario_sin_sede_que_no_ve_todas_cuando_valida_entonces_no_encontrado_sin_consultar(self):
+        repo = _make_repo(lote=_make_lote())
+        result = LoteValidationService(repo).validate("LOTE-ABC", AlcanceSede(sede_id=None, ve_todas=False))
+        assert result.valid is False
+        assert "no encontrado" in result.reason.lower()
+        repo.get_lote_by_codigo.assert_not_called()

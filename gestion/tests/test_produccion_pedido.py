@@ -1,3 +1,10 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): detalle pedido valido / pedido anulado / pedido ya despachado / detalle ya
+  fabricado / lote conforme.
+- Transición de estados (STT): pedido anulado.
+"""
+
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError

@@ -1,9 +1,16 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una formula / una formula sin oficial / la pestana receta activa por
+ *   defecto / click en editar receta / click en volver.
+ * - Caja blanca (CB): ramas de error — error al cargar el historial de ordenes.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormulaDetalle } from './FormulaDetalle';
-import type { FormulaColor, ProcesoTintoreria } from '../../lib/types';
+import type { FormulaColor, ProcesoTintoreria } from '../../lib/types';
+
 import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();

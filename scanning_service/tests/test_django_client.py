@@ -1,10 +1,19 @@
-"""Tests para DjangoApiClient. EP + circuit breaker."""
+"""Tests para DjangoApiClient. EP + circuit breaker.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): api ok / lote inexistente / cache poblado / codigo con barras / sin stock.
+- Análisis de valores límite (BVA): sin stock.
+"""
 
 from decimal import Decimal
 from unittest.mock import MagicMock
 
 import httpx
 import pytest
+
+from src.domain.models import AlcanceSede
+
+TODAS = AlcanceSede(sede_id=None, ve_todas=True)
 
 MOCK_VALIDATE_RESPONSE = {
     "lote_id": 1,
@@ -35,7 +44,7 @@ class TestDjangoApiClient:
 
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
-        lote = client.get_lote_by_codigo("LOT-001")
+        lote = client.get_lote_by_codigo("LOT-001", TODAS)
 
         assert lote is not None
         assert lote.codigo_lote == "LOT-001"
@@ -49,7 +58,7 @@ class TestDjangoApiClient:
 
         respx_mock.get(VALIDATE_URL_NO_EXIST).mock(return_value=httpx.Response(404, json={"detail": "No encontrado"}))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
-        result = client.get_lote_by_codigo("NO-EXISTE")
+        result = client.get_lote_by_codigo("NO-EXISTE", TODAS)
         assert result is None
 
     # EP: stock disponible retorna StockBodega desde cache
@@ -60,7 +69,7 @@ class TestDjangoApiClient:
 
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
-        lote = client.get_lote_by_codigo("LOT-001")  # puebla el cache
+        lote = client.get_lote_by_codigo("LOT-001", TODAS)  # puebla el cache
         stock = client.get_stock_activo_por_lote(lote.id)
 
         assert stock is not None
@@ -81,7 +90,7 @@ class TestDjangoApiClient:
         route = respx_mock.get(url_esperada).mock(return_value=httpx.Response(404, json={"detail": "No encontrado"}))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
 
-        result = client.get_lote_by_codigo(codigo_url)
+        result = client.get_lote_by_codigo(codigo_url, TODAS)
 
         assert result is None
         assert route.called
@@ -100,7 +109,7 @@ class TestDjangoApiClient:
         }
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=response_sin_stock))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
-        lote = client.get_lote_by_codigo("LOT-001")
+        lote = client.get_lote_by_codigo("LOT-001", TODAS)
         stock = client.get_stock_activo_por_lote(lote.id)
         assert stock is None
 
@@ -134,7 +143,7 @@ class TestDjangoApiClientProductosDelLote:
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=respuesta))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
 
-        lote = client.get_lote_by_codigo("LOT-001")
+        lote = client.get_lote_by_codigo("LOT-001", TODAS)
 
         assert [(linea.producto.id, linea.cantidad, linea.bodega.nombre) for linea in lote.productos] == [
             (7, Decimal("95.500"), "Bodega Principal"),
@@ -149,4 +158,28 @@ class TestDjangoApiClientProductosDelLote:
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
 
-        assert client.get_lote_by_codigo("LOT-001").productos == []
+        assert client.get_lote_by_codigo("LOT-001", TODAS).productos == []
+
+
+class TestDjangoApiClientAlcanceSede:
+    """OWASP API1: la sede del usuario viaja a la internal_api como `sede_id`."""
+
+    def test_get_lote_dado_usuario_de_una_sede_cuando_valida_entonces_envia_su_sede(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        ruta = respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(404, json={"detail": "x"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+        client.get_lote_by_codigo("LOT-001", AlcanceSede(sede_id=3, ve_todas=False))
+        assert ruta.calls.last.request.url.params["sede_id"] == "3"
+
+    def test_get_lote_dado_usuario_que_ve_todas_cuando_valida_entonces_no_envia_sede(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        ruta = respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(404, json={"detail": "x"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+        client.get_lote_by_codigo("LOT-001", TODAS)
+        assert "sede_id" not in ruta.calls.last.request.url.params

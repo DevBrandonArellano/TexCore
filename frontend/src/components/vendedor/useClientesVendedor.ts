@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { usePagination } from '../../hooks/usePagination';
-import type { Cliente } from '../../lib/types';
-import { datosDeError } from '../../lib/apiError';
+import type { Cliente } from '../../lib/types';
+
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -66,16 +67,12 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
       fetchData();
     } catch (error) {
       console.error('Error saving cliente:', error);
-      const data = datosDeError(error) as Record<string, unknown> | string | undefined;
-      if (data) {
-        if (typeof data === 'object' && typeof data.detail === 'string') {
-          toast.error(data.detail);
-        } else if (typeof data === 'object') {
-          const messages = Object.entries(data).map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('\\n');
-          toast.error('Error de validación', { description: messages || 'Revisa los campos enviados.' });
-        } else {
-          toast.error('Error al guardar el cliente');
-        }
+      const data = datosDeError(error) as Record<string, unknown> | undefined;
+      if (data && typeof data === 'object' && typeof data.detail === 'string') {
+        toast.error(data.detail);
+      } else if (data) {
+        const mensaje = mensajeDeLaApi(error, 'Revisa los campos enviados.');
+        toast.error('Error de validación', { description: mensaje });
       } else {
         toast.error('Error de conexión o servidor al guardar el cliente');
       }

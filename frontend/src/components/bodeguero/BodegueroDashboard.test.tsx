@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que las peticiones aun no resuelven / sin productos, bodegas ni lotes /
+ *   productos, bodegas y lotes existentes / un perfil con nombre / un perfil sin nombre.
+ * - Caja blanca (CB): ramas de error — que fallan las peticiones de productos o bodegas / que fallan las
+ *   peticiones opcionales de lotes y proveedores / un error al obtener las alertas.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

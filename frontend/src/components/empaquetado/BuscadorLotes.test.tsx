@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin busqueda / click en Buscar sin filtros / todos los filtros llenos /
+ *   resultados / lote sin clasificacion de calidad.
+ * - Caja blanca (CB): ramas de error — error con detalle de fecha desde / error sin detalle especifico.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

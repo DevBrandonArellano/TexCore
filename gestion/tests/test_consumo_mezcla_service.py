@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): mezcla valida / suma distinta de 100 / stock insuficiente / consumo registrado
+  / lote con stock en dos bodegas.
+"""
+
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError

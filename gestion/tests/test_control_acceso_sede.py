@@ -442,3 +442,62 @@ class ErroresInternosSinDetalleTestCase(_DosSedesMixin, TestCase):
         )
         self.assertEqual(resp.status_code, 500)
         self.assertNotIn("detalle interno SQL", str(resp.data))
+
+
+class SedeViewSetAlcanceTestCase(_DosSedesMixin, TestCase):
+    """OWASP API1: la lista y el detalle de sedes (con sus conteos) solo muestran la propia."""
+
+    def test_list_dado_jefe_planta_cuando_lista_sedes_entonces_solo_ve_la_suya(self):
+        self._como("jefe_planta")
+        resp = self.client.get("/api/sedes/")
+        self.assertEqual(resp.status_code, 200)
+        filas = resp.data["results"] if isinstance(resp.data, dict) else resp.data
+        self.assertEqual([s["id"] for s in filas], [self.sede_a.id])
+
+    def test_retrieve_dado_jefe_planta_cuando_pide_otra_sede_entonces_404(self):
+        self._como("jefe_planta")
+        self.assertEqual(self.client.get(f"/api/sedes/{self.sede_b.id}/").status_code, 404)
+
+    def test_list_dado_usuario_sin_sede_cuando_lista_sedes_entonces_no_ve_ninguna(self):
+        self.client.force_authenticate(CustomUserFactory(sede=None, groups=["jefe_planta"]))
+        resp = self.client.get("/api/sedes/")
+        filas = resp.data["results"] if isinstance(resp.data, dict) else resp.data
+        self.assertEqual(list(filas), [])
+
+    def test_list_dado_ejecutivo_cuando_lista_sedes_entonces_ve_todas(self):
+        self._como("ejecutivo")
+        resp = self.client.get("/api/sedes/")
+        filas = resp.data["results"] if isinstance(resp.data, dict) else resp.data
+        self.assertTrue({self.sede_a.id, self.sede_b.id} <= {s["id"] for s in filas})
+
+
+class IndicadoresPorRolTestCase(_DosSedesMixin, TestCase):
+    """
+    RNF-02: el panel ejecutivo (KPI, resumen, tendencia y producción por producto) no es
+    de cualquier usuario con sesión: es del Ejecutivo y de los administradores. El KPI de
+    área lo acota el área del usuario (test_kpi_views.py).
+    Técnicas ISTQB: EP por rol (permitido / no permitido).
+    """
+
+    EJECUTIVAS = (
+        "/api/kpi-ejecutivo/",
+        "/api/produccion/resumen/",
+        "/api/produccion/tendencia/",
+        "/api/produccion/por-producto/",
+        "/api/produccion/historial-producto/",
+        "/api/produccion/por-producto/imprimir/",
+    )
+
+    def _codigos(self, rol, urls):
+        self._como(rol, area=self.area_a)
+        return {url: self.client.get(url).status_code for url in urls}
+
+    def test_panel_ejecutivo_dado_roles_operativos_cuando_consultan_entonces_403(self):
+        for rol in ("operario", "bodeguero", "vendedor", "despacho", "empaquetado", "tintorero", "jefe_area"):
+            with self.subTest(rol=rol):
+                self.assertEqual(set(self._codigos(rol, self.EJECUTIVAS).values()), {403})
+
+    def test_panel_ejecutivo_dado_ejecutivo_o_admin_cuando_consultan_entonces_no_es_403(self):
+        for rol in ("ejecutivo", "admin_sede", "admin_sistemas"):
+            with self.subTest(rol=rol):
+                self.assertNotIn(403, self._codigos(rol, self.EJECUTIVAS).values())

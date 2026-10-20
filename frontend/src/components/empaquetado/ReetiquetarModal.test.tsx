@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): motivo no seleccionado / peso fuera de tolerancia sin confirmar / usuario
+ *   no supervisor sin credenciales / sin cambios de peso ni calidad / supervisor con cambio de peso.
+ * - Caja blanca (CB): ramas de error — error de la API / error de red sin payload estructurado.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

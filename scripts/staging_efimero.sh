@@ -9,8 +9,8 @@
 # Uso, desde la raíz del repositorio:
 #   bash scripts/staging_efimero.sh <imagenes.env>
 # <imagenes.env> tiene una línea por servicio del compose: servicio=referencia, p. ej.
-#   backend=ghcr.io/org/texcore/backend@sha256:...
-# Lo ejecuta el job `staging` de .github/workflows/release.yml; también corre en cualquier
+#   backend=192.168.1.55:5050/grupo/texcore/backend@sha256:...
+# Lo ejecuta el job `staging:efimero` de .gitlab-ci.yml; también corre en cualquier
 # equipo con Docker (usa los puertos 8080 y 8443).
 # =============================================================================
 set -euo pipefail

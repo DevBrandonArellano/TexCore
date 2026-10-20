@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): varias órdenes / órdenes de varios estados / órdenes de varias máquinas /
+ *   el formulario cerrado / áreas cargadas.
+ * - Análisis de valores límite (BVA): /areas/ sin resultados ni results / "Ir a página" vacio.
+ * - Transición de estados (STT): órdenes de varios estados.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,7 +30,8 @@ vi.mock('axios', () => {
     default: { ...mockAxiosInstance, create: vi.fn(() => mockAxiosInstance) },
   };
 });
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+
 import { parcial } from '../../testing/parcial';
 
 const toastErrorMock = vi.fn();

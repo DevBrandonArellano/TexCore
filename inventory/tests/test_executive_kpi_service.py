@@ -1,3 +1,10 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): stock bajo minimo / pedidos y clientes / sin datos / sede id / ejecuciones en
+  dos sedes.
+- Análisis de valores límite (BVA): stock bajo minimo / sin datos.
+"""
+
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch

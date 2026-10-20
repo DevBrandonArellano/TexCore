@@ -21,6 +21,9 @@ La medición end-to-end bajo carga real vive en
 scripts/loadtest/locustfile.py (tarea UsuarioDespachoTexCore.flujo_despacho),
 que golpea /api/scanning/validate a través de Nginx exactamente como lo
 hace DespachoDashboard.tsx.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): peticion valida / 10 peticiones consecutivas.
 """
 
 import time
@@ -51,7 +54,8 @@ def client_lote_valido():
         ),
     )
     app.dependency_overrides[get_validation_service] = lambda: mock_svc
-    yield TestClient(app)
+    # Cabeceras que nginx agrega tras verificar la sesión con Django (auth_request).
+    yield TestClient(app, headers={"X-Texcore-Sede-Id": "3", "X-Texcore-Ve-Todas": "0"})
     app.dependency_overrides.clear()
 
 

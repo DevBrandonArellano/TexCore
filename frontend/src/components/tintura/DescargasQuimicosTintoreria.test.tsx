@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin sede en el perfil / sin quimico seleccionado / error al cargar el
+ *   catalogo / seleccionar un quimico / un quimico sin descargas.
+ * - Caja blanca (CB): ramas de error — error al cargar el catalogo / error al cargar descargas.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

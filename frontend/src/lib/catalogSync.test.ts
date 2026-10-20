@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): quimico o insumo / otros tipos o valores nulos / un quimico / un producto
+ *   quimico / arreglo de items.
+ */
 import { describe, it, expect } from 'vitest';
 import {
   isChemicalType,

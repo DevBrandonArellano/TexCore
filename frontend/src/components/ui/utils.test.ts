@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): clases simples / clases condicionales falsy / clases tailwind en conflicto
+ *   / un array de clases.
+ */
 import { describe, it, expect } from 'vitest';
 import { cn } from './utils';
 

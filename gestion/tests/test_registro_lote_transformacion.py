@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): op simple / maquina con merma / op pendiente.
+- Transición de estados (STT): op pendiente.
+"""
+
 from datetime import UTC, datetime
 from decimal import Decimal
 

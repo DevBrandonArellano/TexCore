@@ -1,6 +1,9 @@
 """
 Pruebas complementarias de HistorialDespachoViewSet.get_queryset — filtros
 por fecha_desde/fecha_hasta que test_historial_despachos.py no ejercita.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): fecha desde / fecha hasta.
 """
 
 from datetime import timedelta

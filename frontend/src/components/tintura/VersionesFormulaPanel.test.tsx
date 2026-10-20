@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una formula con versiones / una formula sin versiones / error de la API /
+ *   dos versiones / click en guardar version actual.
+ * - Transición de estados (STT): onMarcarOficial rechazado / onCrearVersion rechazado.
+ * - Caja blanca (CB): ramas de error — error de la API / onMarcarOficial rechazado / onCrearVersion rechazado.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

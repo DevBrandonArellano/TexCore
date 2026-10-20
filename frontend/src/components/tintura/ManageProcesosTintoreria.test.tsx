@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): procesos activos e inactivos / código vacío / código, nombre y tipo / un
+ *   proceso / un proceso activo.
+ * - Análisis de valores límite (BVA): código vacío.
+ * - Caja blanca (CB): ramas de error — un error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

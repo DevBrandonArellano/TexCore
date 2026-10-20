@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una maquina nueva / un nombre solo con espacios / capacidad %s /
+ *   eficiencia ideal %s / datos validos.
+ * - Caja blanca (CB): ramas de error — un rechazo 400 del backend / un error sin respuesta clasificable.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

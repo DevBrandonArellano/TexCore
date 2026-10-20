@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): filtros completos / filtros vacíos / filtros / respuesta del servidor.
+ * - Análisis de valores límite (BVA): filtros vacíos.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mantenimientoApi } from './mantenimientoApi';
 

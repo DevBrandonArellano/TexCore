@@ -1,9 +1,16 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin productos / loading / productos existentes / producto sin campos
+ *   opcionales / producto tipo merma.
+ * - Análisis de valores límite (BVA): editar un producto con campos opcionales en cero o vacios.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageProductos } from './ManageProductos';
+import { ManageProductos } from './ManageProductos';
+
 import { Producto } from '../../lib/types';
 
 const toastErrorMock = vi.fn();

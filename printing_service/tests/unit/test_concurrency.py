@@ -20,6 +20,9 @@ llamadas C de WeasyPrint). Comparar contra una línea base medida en el
 mismo proceso evita falsos positivos por overhead fijo del entorno de
 test. Si el event loop estuviera bloqueado, paralelo tardaría ~= serie;
 con run_in_threadpool, paralelo debe ser sustancialmente más rápido.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: peticiones concurrentes.
 """
 
 import asyncio

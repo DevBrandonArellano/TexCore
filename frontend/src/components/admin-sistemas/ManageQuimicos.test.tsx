@@ -1,9 +1,15 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin quimicos / loading / quimicos existentes / quimico sin presentacion /
+ *   busqueda por codigo.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageQuimicos } from './ManageQuimicos';
+import { ManageQuimicos } from './ManageQuimicos';
+
 import { Quimico } from '../../lib/types';
 
 const toastErrorMock = vi.fn();

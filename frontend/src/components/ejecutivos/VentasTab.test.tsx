@@ -1,10 +1,17 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): los KPIs / alertaCartera en true / click en una barra del funnel / click
+ *   en una barra de ventas por vendedor / click en una barra de top clientes.
+ * - Análisis de valores límite (BVA): distribucionPago vacia / topDeudores vacio.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tabs } from '../ui/tabs';
 import { VentasTab } from './VentasTab';
-import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { Cliente, PedidoVenta } from '../../lib/types';
+
 import { parcial } from '../../testing/parcial';
 
 // VentasTab es puramente presentacional (no importa apiClient/useAuth/sonner):

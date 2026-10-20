@@ -9,6 +9,11 @@ Valida:
 3. DescargaQuimicoOP se marcan como revertidas
 4. PedidoVenta vuelve a estado 'pendiente'
 5. MovimientoInventario DEVOLUCION se crean
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): despacho realizado / sin justificacion / pedido despachado / fallo intermedio
+  / op con quimicos descargados.
+- Análisis de valores límite (BVA): justificacion vacia.
 """
 
 from decimal import Decimal

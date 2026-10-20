@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): lote sin consumos / consumo sin código de origen ni lote nuevo / costo sin
+ *   precio esperado / error del servidor / margen sin monto ni precio y un concepto nulo.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';

@@ -3,6 +3,12 @@ Tests de src/main.py: middleware JWT (ISO 27001 A.9.4), /health y lifespan.
 
 El conftest acepta cualquier Bearer parcheando jwt.decode para toda la sesión;
 aquí se vuelve a parchear por prueba para ejercitar cada rechazo.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): variable ausente / variable definida / sin header authorization / esquema
+  basic / token expirado.
+- Transición de estados (STT): token expirado.
+- Caja blanca (CB): ramas de error — django 503.
 """
 
 from unittest.mock import AsyncMock, patch

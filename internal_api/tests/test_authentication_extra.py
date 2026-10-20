@@ -2,6 +2,9 @@
 Pruebas complementarias de internal_api/authentication.py — ramas que
 test_authentication.py no ejercita: token malformado, claim requerido
 ausente, generate_token, y authenticate_header.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token malformado / request sin token / service name y scopes / token valido.
 """
 
 from django.test import RequestFactory, TestCase

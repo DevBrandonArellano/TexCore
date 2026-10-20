@@ -1,6 +1,9 @@
 """
 Errores de POST /generate: el 500 no expone el detalle interno (CWE-209), pero la
 auditoría sí lo registra. Mismo criterio que printing_service (5-oct-2026).
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: fallo interno.
 """
 
 from unittest.mock import AsyncMock, patch

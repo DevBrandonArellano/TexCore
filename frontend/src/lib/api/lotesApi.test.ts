@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): página, tamaño y filtros / filtros con page / el resumen del día / id /
+ *   código y dirección.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { lotesApi } from './lotesApi';
 

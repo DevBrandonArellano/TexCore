@@ -1,6 +1,7 @@
 import logging
 
 from django.conf import settings
+from django.middleware.csrf import get_token
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -66,6 +67,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         # Given the previous code, we overwrite response.data entirely.
 
         response = Response(response_data, status=status.HTTP_200_OK)
+        # Cookie `csrftoken` para las escrituras que siguen al login (CookieJWTAuthentication).
+        get_token(request)
 
         # Set cookies
         access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")

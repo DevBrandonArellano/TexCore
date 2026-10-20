@@ -1,8 +1,15 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin datos / isLoading en true y sin datos / movimientos de entrada y
+ *   salida sin filtro de producto/bodega / consulta de kardex con saldo / fila sin saldo acumulado.
+ * - Análisis de valores límite (BVA): sin datos / isLoading en true y sin datos.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { KardexView } from './KardexView';
+import { KardexView } from './KardexView';
+
 import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora. Se mockea useKardex (ya testeado por su cuenta)

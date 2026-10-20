@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): error 403 / error 500 / error de merma / error de campos tecnicos (snake
+ *   case) / mensaje con fuga de informacion (SQL / URLs).
+ * - Análisis de valores límite (BVA): data como string vacio.
+ * - Caja blanca (CB): ramas de error — error 403 / error 500 / error de merma.
+ */
 import { describe, it, expect } from 'vitest';
 import { formatApiError } from './errorUtils';
 

@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario de nuevo cliente completo / un RUC duplicado en el sobre
+ *   unificado / un rechazo del backend / un cliente existente / una justificación de auditoría.
+ * - Análisis de valores límite (BVA): un cliente con saldo menor al limite / un cliente que supera su limite.
+ * - Caja blanca (CB): ramas de error — un rechazo del backend.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -125,6 +132,42 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(payload).not.toHaveProperty('saldo_pendiente');
     expect(payload).not.toHaveProperty('cartera_vencida');
     expect(toast.success).toHaveBeenCalledWith('Cliente registrado correctamente');
+  });
+
+  it('dado un RUC duplicado en el sobre unificado cuando crea un cliente entonces muestra el mensaje de la API', async () => {
+    (apiClient.post as Mock).mockRejectedValue({
+      response: {
+        status: 400,
+        data: {
+          success: false,
+          error: {
+            code: 400,
+            message: '__all__: Ya existe un cliente con esa identificación en esta sede.',
+            fields: { __all__: ['Ya existe un cliente con esa identificación en esta sede.'] },
+          },
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await esperarDirectorio();
+
+    await user.click(screen.getByRole('button', { name: /Nuevo Cliente/i }));
+    await waitFor(() => expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText('RUC/Cédula'), '1234567890');
+    await user.type(screen.getByLabelText('Nombre / Razón Social'), 'Cliente Duplicado');
+    await user.type(screen.getByLabelText('Dirección'), 'Calle X');
+    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Error de validación',
+        expect.objectContaining({ description: expect.stringContaining('Ya existe un cliente con esa identificación') })
+      );
+    });
+    const descripcion = (toast.error as Mock).mock.calls.at(-1)?.[1]?.description as string;
+    expect(descripcion).not.toContain('[object Object]');
   });
 
   it('dado un rechazo del backend cuando crea un cliente entonces muestra el error de validación por campo', async () => {

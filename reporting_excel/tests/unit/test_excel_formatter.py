@@ -1,4 +1,9 @@
-"""Tests unitarios del ExcelFormatter. Sin BD, sin HTTP."""
+"""Tests unitarios del ExcelFormatter. Sin BD, sin HTTP.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): none / bytes / fecha valida / string fecha / columna numerica.
+- Análisis de valores límite (BVA): dataframe vacio.
+"""
 
 import zipfile
 from io import BytesIO

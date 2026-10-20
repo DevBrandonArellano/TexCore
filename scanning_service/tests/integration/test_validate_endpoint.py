@@ -9,9 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from src.domain.models import AlcanceSede
 from src.main import app
 from src.routers.validate import get_validation_service
 from src.schemas.validate import LoteInfo, ValidateResponse
+
+# Cabeceras que nginx agrega tras verificar la sesión con Django (auth_request).
+SESION = {"X-Texcore-Sede-Id": "3", "X-Texcore-Ve-Todas": "0"}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +55,7 @@ def _mock_service(response: ValidateResponse) -> MagicMock:
 def client_lote_valido():
     mock_svc = _mock_service(ValidateResponse(valid=True, lote=_lote_info()))
     app.dependency_overrides[get_validation_service] = lambda: mock_svc
-    yield TestClient(app), mock_svc
+    yield TestClient(app, headers=SESION), mock_svc
     app.dependency_overrides.clear()
 
 
@@ -59,7 +63,7 @@ def client_lote_valido():
 def client_lote_no_encontrado():
     mock_svc = _mock_service(ValidateResponse(valid=False, reason="Lote no encontrado en el sistema"))
     app.dependency_overrides[get_validation_service] = lambda: mock_svc
-    yield TestClient(app), mock_svc
+    yield TestClient(app, headers=SESION), mock_svc
     app.dependency_overrides.clear()
 
 
@@ -67,7 +71,7 @@ def client_lote_no_encontrado():
 def client_sin_stock():
     mock_svc = _mock_service(ValidateResponse(valid=False, reason="Lote existe pero no tiene stock disponible (0 kg)"))
     app.dependency_overrides[get_validation_service] = lambda: mock_svc
-    yield TestClient(app), mock_svc
+    yield TestClient(app, headers=SESION), mock_svc
     app.dependency_overrides.clear()
 
 
@@ -97,7 +101,7 @@ class TestValidateEndpoint_LoteValido:
     def test_validate_dado_lote_valido_cuando_post_entonces_servicio_recibe_codigo(self, client_lote_valido):
         tc, mock_svc = client_lote_valido
         tc.post("/validate", json={"code": "LOTE-00001"})
-        mock_svc.validate.assert_called_once_with("LOTE-00001")
+        mock_svc.validate.assert_called_once_with("LOTE-00001", AlcanceSede(sede_id=3, ve_todas=False))
 
 
 # ---------------------------------------------------------------------------
@@ -138,16 +142,16 @@ class TestValidateEndpoint_SinStock:
 
 class TestValidateEndpoint_ValidacionPydantic:
     def test_validate_dado_payload_sin_code_cuando_post_entonces_422(self):
-        response = TestClient(app).post("/validate", json={})
+        response = TestClient(app, headers=SESION).post("/validate", json={})
         assert response.status_code == 422
 
     def test_validate_dado_code_vacio_cuando_post_entonces_422(self):
-        response = TestClient(app).post("/validate", json={"code": ""})
+        response = TestClient(app, headers=SESION).post("/validate", json={"code": ""})
         assert response.status_code == 422
 
     def test_validate_dado_code_solo_espacios_cuando_post_entonces_422(self):
         # BVA: string de solo espacios — el validator lo rechaza
-        response = TestClient(app).post("/validate", json={"code": "   "})
+        response = TestClient(app, headers=SESION).post("/validate", json={"code": "   "})
         assert response.status_code == 422
 
 
@@ -170,12 +174,12 @@ class TestValidateRouter_NoBloqueaEventLoop:
         fake_pool = AsyncMock(return_value=mock_svc.validate.return_value)
         try:
             with patch("src.routers.validate.run_in_threadpool", fake_pool):
-                response = TestClient(app).post("/validate", json={"code": "LOTE-001"})
+                response = TestClient(app, headers=SESION).post("/validate", json={"code": "LOTE-001"})
         finally:
             app.dependency_overrides.clear()
 
         assert response.status_code == 200
-        fake_pool.assert_awaited_once_with(mock_svc.validate, "LOTE-001")
+        fake_pool.assert_awaited_once_with(mock_svc.validate, "LOTE-001", AlcanceSede(sede_id=3, ve_todas=False))
         mock_svc.validate.assert_not_called()  # solo se invoca DENTRO del threadpool, no directo
 
 
@@ -197,3 +201,38 @@ class TestHealthEndpoint:
         assert response.status_code == 200
         assert response.json()["status"] == "healthy"
         assert response.json()["django_api"] == "connected"
+
+
+# ---------------------------------------------------------------------------
+# OWASP API2: sin la verificación de sesión de nginx, el servicio no responde
+# ---------------------------------------------------------------------------
+
+
+class TestValidateEndpoint_SesionVerificada:
+    @pytest.fixture(autouse=True)
+    def _servicio(self):
+        self.svc = _mock_service(ValidateResponse(valid=False, reason="Lote no encontrado en el sistema"))
+        app.dependency_overrides[get_validation_service] = lambda: self.svc
+        yield
+        app.dependency_overrides.clear()
+
+    def test_validate_dado_peticion_sin_cabeceras_de_sesion_cuando_post_entonces_401_sin_consultar(self):
+        response = TestClient(app).post("/validate", json={"code": "LOTE-00001"})
+        assert response.status_code == 401
+        self.svc.validate.assert_not_called()
+
+    def test_validate_dado_cabecera_ve_todas_invalida_cuando_post_entonces_401(self):
+        response = TestClient(app, headers={"X-Texcore-Ve-Todas": "si"}).post("/validate", json={"code": "L"})
+        assert response.status_code == 401
+
+    def test_validate_dado_usuario_que_ve_todas_cuando_post_entonces_alcance_sin_sede(self):
+        TestClient(app, headers={"X-Texcore-Sede-Id": "", "X-Texcore-Ve-Todas": "1"}).post(
+            "/validate", json={"code": "L"}
+        )
+        self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=None, ve_todas=True))
+
+    def test_validate_dado_sede_no_numerica_cuando_post_entonces_alcance_sin_sede(self):
+        TestClient(app, headers={"X-Texcore-Sede-Id": "abc", "X-Texcore-Ve-Todas": "0"}).post(
+            "/validate", json={"code": "L"}
+        )
+        self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=None, ve_todas=False))

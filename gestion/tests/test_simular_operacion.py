@@ -2,6 +2,9 @@
 
 Técnicas ISTQB: prueba de humo + verificación de invariantes (stock = Kardex, sin saldos
 negativos, fechas en el período simulado, pedidos despachados completos).
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): corrida / reloj simulado / banos / cierre / roles.
 """
 
 import io

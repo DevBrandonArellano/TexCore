@@ -1,3 +1,8 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: tipo colorante.
+"""
+
 from decimal import Decimal
 
 from django.test import TestCase

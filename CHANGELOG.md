@@ -2,9 +2,9 @@
 
 ## Octubre 2026
 
-### Para continuar — Hoja de ruta (actualizada el 14-oct-2026)
+### Para continuar — Hoja de ruta (actualizada el 20-oct-2026)
 
-Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está commiteado en `MES` (`6b22edf`…`bfa6513`): Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD) y el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct.
+Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está commiteado en `MES` (`6b22edf`…`bfa6513`): Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD) y el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct. Desde el 19-oct hay trabajo **sin commitear** en `MES` (cifrado RS-19, seguridad de la API, GitLab CI e ISTQB): ver el resumen del 20-oct.
 
 #### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
@@ -36,7 +36,7 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
    - capturas del panel ejecutivo a 375, 768 y 1366 px.
 7. Cambiar la contraseña de `admin` (sigue en `admin` para la demo).
 8. ✅ ~~CI/CD Fases 3 a 6~~ (13-oct): `release.yml`, staging efímero con pruebas de humo, runner propio, contenedores endurecidos y `gobierno.yml`.
-9. **Acciones del usuario en GitHub**, sin las cuales el release no puede desplegar (§6 del plan de CI/CD): rama por defecto = `master` y borrar `main`; rulesets de `master` y `staging`; environment `production` con revisores; registrar el runner propio con la etiqueta `texcore-prod` (`docs/arquitectura/GUIA_DESPLIEGUE.md` §5). Después: PR borrador `MES → staging` → captura del pipeline en GitHub Actions.
+9. ~~Acciones del usuario en GitHub~~ **Sustituido el 20-oct** por la plataforma GitLab (pasos 18 a 21): los workflows de GitHub Actions se retiraron (ADR-014) y GitHub queda como espejo.
 10. ✅ ~~Fase 2 del CI/CD: Ruff etapa 5 y Tailwind 4~~ (14-oct). El plan de CI/CD queda cerrado en el código.
 11. ✅ ~~Verificación visual de Tailwind 4 en el navegador~~ (14-oct, el usuario: «todo se ve bien»). **El plan de CI/CD queda cerrado en el código; solo faltan las acciones en GitHub (paso 9).**
 12. Verificación con React DevTools Profiler de la división de dashboards (único punto abierto de ese plan).
@@ -44,7 +44,18 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 14. Pegarle el SHA a `.git-blame-ignore-revs` cuando exista el commit del reformateo de Ruff (`git log -1 --format=%H`) y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 15. ✅ ~~RS-19: cifrar los datos personales en reposo y precisar lo que la tesis afirma sobre la LOPDP~~ (19-oct). El texto para pegar está en `CORRECCIONES_TESIS.md` §3.
 16. **Al desplegar `MES`:** generar `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` de producción **antes** de `migrate` (la `0010` no arranca sin ellas), respaldo previo, y `manage.py cifrar_datos_personales` para verificar. Guardar `FIELD_ENCRYPTION_KEYS` fuera del servidor: sin ella los datos cifrados no se recuperan (`docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §5).
-17. Al final: staging, TEX-54 y el resto de la corrección del texto de la tesis (`CORRECCIONES_TESIS.md` §1 y §2).
+17. Al final: staging, TEX-54 y el resto de la corrección del texto de la tesis (`CORRECCIONES_TESIS.md` §1, §2 y §5: flake8 y bandit por Ruff, y las cifras de las Tablas 46 y 47).
+18. ✅ ~~Seguridad de la API: RNF-02 y OWASP API1/API2~~ (20-oct), ✅ ~~GitLab CE levantado y configurado~~ (20-oct, runners en línea, variables de CI y programación), ✅ ~~Gate ISTQB, plan de pruebas formal y ADR de Ruff~~ (20-oct).
+19. **Primer commit y push a GitLab** (del usuario): `git push gitlab master staging MES`. Después: cambiar la rama por defecto de `main` a `master` y poner el push directo de `master` y `staging` en «Nadie» (`GUIA_GITLAB.md` §4).
+20. **Variables y servicios pendientes de GitLab:** `PRODUCCION_HOST` y `TEXCORE_DIR`, espejo hacia GitHub (necesita un token), runner `texcore-produccion` en la VM, guardar fuera del equipo y borrar `infrastructure/gitlab/secretos/`, y cambiar la contraseña de `root`.
+21. **Revisar el primer pipeline** en GitLab (`lint:*`, `test:*`, `audit:*`) y, en `master`, `build:imagenes` → `scan:trivy` → `staging:efimero`. El pipeline todavía no corrió; es donde suelen aparecer los ajustes finos. Probar una restauración del respaldo de GitLab (RS-23).
+
+#### Estado del entorno Linux (20-oct) — reemplaza al del 14-oct
+
+- Stack `texcore-prod`: 6 contenedores `healthy` con las imágenes `texcore-local/*:mes-1019`; `gestion.0010` aplicada (RUC cifrados). Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1019 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
+- `.env` local (no versionado): además de lo del 14-oct, ahora lleva `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` (sin ellas el backend no arranca). Copia anterior en `.env.bak-pre-cifrado`.
+- Respaldos de la base en el volumen `texcore-prod_mssql_data` (`/var/opt/mssql/backup/`): además de los anteriores, `texcore_db_pre_cifrado_2026-10-20.bak`.
+- GitLab CE: `docker compose -f infrastructure/gitlab/docker-compose.gitlab.yml --env-file infrastructure/gitlab/.env up -d --wait`; guía y verificación en `docs/arquitectura/GUIA_GITLAB.md`.
 
 #### Estado del entorno Linux (14-oct)
 
@@ -116,6 +127,75 @@ Pedido del usuario: resolver **RS-19**, el único ❌ del contraste con la tesis
 **Lo que queda dicho, no supuesto:** `dumpdata` sigue exportando los valores en claro (serializa lo que el ORM entrega), la marcha atrás de la `0010` descifra pero no recrea las columnas borradas —hay que restaurar el respaldo—, y TDE sigue pendiente de la edición licenciada. Todo en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §7.
 
 **Texto para la tesis:** `CORRECCIONES_TESIS.md` §3 (párrafo para pegar, el enunciado del RNF-01 y las fronteras del alcance que conviene declarar).
+
+### 20 de Octubre de 2026 — Resumen del día (sin commitear)
+
+Cuatro bloques de trabajo, en orden. El detalle de cada uno está en las entradas que siguen.
+
+| # | Bloque | Resultado |
+|---|---|---|
+| 1 | **Revisión del CHANGELOG y `git pull`** | No había trabajo sin registrar de la noche anterior. `MES` avanzó de `d97942b` a `0fd1d28` con dos commits: `88f8b53` (cifrado de datos personales, LOPDP) y `0fd1d28` (cifrado en logs y lotes, y migraciones consolidadas de 14 a 6). Los cambios locales del grafo se guardaron en el stash `graphify-out previo al pull` |
+| 2 | **Migración `gestion.0010` en el stack `texcore-prod`** | Las migraciones consolidadas se registran solas por su lista `replaces`. Antes de migrar: respaldo `texcore_db_pre_cifrado_2026-10-20.bak` (1,2 GB, con `CHECKSUM`) en el volumen `mssql_data`, y generación de `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` local (copia previa en `.env.bak-pre-cifrado`, ambos fuera de git). Backend reconstruido (`mes-1018`) y `migrate` aplicó la `0010`. Verificado: 160 clientes con el RUC cifrado en la base, 0 sin índice ciego y el ORM los descifra; 0 usuarios con fecha de nacimiento (no se contaron antes de migrar, probablemente ya eran nulas). **Si se pierden las claves, los datos cifrados no se recuperan** |
+| 3 | **Seguridad de la API (RNF-02, OWASP API1/API2)** | 7 hallazgos corregidos y 6 pruebas globales nuevas (entrada «Seguridad de la API»). Imágenes `mes-1019` y stack recreado con ellas. En el front: aviso del RUC duplicado del Vendedor |
+| 4 | **GitLab CI, ISTQB y Ruff** | `.gitlab-ci.yml`, GitLab CE levantado y configurado en este equipo, GitHub Actions retirado, gate ISTQB, plan de pruebas formal y ADR de Ruff (entrada «GitLab CI como plataforma principal») |
+
+**Tesis.** El PDF del anteproyecto no se modificó. Lo que cambió es la evidencia del repositorio: el RNF-02 y API1/API2 se **sostienen sin corrección** (`CORRECCIONES_TESIS.md` §4, con las precisiones de alcance); «GitLab CI» y «GitLab Container Registry» pasan a «se cumple»; queda **una sola corrección de redacción** del pipeline, flake8 y bandit por Ruff (§5, con el párrafo para pegar y los motivos); y siguen vigentes el cifrado (§3) y las demás filas de §1 y §2.
+
+**Archivos.** Nuevos: `.gitlab-ci.yml`, `renovate.json`, `cosign.pub`, `.gitlab/CODEOWNERS`, `infrastructure/gitlab/` (compose, `Dockerfile.ci-tools`, `.env.example` y 4 scripts), `scripts/auditar_permisos_backend.py`, `scripts/auditar_convencion_pruebas.py`, 3 archivos de prueba (`test_acceso_no_autorizado_global.py`, `test_auditoria_permisos_script.py`, `test_auditoria_convencion_script.py`) y 4 documentos (`ADR_014`, `ADR_015`, `GUIA_GITLAB.md`, `PLAN_PRUEBAS_ISTQB.md`). Eliminados: `.github/` completo (10 archivos) y `scripts/tests/test_regex.py` y `test_url.py`. Modificados 233, de ellos 183 por la cabecera de técnicas ISTQB. Documentos de evidencia actualizados: `ARQUITECTURA_SISTEMA.md` (§8.2 a §8.4 y §9.5), `GUIA_DESPLIEGUE.md`, `ESTANDARES_DESARROLLO.md`, `SECURITY.md`, `README.md`, `CHECKLIST_EVIDENCIA_MANUAL.md`, `AUDITORIA_CALIDAD.md`, `REGISTRO_RIESGOS.md` (RS-20 a RS-24), `matriz_trazabilidad_pruebas.md` (dos secciones nuevas) y `CORRECCIONES_TESIS.md`.
+
+**Verificación al cierre.**
+
+| Comprobación | Resultado |
+|---|---|
+| Backend en SQL Server 2022 (antes de las pruebas del pipeline y del gate) | 1918 pruebas OK, cobertura 92,5 % |
+| Backend en SQLite al cierre | 1944 pruebas OK |
+| `scanning_service` · `printing_service` · `reporting_excel` | 66 · 114 · 76 OK (94,3 · 98,9 · 99,2 %) |
+| Frontend | 1981 pruebas OK en 138 archivos; `tsc` y `eslint` sin errores |
+| Ruff · `ruff format` · yamllint · shellcheck | Sin hallazgos |
+| Gate ISTQB · auditor de rutas | 0 hallazgos · 0 rutas públicas fuera de la lista blanca (174 rutas) |
+
+**Estado del entorno al cierre.**
+- `texcore-prod`: 6 contenedores `healthy` con las imágenes `mes-1019` (código de seguridad). Los cambios posteriores de ISTQB y GitLab no tocan código de producción.
+- GitLab: `texcore-gitlab` en `https://192.168.1.55:8929`, registro en `:5050` y SSH en `:2224`; `gitlab` sano y los dos runners en línea. Datos en los volúmenes `gitlab_config`, `gitlab_logs` y `gitlab_data`.
+- Fuera de git: `infrastructure/gitlab/.env`, `certs/` (certificado propio de 825 días) y `secretos/` (clave privada de cosign y su contraseña, ya cargadas en GitLab).
+- En el equipo: imagen `texcore/ci-tools:1`; la CA de GitLab en `/etc/docker/certs.d/192.168.1.55:5050/ca.crt` (escrita con un contenedor, sin `sudo`); remoto git `gitlab` con la CA configurada solo en este repositorio.
+- Credenciales: el token temporal de `root` usado para configurar GitLab se revocó y los tokens de runner se borraron del directorio de trabajo. La contraseña de `root` se compartió por el chat: conviene cambiarla.
+- **Nada está commiteado** (259 archivos entre nuevos, modificados y eliminados, sin contar el grafo).
+
+### 20 de Octubre de 2026 (tarde) — GitLab CI como plataforma principal, gate ISTQB y Ruff documentado (sin commitear)
+
+Pedido del usuario: «si la tesis nos pide GitLab lo tenemos que usar» y cumplir el uso de ISTQB; de lo contrario, dejar documentado el cambio a Ruff con sus motivos para actualizar la tesis. Decisiones: GitLab CE autoalojado en este equipo (192.168.1.55, también servidor de staging), GitLab principal con GitHub como espejo, ISTQB completo.
+
+| Qué | Cambio | Prueba |
+|---|---|---|
+| **Plataforma** | `.gitlab-ci.yml` (lint → test → build → scan → staging → deploy → rollback) con paridad del CI de Actions: Ruff, `ruff format`, mypy, detect-secrets, Semgrep, SQL Server 2022 como service, cobertura, `pip-audit` y `npm audit` **bloqueantes** (en el GitLab retirado eran `allow_failure`), Trivy por digest, firma y atestación con cosign, staging efímero, deploy y rollback manuales (un clic). Imágenes de los jobs fijadas por digest | `test_despliegue_produccion.py` reescrita para leer el pipeline (en rojo antes del `.gitlab-ci.yml`) |
+| **Servidor** | `infrastructure/gitlab/`: GitLab CE (versión y digest fijos, 6 GB), Container Registry (5050), dos runners (`texcore-ci` sin socket y `texcore-staging` protegido), imagen de herramientas `texcore/ci-tools:1` (cosign verificado por checksum), certificado propio y registro de runners. Runbook `docs/arquitectura/GUIA_GITLAB.md` | `docker compose config`, `shellcheck`; digests comprobados en el registro |
+| **Firma** | cosign con par de claves (la firma sin clave exige un emisor OIDC público). `cosign.pub` en el repositorio; la privada y su contraseña en `infrastructure/gitlab/secretos/` (fuera de git) para cargarlas como variables protegidas | firma y verificación de prueba con el par |
+| **Retiro de GitHub Actions** | Se borran `.github/workflows/*`, `actionlint.yaml`, `zizmor.yml`, `dependabot.yml` y `DEPLOYMENT_SETUP.md` (desactualizado). `CODEOWNERS` pasa a `.gitlab/`. Dependabot → `renovate.json` y job `dependencias:renovate`. OpenSSF Scorecard queda fuera | `test_github_actions_dado_gitlab_principal_…` |
+| **DORA** | `scripts/metricas_dora.py` lee la API de GitLab (deployments de `production` y jobs `rollback:produccion`) | 6 pruebas nuevas en `test_metricas_dora.py` |
+| **ISTQB** | `scripts/auditar_convencion_pruebas.py` (gate `lint:istqb`): nombre `test_[objeto]_dado_…_cuando_…_entonces_…` en Python y «dado … cuando … entonces» en el frontend, y técnica declarada en cada archivo. Se renombraron 14 pruebas de los satélites y se declararon las técnicas en 183 archivos (derivadas de los contextos de sus propias pruebas). Se borraron `scripts/tests/test_regex.py` y `test_url.py`, que eran depuración sin pruebas. Plan formal `docs/requerimientos/PLAN_PRUEBAS_ISTQB.md` (niveles, técnicas, criterios de entrada y salida, trazabilidad); `PLAN_PRUEBAS.md` queda como registro histórico | `test_auditoria_convencion_script.py` (17 pruebas) |
+| **Ruff** | ADR-015 con la justificación (una herramienta, cobertura del 100 % del Python, defectos reales, una configuración, velocidad, sin regresión) y el texto para pegar en la tesis en `CORRECCIONES_TESIS.md` §5 | — |
+| **Tesis** | Las filas de GitLab CI y GitLab Container Registry pasan a «se cumple»; queda **una sola corrección** del pipeline: flake8 y bandit por Ruff | — |
+
+**GitLab levantado y configurado en este equipo (20-oct, tarde).** GitLab CE 19.4.2 y el registro responden en `https://192.168.1.55:8929` y `:5050` (3,7 GB de los 6 GB asignados; el stack `texcore-prod` siguió sano). El usuario cambió la contraseña de `root` y creó el grupo `interfibra` y el proyecto `interfibra/texcore`. Por API (con un token personal temporal de `root`, ya revocado) se dejó: ajustes del proyecto (MR solo con pipeline en verde e hilos resueltos, sin runners compartidos, limpieza del registro: 25 etiquetas y las de SHA, `latest` y `backup`), `master` y `staging` protegidas, los runners `texcore-ci` y `texcore-staging` en línea (el segundo con la etiqueta `staging`, protegido, con el socket y la red del host), las variables de CI (`GITLAB_CA_CRT`, `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, y los tokens de proyecto `GITLAB_TOKEN` y `RENOVATE_TOKEN`), la CA de confianza en el Docker del equipo (verificado: el login falla por credenciales, no por certificado) y la programación semanal (lunes 06:00, America/Guayaquil). Hallazgos: GitLab 19 ya no admite el inicio de sesión por contraseña en la API; los códigos de `keep_n` del registro son fijos; la aprobación de Code Owners es de pago (Premium); y una programación sobre una rama inexistente exige `refs/heads/master`.
+
+**Pendiente del usuario** (`GUIA_GITLAB.md` §0): el primer push de `master`, `staging` y `MES` (y luego cerrar el push directo y fijar `master` como rama por defecto), las variables `PRODUCCION_HOST` y `TEXCORE_DIR`, el espejo hacia GitHub (necesita un token de GitHub) y el runner de producción cuando exista la VM. El runner de producción se registra cuando exista la VM; hasta entonces `deploy:produccion` queda esperando.
+
+### 20 de Octubre de 2026 — Seguridad de la API: RNF-02 y OWASP API1/API2 con pruebas sobre todas las rutas (sin commitear)
+
+Pedido del usuario: «que las APIs no sean vulnerables: si alguien tipea algo en el navegador, que no se robe la información», cerrando lo que la tesis afirma (Tabla 7, RNF-02; «API1 y API2 del OWASP API Security Top 10 2023 quedan mitigados»). Antes se aplicó en el stack la migración `gestion.0010_cifrar_datos_personales` del 19-oct (respaldo `texcore_db_pre_cifrado_2026-10-20.bak`; claves de cifrado de desarrollo agregadas al `.env` local).
+
+| Hallazgo | Corrección | Prueba |
+|---|---|---|
+| **RS-20.** nginx enviaba `/api/scanning/*` directo al `scanning_service`, que no autentica usuarios: sin sesión se consultaban lotes de cualquier sede; `/api/scanning/docs` y `openapi.json` eran públicos | `auth_request` de nginx a `GET /api/auth/verificar-sesion/` (nuevo, `VerificarSesionView`), que devuelve la sede del usuario en cabeceras; nginx las reemplaza y el servicio responde 401 sin ellas; la sede viaja a la `internal_api` (`sede_id`), que acota lote y stock (`filtrar_lotes_de_sede`). Solo se publica `/api/scanning/validate` | `test_profile_views.py`, `test_validate_endpoint.py`, `test_validation_service.py`, `test_django_client.py`, `test_scanning_views.py`. En el stack: sin sesión 401, cabeceras falsificadas 401, otra sede «no encontrado», documentación 404 |
+| **RS-21.** `SedeViewSet` mostraba todas las sedes con sus conteos a cualquier rol | Acotado a la propia sede salvo para quien ve todas, como subconsulta `EXISTS` (el panel de Jefe de Planta no suma consultas) | `SedeViewSetAlcanceTestCase` |
+| **RS-21.** La validación de lote de Django distinguía un lote de otra sede de uno inexistente, daba 500 con un código repetido entre sedes y con un `pedido_id` no numérico | `filtrar_lotes_por_sede`, primer lote por id y 400 para el `pedido_id` inválido | `ValidarLoteAlcanceTestCase` |
+| **RS-21.** El panel ejecutivo (KPI, resumen, tendencia, producción por producto e impresión) no exigía rol | `IsPanelEjecutivo`: Ejecutivo, Admin de Sede (lo ve incrustado) y Admin de Sistemas. El KPI de área sigue acotado al área del usuario, como ya fijaba `test_kpi_views.py` | `IndicadoresPorRolTestCase` |
+| **RS-22.** Las escrituras con la cookie JWT no exigían token CSRF | `CookieJWTAuthentication.enforce_csrf` (con `CSRFCheck` de DRF, que da el motivo en texto); `csrftoken` en el login y el perfil; axios lo envía en `X-CSRFToken` | `CookieJWTCsrfTestCase`, `axios.test.ts`. En el stack: escritura sin token 403, con token 200, desde otro origen 403 |
+| **RS-22.** El relay público `/api/logs/` creaba un logger por cada `msgid`, aceptaba saltos de línea y no tenía límite | `msgid` `[A-Za-z0-9_-]{1,40}`, mensaje y `sd` en una línea y recortados, `FrontendLogThrottle` (120/min por IP real) | `FrontendLogEndurecimientoTestCase` |
+| Evidencia de RNF-02 manual y por módulo | `scripts/auditar_permisos_backend.py` (CSV de cada ruta con su permiso, `por_accion` y filtro de sede; falla con una ruta pública fuera de la lista blanca de 6) y `test_acceso_no_autorizado_global.py` (anónimo en todas las rutas; en cada ruta de objeto, los 9 roles acotados a una sede contra un objeto de otra) | `test_auditoria_permisos_script.py`, `test_acceso_no_autorizado_global.py` |
+
+**Front, RS-19:** el alta y la edición de clientes del Vendedor (`useClientesVendedor.ts`) mostraban `success: false` y `error: [object Object]` ante el RUC duplicado, porque no leían el sobre de error de la API; ahora usan `mensajeDeLaApi` (prueba en `VendedorDashboard.cliente.test.tsx`). **Descartado:** el `/admin/` que parecía público era la SPA de React: nginx no tiene ruta hacia el admin de Django. **Pruebas afectadas actualizadas:** las del `scanning_service` envían las cabeceras de sesión de nginx; el auditor de rutas del frontend excluye `api/auth/verificar-sesion/`, que consume nginx. **Evidencia:** `AUDITORIA_CALIDAD.md` §I.2 (A01 y API1/API2), `CHECKLIST_EVIDENCIA_MANUAL.md` (RNF-01 y RNF-02), `matriz_trazabilidad_pruebas.md` (sección RNF-02), `REGISTRO_RIESGOS.md` (RS-20 a RS-22) y `CORRECCIONES_TESIS.md` §4 (el texto de la tesis se sostiene sin cambios; solo las precisiones de alcance). **Imágenes** `texcore-local/*:mes-1019`, stack `texcore-prod` recreado con ellas (6 contenedores `healthy`).
 
 ### 16 de Octubre de 2026 — Despacho: PDF en blanco, detalle angosto, impresión de la página visible y orden de carga de las pruebas (sin commitear)
 

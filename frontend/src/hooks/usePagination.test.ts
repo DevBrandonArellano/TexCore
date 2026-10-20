@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): modo interno / lista vacia / modo controlado / currentPage fuera de rango
+ *   / resetKey cambiando.
+ * - Análisis de valores límite (BVA): lista vacia.
+ */
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePagination } from './usePagination';

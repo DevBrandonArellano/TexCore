@@ -1,8 +1,17 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin maquina seleccionada / sin producto de salida / peso de entrada cero /
+ *   peso de salida negativo / peso de salida mayor al de entrada.
+ * - Análisis de valores límite (BVA): peso de entrada cero / peso de salida negativo.
+ * - Caja blanca (CB): ramas de error — error del backend con detail string / error del backend con detail como
+ *   dict de campos / error sin detail.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RegistrarTransformacion } from './RegistrarTransformacion';
+import { RegistrarTransformacion } from './RegistrarTransformacion';
+
 import { parcial } from '../../testing/parcial';
 import { type Maquina, type Producto } from '../../lib/types';
 

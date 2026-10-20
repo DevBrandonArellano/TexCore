@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): profile nulo / respuestas planas (array) / respuestas paginadas
+ *   ({results}) / fallo del OEE de una maquina / error de red al cargar el dashboard.
+ * - Análisis de valores límite (BVA): productos sin stock minimo.
+ * - Caja blanca (CB): ramas de error — error de red al cargar el dashboard.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useJefeAreaData } from './useJefeAreaData';

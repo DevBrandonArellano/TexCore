@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): blob sin tipo / blob con otro tipo / un pdf / un pdf abierto.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { abrirPdfEnPestana } from './abrirPdf';
 

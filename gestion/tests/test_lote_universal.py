@@ -1,3 +1,8 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): orden produccion / sin orden / materia prima proveedor.
+"""
+
 from decimal import Decimal
 
 from django.test import TestCase

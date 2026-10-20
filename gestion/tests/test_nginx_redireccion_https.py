@@ -4,6 +4,10 @@ La imagen de nginx es la misma en desarrollo y en producción: la redirección
 se activa con NGINX_REDIRIGIR_HTTP=1, que solo declara el compose de producción.
 Las pruebas leen los archivos de configuración; el comportamiento en el stack
 se verifica con curl en el equipo con Docker.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): servicio nginx / server del puerto 80 / variables de nginx / healthcheck /
+  envsubst.
 """
 
 import re

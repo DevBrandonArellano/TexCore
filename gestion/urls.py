@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from inventory.reporting_proxy import ReportingProxyView
 
-from .profile_views import UserProfileView
+from .profile_views import UserProfileView, VerificarSesionView
 from .views import (
     AreaViewSet,
     BodegaViewSet,
@@ -81,6 +81,7 @@ urlpatterns = [
     path("", include(router.urls)),
     path("reporting/<path:report_path>", ReportingProxyView.as_view(), name="reporting-proxy-fallback"),
     path("profile/", UserProfileView.as_view(), name="user-profile"),
+    path("auth/verificar-sesion/", VerificarSesionView.as_view(), name="verificar-sesion"),
     path(
         "ordenes-produccion/<int:orden_id>/registrar-lote/",
         RegistrarLoteProduccionView.as_view(),

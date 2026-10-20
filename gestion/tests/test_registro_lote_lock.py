@@ -5,6 +5,9 @@ concurrentes del mismo OP podrían calcular el mismo código de lote
 (mitigado solo por unique_together, que falla con IntegrityError en vez de
 prevenir la condición de carrera). registrar_lote() ahora adquiere
 select_for_update() sobre la orden antes de generar el código.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: orden.
 """
 
 from decimal import Decimal

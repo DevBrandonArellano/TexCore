@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): peso y litros / fórmula / número.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { formulasApi } from './formulasApi';
 

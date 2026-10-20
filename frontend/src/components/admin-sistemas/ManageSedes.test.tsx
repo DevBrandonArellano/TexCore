@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin sedes / sedes cargando / sedes existentes / nueva sede / campos
+ *   vacios.
+ * - Análisis de valores límite (BVA): campos vacios.
+ * - Transición de estados (STT): estado inactivo seleccionado.
+ * - Caja blanca (CB): ramas de error — error al crear.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

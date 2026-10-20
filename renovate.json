@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Reemplaza a Dependabot (que solo existe en GitHub). Corre como pipeline programado de GitLab (job dependencias:renovate); los MR van a staging, nunca a master.",
+  "baseBranches": ["staging"],
+  "timezone": "America/Guayaquil",
+  "schedule": ["before 6am on monday"],
+  "enabledManagers": ["dockerfile", "docker-compose", "gitlabci", "pip_requirements", "npm"],
+  "pinDigests": true,
+  "labels": ["dependencias"],
+  "prConcurrentLimit": 5,
+  "commitMessagePrefix": "chore(deps):",
+  "packageRules": [
+    {
+      "description": "Imágenes base y de servicios: cada Dockerfile, el compose y el pipeline fijan por digest.",
+      "matchManagers": ["dockerfile", "docker-compose", "gitlabci"],
+      "pinDigests": true
+    },
+    {
+      "description": "Python y Django: las actualizaciones mayores son una decisión, no un MR automático.",
+      "matchManagers": ["pip_requirements"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "SQL Server: la CU se alinea a propósito en database/Dockerfile y en el pipeline a la vez.",
+      "matchPackageNames": ["mcr.microsoft.com/mssql/server"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

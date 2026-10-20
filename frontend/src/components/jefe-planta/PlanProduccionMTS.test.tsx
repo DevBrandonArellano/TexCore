@@ -1,3 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que el componente se monta / clic en Aprobar Plan / clic en la pestaña
+ *   Necesidad de producción / sin necesidades / error al cargar planes.
+ * - Análisis de valores límite (BVA): codigo de plan vacio.
+ * - Transición de estados (STT): filtro de estado / un plan y un renglon en estados no contemplados / un
+ *   renglon sin bodegas ni saldo pendiente / un renglon en distintos estados.
+ * - Caja blanca (CB): ramas de error — error al cargar planes / error al cargar necesidades / el backend
+ *   rechaza aprobar.
+ */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

@@ -139,3 +139,80 @@ class DespachoAccesoTestCase(_DosSedesMixin, TestCase):
         StockBodegaFactory(bodega=self.bodega_b, producto=self.producto, lote=lote, cantidad=Decimal("50.00"))
         resp = self.client.post("/api/scanning/validate", {"code": lote.codigo_lote}, format="json")
         self.assertFalse(resp.data["valid"])
+
+
+class ValidarLoteAlcanceTestCase(_DosSedesMixin, TestCase):
+    """
+    OWASP API1: validar un código de lote no revela lotes de otra sede. Un lote ajeno
+    responde igual que uno inexistente (antes decía «existe pero no tiene stock»), y un
+    `pedido_id` que no es número es un 400, no un 500.
+    """
+
+    URL = "/api/scanning/validate"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.orden_a = OrdenProduccionFactory(sede=cls.sede_a)
+        cls.orden_b = OrdenProduccionFactory(sede=cls.sede_b)
+        cls.lote_a = LoteProduccionFactory(orden_produccion=cls.orden_a, codigo_lote="VAL-A")
+        cls.lote_b = LoteProduccionFactory(orden_produccion=cls.orden_b, codigo_lote="VAL-B")
+
+    def _validar(self, codigo, **extra):
+        return self.client.post(self.URL, {"code": codigo, **extra}, format="json")
+
+    def test_validar_dado_lote_de_otra_sede_cuando_valida_entonces_responde_como_inexistente(self):
+        self._como("despacho")
+        ajeno = self._validar("VAL-B").data
+        inexistente = self._validar("NO-EXISTE").data
+        self.assertFalse(ajeno["valid"])
+        self.assertEqual(ajeno, inexistente)
+
+    def test_validar_dado_lote_de_su_sede_sin_stock_cuando_valida_entonces_indica_sin_stock(self):
+        self._como("despacho")
+        resp = self._validar("VAL-A").data
+        self.assertFalse(resp["valid"])
+        self.assertIn("no tiene stock", resp["reason"])
+
+    def test_validar_dado_codigo_repetido_en_otra_sede_cuando_valida_entonces_usa_el_de_su_sede(self):
+        LoteProduccionFactory(orden_produccion=self.orden_b, codigo_lote="VAL-A")
+        self._como("despacho")
+        resp = self._validar("VAL-A")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("no tiene stock", resp.data["reason"])
+
+    def test_validar_dado_pedido_id_no_numerico_cuando_valida_entonces_400(self):
+        StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=self.lote_a)
+        self.lote_a.pedido_venta_reserva = PedidoVenta.objects.create(
+            cliente=ClienteFactory(sede=self.sede_a), sede=self.sede_a, guia_remision="G-VAL"
+        )
+        self.lote_a.save(update_fields=["pedido_venta_reserva"])
+        self._como("admin_sede")
+        self.assertEqual(self._validar("VAL-A", pedido_id="abc").status_code, 400)
+
+
+class AlertasStockAlcanceTestCase(_DosSedesMixin, TestCase):
+    """OWASP API1: los filtros `sede_id` y `bodega_id` no abren el stock de otra sede."""
+
+    URL = "/api/inventory/alertas-stock/"
+
+    def _bodegas(self, **params):
+        resp = self.client.get(self.URL, {"search": self.producto.codigo, **params})
+        self.assertEqual(resp.status_code, 200)
+        return {fila["bodega_id"] for fila in resp.data}
+
+    def test_alertas_dado_sede_id_de_otra_sede_cuando_filtra_entonces_no_ve_su_stock(self):
+        self._como("admin_sede")
+        self.assertEqual(self._bodegas(sede_id=self.sede_b.id), set())
+
+    def test_alertas_dado_bodega_id_de_otra_sede_cuando_filtra_entonces_no_ve_su_stock(self):
+        self._como("admin_sede")
+        self.assertEqual(self._bodegas(bodega_id=self.bodega_b.id), set())
+
+    def test_alertas_dado_bodeguero_sin_esa_bodega_asignada_cuando_filtra_entonces_no_la_ve(self):
+        self._como("bodeguero", [self.bodega_a2])
+        self.assertEqual(self._bodegas(bodega_id=self.bodega_a.id), set())
+
+    def test_alertas_dado_admin_sede_sin_filtros_cuando_busca_entonces_solo_ve_su_sede(self):
+        self._como("admin_sede")
+        self.assertEqual(self._bodegas(), {self.bodega_a.id})

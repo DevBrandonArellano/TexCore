@@ -7,6 +7,21 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 
+@dataclass(frozen=True)
+class AlcanceSede:
+    """
+    Sede del usuario que escanea (OWASP API1).
+
+    La pone nginx en cabeceras después de verificar la sesión contra Django
+    (`auth_request`); el servicio la reenvía a la internal_api para que un lote de otra
+    sede responda igual que uno inexistente. `ve_todas` es el usuario que ve todas las
+    sedes (admin_sistemas, ejecutivo); sin sede y sin `ve_todas` no ve ningún lote.
+    """
+
+    sede_id: int | None
+    ve_todas: bool
+
+
 @dataclass
 class Producto:
     id: int

@@ -17,7 +17,7 @@ Arquitectura de **monolito modular (Django 5 + SQL Server 2022)** complementado 
 | **Autenticación Inter-Servicio** | JWT RS256 vía `internal_api` (ISO 27001 A.10 / Criptografía RSA 2048) |
 | **Pruebas y Calidad** | Django test runner + Coverage (umbral ≥90 %, 1814 pruebas) + Vitest (1972 pruebas frontend) + Ruff (lint, seguridad y formato) + mypy + Semgrep + detect-secrets |
 | **Gateway & Proxy** | Nginx (Reverse proxy + rate limiting + cabeceras de seguridad) |
-| **CI / CD** | GitHub Actions (`.github/workflows/ci.yml`, `release.yml`, `security.yml`, `rollback.yml`, `gobierno.yml`), actions fijadas por SHA, imágenes por digest firmadas con cosign, Dependabot, actionlint + zizmor. Flujo: rama de trabajo → PR a `staging` → PR a `master` (release y despliegue) |
+| **CI / CD** | GitLab CI autoalojado (`.gitlab-ci.yml`, `docs/arquitectura/GUIA_GITLAB.md`), GitLab Container Registry, imágenes por digest firmadas con cosign, Renovate, Ruff + mypy + Semgrep + detect-secrets y el gate ISTQB. GitHub es solo un espejo. Flujo: rama de trabajo → MR a `staging` → MR a `master` (release; despliegue y rollback manuales) |
 
 ---
 
@@ -86,7 +86,11 @@ TexCore/
 ├── docs/                      # Documentación técnica, manuales de arquitectura, base de datos y despliegue
 ├── .agent/workflows/          # Workflows operativos de agentes por rol (11 archivos .md)
 ├── .agents/rules/             # Reglas estandarizadas de calidad, pruebas y grafo de conocimiento (graphify)
-├── .github/workflows/         # Pipeline CI/CD de GitHub Actions (ci.yml, release.yml, security.yml, rollback.yml, gobierno.yml)
+├── .gitlab-ci.yml             # Pipeline CI/CD de GitLab (lint, test, build, scan, staging, deploy, rollback)
+├── .gitlab/CODEOWNERS         # Revisores obligatorios de las rutas críticas
+├── renovate.json              # Actualización automática de dependencias e imágenes
+├── cosign.pub                 # Clave pública para verificar las imágenes firmadas
+├── infrastructure/gitlab/     # GitLab CE, Container Registry y runners (docker-compose.gitlab.yml)
 ├── manage.py                  # CLI de administración Django
 ├── setup.cfg                  # Configuración unificada de pytest, coverage (fail_under = 89) y linters
 ├── package.json               # Scripts unificados del monorepo

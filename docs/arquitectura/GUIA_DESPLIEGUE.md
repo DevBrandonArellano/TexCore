@@ -263,7 +263,7 @@ tc up -d --wait
 
 ## 5. Rollback
 
-- **Con CI/CD:** el workflow `.github/workflows/rollback.yml` (`workflow_dispatch`) vuelve a la versión anterior. Pide el SHA del commit (o usa la imagen `:backup`), la palabra `ROLLBACK` como confirmación y el motivo, que queda registrado.
+- **Con CI/CD:** el job manual `rollback:produccion` de `.gitlab-ci.yml` vuelve a la versión anterior con un clic. Al lanzarlo se indica `ROLLBACK_SHA` (vacío usa las imágenes `:backup`; con un SHA se verifica la firma) y `ROLLBACK_MOTIVO`, que queda registrado. Detalle en `GUIA_GITLAB.md` §9.
 - **Manual:**
   1. `git checkout <versión-anterior>`, `tc build` y `tc up -d --wait`.
   2. Si la versión que se revierte aplicó migraciones, restaura el respaldo tomado antes de actualizar (sección 4.3): las migraciones de datos no siempre son reversibles.

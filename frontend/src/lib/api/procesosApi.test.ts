@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): respuesta paginada o lista / un proceso.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { procesosApi } from './procesosApi';
 

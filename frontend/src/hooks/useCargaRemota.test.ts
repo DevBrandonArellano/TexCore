@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): montaje / error del servidor / cambio de clave / recargar / habilitado en
+ *   false.
+ * - Transición de estados (STT): habilitado que pasa a true.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useCargaRemota } from './useCargaRemota';

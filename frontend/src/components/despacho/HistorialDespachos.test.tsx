@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): clic en imprimir historial / clic en generar guia de remision / clic en
+ *   volver a despacho / datos aun no resueltos / sin despachos.
+ * - Transición de estados (STT): error de reversion con clave justificacion / error de reversion sin mensaje
+ *   del backend.
+ * - Caja blanca (CB): ramas de error — un error del servidor / error de reversion con clave justificacion /
+ *   error de reversion sin mensaje del backend.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

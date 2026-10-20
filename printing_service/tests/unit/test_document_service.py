@@ -2,6 +2,11 @@
 Tests unitarios de DocumentService.
 Migrados desde test_nota_venta_calculos.py — misma lógica, nueva ubicación.
 No requieren HTTP ni WeasyPrint.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): un detalle / lista vacia / detalle con iva / multiples detalles / detalle sin
+  iva.
+- Análisis de valores límite (BVA): lista vacia / todo cero.
 """
 
 import pytest

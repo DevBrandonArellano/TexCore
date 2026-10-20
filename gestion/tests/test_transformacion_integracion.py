@@ -7,6 +7,9 @@ Reproduce el caso real de la planta textil:
 
 Verifica de extremo a extremo: secuenciación automática, continuidad de códigos,
 merma acumulada y trazabilidad que cruza de un área a la siguiente.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): tres maquinas / transferencia a hilatura.
 """
 
 from decimal import Decimal

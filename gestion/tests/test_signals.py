@@ -7,6 +7,9 @@ así que un registro de auditoría podía quedar incompleto sin que nadie lo not
 
 No requieren BD: son funciones puras sobre un objeto con la forma esperada
 (no hace falta un modelo Django real ni factories).
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): campo que revienta / instancia sana.
 """
 
 from django.test import TestCase

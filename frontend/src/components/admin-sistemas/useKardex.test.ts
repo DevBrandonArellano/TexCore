@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): bodega y producto / respuesta del kardex / sin producto / ningun filtro /
+ *   count del servidor.
+ * - Caja blanca (CB): ramas de error — un error de la API.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useKardex, KARDEX_PAGE_SIZE } from './useKardex';

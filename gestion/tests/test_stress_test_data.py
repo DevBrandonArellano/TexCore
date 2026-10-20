@@ -1,6 +1,10 @@
 """Humo de stress_test_data: invariantes de los datos sembrados que usan el loadtest y las demos.
 
 Técnicas ISTQB: prueba de humo + verificación de invariantes sobre una corrida corta.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): bd vacia / siembra / simulacion / ops del operario demo / ventas.
+- Análisis de valores límite (BVA): bd vacia.
 """
 
 import io

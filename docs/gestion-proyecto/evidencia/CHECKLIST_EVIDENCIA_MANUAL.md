@@ -25,7 +25,7 @@ DoD de la tesis: «Contenedores levantan sin errores; pipeline ejecuta build y l
 | Puerto de la BD no accesible desde fuera (TEX-02 CA-2) | 1433 sin publicar y conexión rechazada: `sprint-0/2026-10-08_puerto-bd.txt` | ✅ |
 | Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` por HTTPS a `/api/health/` y a `/`: `sprint-0/2026-10-13_nginx-https.txt` | ✅ |
 | IP real del cliente en la auditoría (TEX-03 CA-3) | `gestion/tests/test_system_views.py` (`_extract_client_ip`) | ✅ |
-| Pipeline ejecuta build y lint (TEX-04) | Ejecución de `.github/workflows/ci.yml` en GitHub Actions con `quality-gate` en verde | ⏳ |
+| Pipeline ejecuta build y lint (TEX-04) | Ejecución del `.gitlab-ci.yml` en GitLab CI con los jobs `lint:*`, `test:*` y `audit:*` en verde (`GUIA_GITLAB.md` §11) | ⏳ |
 | Estructura base del repositorio y estándares (TEX-05) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` y convención ISTQB de nombres de prueba | ✅ |
 | Backlog estimado y priorizado | `docs/gestion-proyecto/PRODUCT_BACKLOG.md`: 54 historias, 288 puntos, 9 épicas | ✅ |
 
@@ -43,14 +43,14 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 | 6 | Dosificación calcula gramos exactos; etiqueta ZPL impresa con tara; recetas versionadas | TEX-37 a TEX-43 (268 pruebas) | ✅ |
 | 7 | Escaneo valida lote contra pedido; despacho atómico sin descargas parciales; KPIs en tiempo real | TEX-44 a TEX-48 (199 pruebas); escaneo < 2500 ms bajo carga (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
 | 8 | Roles administrativos operan según su alcance; navegación persistente | TEX-49 a TEX-53 | ✅ |
-| 8 | Congelamiento de código aplicado; sistema completo en staging (TEX-54) | Etiqueta de versión, protección de ramas, despliegue en staging y ejecución de `.github/workflows/rollback.yml` | ⏳ |
+| 8 | Congelamiento de código aplicado; sistema completo en staging (TEX-54) | Etiqueta de versión, protección de ramas, despliegue en staging y ejecución del job `rollback:produccion` | ⏳ |
 
 ## 3. Definición de Hecho transversal (§5.1)
 
 | Criterio de la tesis | Evidencia | Veredicto |
 |---|---|---|
 | Código integrado en la rama principal a través del pipeline de CI/CD | PR `MES` → `staging` → `master` con los checks en verde | ⏳ |
-| Superación de los análisis estáticos (flake8, bandit, detect-secrets) | Gates bloqueantes de `ci.yml`, todos en 0. Job `backend-lint`: Ruff (estilo y reglas de seguridad `S`, que reemplazan a flake8 y bandit; `docs/arquitectura/ESTANDARES_DESARROLLO.md`), mypy y detect-secrets (ningún secreto nuevo y línea base auditada por completo). Job `sast-semgrep`: Semgrep. Job `frontend-test`: ESLint y `tsc` | ✅ |
+| Superación de los análisis estáticos (flake8, bandit, detect-secrets) | Gates bloqueantes del `.gitlab-ci.yml`, todos en 0. Job `lint:backend`: Ruff (estilo y reglas de seguridad `S`, que reemplazan a flake8 y bandit; ADR-015), mypy y detect-secrets (ningún secreto nuevo y línea base auditada por completo). Job `sast:semgrep`: Semgrep. Job `test:frontend`: ESLint y `tsc`. Job `lint:istqb`: convención ISTQB | ✅ |
 | Cobertura de pruebas automatizadas ≥ 75 % en el núcleo | 92,1 % del backend sobre SQL Server, con un gate de 90 % en el CI (`.coveragerc`). Microservicios con gates de 95 % (`printing_service`), 90 % (`reporting_excel`) y 90 % (`scanning_service`). Frontend con 95,5 % de sentencias, 90,0 % de ramas, 93,9 % de funciones y 96,6 % de líneas | ✅ |
 | Registro de auditoría en las operaciones críticas | TEX-09 (auditoría inmutable) y TEX-10 (justificación obligatoria), en `EVIDENCIA_POR_SPRINT.md` Sprint 1 | ✅ |
 | Despliegue verificado en el ambiente de staging | Despliegue en staging con la suite en verde | ⏳ |
@@ -61,8 +61,8 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 |---|---|---|---|
 | RNF-01 | Autenticación vía JWT | TEX-06: cookies `HttpOnly`, `SameSite=Lax` y `Secure` en producción (`Set-Cookie` del login en `sprint-0/2026-10-13_nginx-https.txt`) | ✅ |
 | RNF-01 | Datos sensibles encriptados | **En tránsito:** TLS 1.2 y 1.3 con HSTS en el puerto 443 (TLS 1.0 y 1.1 rechazados), y el puerto 80 solo redirige (301) a HTTPS: `sprint-0/2026-10-13_nginx-https.txt`, `gestion/tests/test_nginx_redireccion_https.py`. Las cookies de sesión, CSRF y JWT solo viajan por HTTPS (`gestion/tests/test_cookies_seguras_produccion.py`). **Credenciales:** contraseñas con el hash de Django. El cifrado de la base en reposo (TDE) no forma parte de la configuración evaluada | ✅ |
-| RNF-01 | RBAC aplicado al 100 % de los endpoints | `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` y `gestion/tests/test_permisos_por_defecto.py`, que recorre todas las vistas y exige permisos declarados | ✅ |
-| RNF-02 | 100 % de funcionalidades con autenticación; autorización por rol en todas las operaciones; pruebas de acceso no autorizado | TEX-07, TEX-08, TEX-23, TEX-49 y TEX-50 (rol y sede) | ✅ |
+| RNF-01 | RBAC aplicado al 100 % de los endpoints | `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` y `gestion/tests/test_permisos_por_defecto.py`, que recorre todas las vistas y exige permisos declarados; `scripts/auditar_permisos_backend.py` lista cada ruta con su permiso (de clase o por acción) y su filtro de sede (`gestion/tests/test_auditoria_permisos_script.py`) | ✅ |
+| RNF-02 | 100 % de funcionalidades con autenticación; autorización por rol en todas las operaciones; pruebas de acceso no autorizado | **Autenticación:** el anónimo recibe 401/403 en todas las rutas salvo las 6 públicas justificadas, y las escrituras con la cookie exigen el token CSRF. **Acceso no autorizado:** en cada ruta de objeto, los 9 roles acotados a una sede no acceden a objetos de otra sede (`gestion/tests/test_acceso_no_autorizado_global.py`). **Rol y sede por módulo:** TEX-07, TEX-08, TEX-23, TEX-49 y TEX-50, `gestion/tests/test_control_acceso_sede.py` e `inventory/tests/test_control_acceso_bodegas.py`. En el stack, el escaneo sin sesión responde 401 y el de otra sede, «no encontrado» | ✅ |
 | RNF-03 | Microsoft SQL Server; consultas de inventario y producción < 3 s; escaneo QR < 2500 ms | SQL Server 2022; con 100 y 250 usuarios concurrentes, p95 del escaneo de 89 y 200 ms; panel de planta de 220 y 380 ms; kárdex de 610 y 390 ms (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
 | RNF-04 | Núcleo y tres módulos internos desplegables e independientes | El compose de producción despliega `scanning_service`, `printing_service` y `reporting_excel`, cada uno con su imagen, contenedor y `HEALTHCHECK` | ✅ |
 | RNF-05 | Tareas frecuentes (registro de lote, escaneo) ≤ 3 pasos | Grabaciones numeradas del registro de lote, el escaneo y el pesaje (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4) | ⏳ |
@@ -72,15 +72,15 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 
 | Afirmación de la tesis | Situación del sistema | Veredicto |
 |---|---|---|
-| Pipeline configurado en GitLab CI; imágenes en GitLab Container Registry | GitHub Actions (`ci.yml`, `release.yml`, `security.yml`, `rollback.yml`, `gobierno.yml`) y GitHub Container Registry | ❌ como está redactado |
-| Validación de sintaxis y formato con flake8 y detección de vulnerabilidades con bandit | Ruff con las reglas de estilo y de seguridad `S`, además de mypy y Semgrep | ❌ como está redactado |
-| Escaneo de secretos con detect-secrets | Dos pasos bloqueantes en `ci.yml`: ningún secreto nuevo en los archivos versionados y línea base auditada | ✅ |
-| Base de datos efímera para pruebas unitarias y de integración (Pytest y Django) | SQL Server 2022 como servicio del job `backend-test` | ✅ |
+| Pipeline configurado en GitLab CI; imágenes en GitLab Container Registry | `.gitlab-ci.yml` en un GitLab CE autoalojado con su Container Registry (`infrastructure/gitlab/`, `GUIA_GITLAB.md`, ADR-014). GitHub es solo un espejo y no ejecuta nada | ✅ en configuración · ⏳ primera ejecución en el servidor |
+| Validación de sintaxis y formato con flake8 y detección de vulnerabilidades con bandit | Ruff con las reglas de estilo y de seguridad `S`, además de mypy y Semgrep (ADR-015) | ❌ como está redactado: única corrección de redacción del pipeline (`CORRECCIONES_TESIS.md` §5) |
+| Escaneo de secretos con detect-secrets | Dos pasos bloqueantes en `lint:backend`: ningún secreto nuevo en los archivos versionados y línea base auditada | ✅ |
+| Base de datos efímera para pruebas unitarias y de integración (Pytest y Django) | SQL Server 2022 como servicio del job `test:backend` | ✅ |
 | Umbral de cobertura mínimo del 75 % para la mezcla | Gate del 90 % en el backend | ✅ |
 | Imágenes de Backend, Frontend y microservicios | 6 imágenes: backend, nginx con el frontend, los 3 microservicios y la base de datos; el release las construye sin caché y las despliega por digest, firmadas con cosign | ✅ |
-| Despliegue automático a staging | No hay servidor de staging: `release.yml` levanta un **staging efímero** con las 6 imágenes del release y un SQL Server desechable, migra desde cero y corre las pruebas de humo de los 11 roles antes de pedir la aprobación de producción | ✅ en configuración · ⏳ ejecución (primer merge a `master`) |
+| Despliegue automático a staging | No hay servidor de staging permanente: `staging:efimero` levanta un **staging efímero** con las 6 imágenes del release y un SQL Server desechable, migra desde cero y corre las pruebas de humo de los 11 roles antes de habilitar el despliegue de producción | ✅ en configuración · ⏳ ejecución (primer merge a `master`) |
 | Producción en Ubuntu Server (Hyper-V) con Gunicorn y Nginx | Compose de producción con Gunicorn (20 workers) detrás de Nginx; dimensionamiento en `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` | ✅ en configuración · ⏳ despliegue |
-| Rollback manual con un solo clic | `.github/workflows/rollback.yml` (`workflow_dispatch` con confirmación) | ⏳ ejecución |
+| Rollback manual con un solo clic | Job manual `rollback:produccion` (un clic; `ROLLBACK_SHA` y `ROLLBACK_MOTIVO` al lanzarlo) | ⏳ ejecución |
 
 ## 6. Puesta en marcha (§5.4)
 
@@ -103,7 +103,7 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 
 | Punto ⏳ | Qué generar | Dónde |
 |---|---|---|
-| TEX-04 y la integración por CI/CD | Captura de una ejecución de `ci.yml` con todos los jobs y `quality-gate` en verde | GitHub Actions |
+| TEX-04 y la integración por CI/CD | Captura de un pipeline de `.gitlab-ci.yml` con todos los jobs en verde | GitLab (CI/CD > Pipelines) |
 | RNF-05 | Grabaciones del registro de lote (TEX-12), el escaneo y el pesaje (TEX-41), numerando cada paso; capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46) | Navegador contra el stack |
-| TEX-54 y staging | `git tag -a v1.0.0-rc1`, protección de `master` y `staging`, despliegue en staging y ejecución de `rollback.yml` | GitHub |
+| TEX-54 y staging | `git tag -a v1.0.0-rc1`, protección de `master` y `staging`, despliegue en staging y ejecución de `rollback:produccion` | GitLab |
 | Ceremonias | Actas, capturas de Jira y `git log` por sprint | — |

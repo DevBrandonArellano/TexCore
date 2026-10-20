@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): paros del rango / el primer render / el atajo de mantenimiento / el atajo
+ *   de averías / un cambio de fecha.
+ * - Transición de estados (STT): un paro abierto por el cambio de estado.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';

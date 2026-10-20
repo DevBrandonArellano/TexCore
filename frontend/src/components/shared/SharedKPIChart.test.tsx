@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): datos vacios / data null / type bar con datos / type line con datos / type
+ *   area con datos.
+ * - Análisis de valores límite (BVA): datos vacios.
+ */
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';

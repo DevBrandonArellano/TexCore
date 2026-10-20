@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): despachoId null / despachoId asignado / campos obligatorios vacios /
+ *   transporte de tercero sin nombre / formulario valido con transporte propio.
+ * - Análisis de valores límite (BVA): campos obligatorios vacios.
+ * - Caja blanca (CB): ramas de error — error del backend.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

@@ -1,3 +1,9 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): filtro por bodega / filtro por producto / filtro tipo entrada / filtro tipo
+  salida / 30 filas con sus fk.
+"""
+
 from datetime import timedelta
 from decimal import Decimal
 

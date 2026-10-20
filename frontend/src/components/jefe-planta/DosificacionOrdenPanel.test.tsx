@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): litros propuestos / litros vacíos o no positivos / error del servidor /
+ *   máquina asignada / sin máquina asignada.
+ * - Análisis de valores límite (BVA): litros vacíos o no positivos.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';

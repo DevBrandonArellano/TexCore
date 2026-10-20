@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin componentes / componentes que suman 100% / un componente / modo
+ *   readonly / boton agregar deshabilitado.
+ * - Caja blanca (CB): ramas de error — error de validacion del backend / error al eliminar.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

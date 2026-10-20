@@ -1,3 +1,10 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): maquina con merma / maquina sin merma / peso merma cero / peso merma minimo /
+  lote con merma.
+- Análisis de valores límite (BVA): peso merma cero / peso merma minimo.
+"""
+
 from decimal import Decimal
 
 from django.test import TestCase

@@ -3,6 +3,11 @@
 El PDF contiene solo la página visible del listado; cuando el filtro tiene más
 registros que una página, el pie debe decir cuántos hay en total y cuántas
 páginas existen.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): mas de una pagina / un solo dia / un rango / una sola pagina / request sin
+  datos de paginacion.
+- Análisis de valores límite (BVA): request sin datos de paginacion.
 """
 
 from src.routers.pdf import get_pdf_strategy

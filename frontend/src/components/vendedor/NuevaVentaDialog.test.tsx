@@ -1,9 +1,16 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin cliente seleccionado / un cliente a credito con cartera al dia / un
+ *   cliente de contado / un cliente con cartera vencida / cliente de contado con pedido no pagado.
+ * - Análisis de valores límite (BVA): retencion aplicada con valor mayor a cero / retencion aplicada en cero.
+ */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NuevaVentaDialog } from './NuevaVentaDialog';
-import type { Cliente, Producto } from '../../lib/types';
+import type { Cliente, Producto } from '../../lib/types';
+
 import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora.

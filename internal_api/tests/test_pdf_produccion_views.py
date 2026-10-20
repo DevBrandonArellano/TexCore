@@ -3,6 +3,12 @@ Pruebas unitarias para vistas de generación de PDFs de producción en internal_
   - ReporteAvancePdfView
   - BalanceMasasPdfView
   - Permiso IsInternalServiceOrUser (ServicePrincipal y Usuario Jefe de Planta/Área)
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): usuario sin permiso / servicio sin sede id / usuario jefe / llamada exitosa /
+  token de servicio.
+- Análisis de valores límite (BVA): peso requerido cero / stock negativo.
+- Caja blanca (CB): ramas de error — error http del printing service.
 """
 
 from unittest.mock import MagicMock, patch

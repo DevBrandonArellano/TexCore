@@ -1,3 +1,10 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): formula y bodega quimicos / sin bodega quimicos / quimicos descontados /
+  formula grl y pct / sin justificacion.
+- Análisis de valores límite (BVA): stock bajo minimo.
+"""
+
 from decimal import Decimal
 
 from rest_framework import status

@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): ordenes de varios estados / sin ordenes pendientes / una orden pendiente /
+ *   el panel de mezcla abierto / asignar sin maquina ni operario.
+ * - Transición de estados (STT): ordenes de varios estados / sin ordenes pendientes / una orden pendiente.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

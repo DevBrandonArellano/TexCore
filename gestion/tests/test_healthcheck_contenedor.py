@@ -2,6 +2,11 @@
 
 El script vive fuera de un paquete: se carga por ruta para probar cómo elige
 el encabezado Host a partir de ALLOWED_HOSTS.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): allowed hosts con dominio / comodin de subdominio / asterisco o vacio /
+  backend responde 200 / backend no responde.
+- Análisis de valores límite (BVA): asterisco o vacio.
 """
 
 import importlib.util

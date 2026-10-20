@@ -103,6 +103,10 @@ IsLectorProcesosTintoreria = make_group_permission(
 # MRP: requerimientos de material y sugerencias de compra (Bodeguero y Ejecutivo).
 IsMRPRole = make_group_permission("bodeguero", "ejecutivo", "admin_sistemas", "admin_sede")
 
+# Panel ejecutivo: KPI, resumen, tendencia y producción por producto (RNF-02). El
+# Admin de Sede lo ve incrustado en su panel.
+IsPanelEjecutivo = make_group_permission("ejecutivo", "admin_sistemas", "admin_sede")
+
 GRUPOS_TODAS_LAS_SEDES = ("admin_sistemas", "ejecutivo")
 
 
@@ -132,16 +136,19 @@ def filtrar_catalogo_por_sede(qs, user):
     return qs.filter(Q(sede_id=user.sede_id) | Q(sede__isnull=True))
 
 
+def filtrar_lotes_de_sede(qs, sede_id):
+    """Lotes de `sede_id`: la sede de un lote es la de su orden o, sin orden (corridas
+    MES), la de su producto — misma regla que LoteProduccion.save()."""
+    return qs.filter(Q(orden_produccion__sede_id=sede_id) | Q(orden_produccion__isnull=True, producto__sede_id=sede_id))
+
+
 def filtrar_lotes_por_sede(qs, user):
-    """La sede de un lote es la de su orden o, sin orden (corridas MES), la de su
-    producto — misma regla que LoteProduccion.save()."""
+    """Lotes que ve `user`: todos si ve todas las sedes, ninguno sin sede, o los de su sede."""
     if ve_todas_las_sedes(user):
         return qs
     if not user.sede_id:
         return qs.none()
-    return qs.filter(
-        Q(orden_produccion__sede_id=user.sede_id) | Q(orden_produccion__isnull=True, producto__sede_id=user.sede_id)
-    )
+    return filtrar_lotes_de_sede(qs, user.sede_id)
 
 
 def validar_visible(qs, obj, campo):

@@ -1,4 +1,8 @@
-"""Tests para endpoints de reporting. EP por endpoint representativo."""
+"""Tests para endpoints de reporting. EP por endpoint representativo.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token valido / bodega valida / sin bodega / scope incorrecto.
+"""
 
 import uuid
 from datetime import UTC, datetime, timedelta

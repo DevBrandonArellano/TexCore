@@ -1,7 +1,14 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin producto / producto, fecha y bodega / bodega elegida / error del
+ *   servidor.
+ * - Caja blanca (CB): ramas de error — error del servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { StockAFechaView } from './StockAFechaView';
+import { StockAFechaView } from './StockAFechaView';
+
 import { parcial } from '../../testing/parcial';
 import { type Producto } from '../../lib/types';
 

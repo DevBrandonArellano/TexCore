@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): bloque y sede / todas las sedes / sede / alcance / un fallo del motor.
+ * - Caja blanca (CB): ramas de error — un error sin ejecuciones.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mrpApi } from './mrpApi';
 

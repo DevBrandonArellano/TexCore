@@ -1,7 +1,14 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un movimiento nulo / un movimiento existente / razon vacia / razon con
+ *   menos de 10 caracteres / datos validos.
+ * - Análisis de valores límite (BVA): razon vacia / razon con menos de 10 caracteres.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { EditarMovimientoDialog } from './EditarMovimientoDialog';
+import { EditarMovimientoDialog } from './EditarMovimientoDialog';
+
 import { parcial } from '../../testing/parcial';
 import { Movimiento } from '../../lib/types';
 

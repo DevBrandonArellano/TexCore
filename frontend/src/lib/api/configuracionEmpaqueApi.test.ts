@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): admin de sede sin sede elegida / sede elegida.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getMock = vi.fn();

@@ -75,6 +75,79 @@ class FrontendLogViewTestCase(TestCase):
         self.assertTrue(any("frontend" in msg.lower() for msg in cm.output))
 
 
+class FrontendLogEndurecimientoTestCase(TestCase):
+    """
+    RNF-02 / OWASP API4: el relay es público (el front registra errores incluso en el login),
+    así que acota lo que acepta. Sin esto, cada `msgid` distinto creaba un logger nuevo que
+    Python nunca libera, un salto de línea en el mensaje falsificaba una línea de log y no
+    había límite de tasa.
+
+    Técnicas ISTQB: EP (msgid válido / con caracteres no permitidos), BVA (mensaje en el
+    límite de longitud y uno por encima; la petición en el límite de tasa y la siguiente).
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.client = APIClient()
+        self.url = reverse("frontend-logs")
+
+    def _registro(self, payload, logger="frontend"):
+        with self.assertLogs(logger, level="INFO") as capturado:
+            resp = self.client.post(self.url, payload, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        return capturado.records[0]
+
+    def test_log_dado_msgid_con_caracteres_no_permitidos_cuando_post_entonces_usa_el_logger_generico(self):
+        registro = self._registro({"severity": 6, "message": "x", "msgid": "../../evil name\n"})
+        self.assertEqual(registro.name, "frontend.frontend")
+
+    def test_log_dado_msgid_mas_largo_que_el_limite_cuando_post_entonces_usa_el_logger_generico(self):
+        registro = self._registro({"severity": 6, "message": "x", "msgid": "a" * 41})
+        self.assertEqual(registro.name, "frontend.frontend")
+
+    def test_log_dado_msgid_valido_en_el_limite_cuando_post_entonces_conserva_el_nombre(self):
+        registro = self._registro({"severity": 6, "message": "x", "msgid": "a" * 40})
+        self.assertEqual(registro.name, "frontend." + "a" * 40)
+
+    def test_log_dado_saltos_de_linea_en_el_mensaje_cuando_post_entonces_no_falsifica_lineas(self):
+        registro = self._registro({"severity": 6, "message": "ok\n<134>1 falso\r\notra"})
+        self.assertNotIn("\n", registro.getMessage())
+        self.assertNotIn("\r", registro.getMessage())
+
+    def test_log_dado_mensaje_mas_largo_que_el_limite_cuando_post_entonces_lo_recorta(self):
+        registro = self._registro({"severity": 6, "message": "x" * 5000})
+        self.assertEqual(len(registro.getMessage()), 2000)
+
+    def test_log_dado_severity_no_numerica_cuando_post_entonces_registra_como_info(self):
+        import logging
+
+        registro = self._registro({"severity": "alto", "message": "x"})
+        self.assertEqual(registro.levelno, logging.INFO)
+
+    def test_log_dado_sd_con_demasiadas_claves_y_valores_largos_cuando_post_entonces_los_acota(self):
+        sd = {f"k{i}": "v" * 500 for i in range(50)}
+        registro = self._registro({"severity": 6, "message": "x", "sd": sd})
+        # 20 claves del cliente + `source` e `ip`, que pone el backend.
+        self.assertEqual(len(registro.sd), 22)
+        self.assertTrue(all(len(str(v)) <= 200 for v in registro.sd.values()))
+
+    def test_log_dado_sd_que_intenta_cambiar_la_ip_cuando_post_entonces_prevalece_la_del_backend(self):
+        registro = self._registro({"severity": 6, "message": "x", "sd": {"ip": "1.2.3.4", "source": "server"}})
+        self.assertEqual(registro.sd["source"], "browser")
+        self.assertNotEqual(registro.sd["ip"], "1.2.3.4")
+
+    def test_log_dado_rafaga_por_encima_del_limite_cuando_post_entonces_429(self):
+        from unittest.mock import patch
+
+        from gestion.views.system_views import FrontendLogThrottle
+
+        with patch.object(FrontendLogThrottle, "rate", "2/min"):
+            codigos = [self.client.post(self.url, {"message": "x"}, format="json").status_code for _ in range(3)]
+        self.assertEqual(codigos, [204, 204, 429])
+
+
 class FrontendLogIpClienteTestCase(TestCase):
     """
     TEX-03 CA-3 (hallazgo M-8): la IP del log debe ser la del cliente real. Detrás de Nginx

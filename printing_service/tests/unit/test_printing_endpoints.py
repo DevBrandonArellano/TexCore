@@ -1,6 +1,12 @@
 """
 Tests de endpoints e integración para printing_service.
 Cubre: config, main, health.py, pdf.py, zpl.py, output_strategy.py.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): templates existentes / templates ausentes / request valido / error en strategy
+  / transporte propio.
+- Análisis de valores límite (BVA): peso cero.
+- Caja blanca (CB): ramas de error — error en strategy.
 """
 
 import sys
@@ -34,13 +40,13 @@ _AUTH_HEADERS = {"Authorization": "Bearer test-token"}
 
 
 class TestHealthEndpoint:
-    def test_health_ok_cuando_templates_existen_entonces_retorna_200(self):
+    def test_health_dado_templates_existentes_cuando_consulta_entonces_retorna_200(self):
         """EP: todos los templates presentes → status ok."""
         response = client.get("/health")  # templates reales del servicio
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-    def test_health_503_cuando_templates_ausentes_entonces_lanza_503(self):
+    def test_health_dado_templates_ausentes_cuando_consulta_entonces_lanza_503(self):
         """EP: templates faltantes → 503 Service Unavailable con lista de ausentes."""
         with tempfile.TemporaryDirectory() as vacio, patch("src.routers.health.TEMPLATES_DIR", vacio):
             response = client.get("/health")
@@ -690,19 +696,19 @@ class TestZplEndpoint:
 
 
 class TestGetStrategyFunctions:
-    def test_get_pdf_strategy_retorna_instancia_pdf_output_strategy(self):
+    def test_get_pdf_strategy_dado_la_dependencia_cuando_se_resuelve_entonces_retorna_pdf_output_strategy(self):
         """Cubre get_pdf_strategy: crea Environment y PdfOutputStrategy."""
         strategy = get_pdf_strategy()
         assert isinstance(strategy, PdfOutputStrategy)
 
-    def test_get_zpl_strategy_retorna_instancia_zpl_output_strategy(self):
+    def test_get_zpl_strategy_dado_la_dependencia_cuando_se_resuelve_entonces_retorna_zpl_output_strategy(self):
         """Cubre get_zpl_strategy: crea Environment y ZplOutputStrategy."""
         strategy = get_zpl_strategy()
         assert isinstance(strategy, ZplOutputStrategy)
 
 
 class TestZplOutputStrategy:
-    def test_dado_zpl_strategy_cuando_render_entonces_retorna_plain_text(self):
+    def test_render_dado_zpl_strategy_cuando_renderiza_entonces_retorna_plain_text(self):
         """Cubre ZplOutputStrategy.__init__ y render: renderiza template ZPL."""
         mock_env = MagicMock()
         mock_template = MagicMock()
@@ -718,7 +724,7 @@ class TestZplOutputStrategy:
 
 
 class TestPdfOutputStrategy:
-    def test_dado_pdf_strategy_cuando_render_entonces_retorna_streaming_response(self):
+    def test_render_dado_pdf_strategy_cuando_renderiza_entonces_retorna_streaming_response(self):
         """Cubre PdfOutputStrategy.__init__ y render con WeasyPrint mockeado."""
         mock_env = MagicMock()
         mock_template = MagicMock()

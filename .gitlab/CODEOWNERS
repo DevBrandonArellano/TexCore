@@ -1,9 +1,12 @@
-# Revisores obligatorios de las rutas críticas (plan CI/CD, Fase 1).
-# Surte efecto cuando el ruleset de la rama activa «Require review from Code Owners».
+# Revisores obligatorios de las rutas críticas (GitLab CODEOWNERS).
+# Surte efecto con «Aprobación de Code Owners» activada en las ramas protegidas master y staging.
 # La última coincidencia gana: las rutas más específicas van al final.
 
-# Pipeline, dependencias automáticas y esta misma lista
-/.github/                       @DevBrandonArellano
+# Pipeline, dependencias automáticas, GitLab y esta misma lista
+/.gitlab-ci.yml                 @DevBrandonArellano
+/renovate.json                  @DevBrandonArellano
+/cosign.pub                     @DevBrandonArellano
+/.gitlab/                       @DevBrandonArellano
 
 # Infraestructura de despliegue e imágenes
 /infrastructure/                @DevBrandonArellano

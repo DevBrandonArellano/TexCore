@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario de nuevo cliente / el switch de retención activo / un error
+ *   401 / un error distinto de 401 / clientes con saldo string, alto porcentaje de credito, beneficio y mora
+ *   sin fecha.
+ * - Transición de estados (STT): pedidos anulados, pagados, abonados y pendientes sin guia ni retencion / un
+ *   pedido no anulado en estado distinto de pendiente.
+ * - Caja blanca (CB): ramas de error — un error 401 / un error distinto de 401.
+ */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

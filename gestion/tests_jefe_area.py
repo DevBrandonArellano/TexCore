@@ -1,3 +1,8 @@
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): su area / lotes del dia.
+"""
+
 import datetime
 
 from django.contrib.auth.models import Group

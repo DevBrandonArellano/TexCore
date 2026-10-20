@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): 400 con detail / 400 con error string / 400 con el sobre del backend / 403
+ *   con el sobre del backend / 400 con errores por campo.
+ * - Caja blanca (CB): ramas de error — 400 con error string / 400 con errores por campo / error string del
+ *   backend.
+ */
 import { describe, it, expect } from 'vitest';
 import { datosDeError, estadoHttp, getApiErrorMessage, mensajeDeLaApi } from './apiError';
 

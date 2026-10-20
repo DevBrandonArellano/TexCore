@@ -6,6 +6,11 @@ test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 Antes de este fix, cualquier actor con acceso a la red interna de Docker
 podía generar PDFs/ZPL con datos arbitrarios (notas de venta, etiquetas)
 sin ninguna credencial — este archivo prueba que ya no es posible.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): sin authorization header / header sin bearer / token con bearer valido / token
+  expirado / tipo token incorrecto.
+- Transición de estados (STT): token expirado.
 """
 
 from unittest.mock import patch

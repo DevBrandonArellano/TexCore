@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): loading en true / sin formulas / formulas existentes / busqueda por codigo
+ *   / mas de 20 formulas.
+ * - Análisis de valores límite (BVA): peso o litros vacios / un catalogo de procesos vacio / editar una
+ *   formula con description y notas no vacias / un insumo con litros de bano vacios.
+ * - Transición de estados (STT): formula aprobada.
+ * - Caja blanca (CB): ramas de error — error de red / un error al generar el PDF.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
