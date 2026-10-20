@@ -127,8 +127,8 @@ class Command(BaseCommand):
             idx = i % len(nombres)
             suf = f" {i // len(nombres) + 1}" if i >= len(nombres) else ""
             ruc = f"179{i:08d}001"  # Único por cliente
-            Cliente.objects.get_or_create(
-                ruc_cedula=ruc,
+            Cliente.objects.obtener_o_crear_por_identificacion(
+                ruc,
                 defaults={
                     "nombre_razon_social": f"{nombres[idx]}{suf} S.A.",
                     "direccion_envio": f"Calle {i + 1}, Av. Principal",

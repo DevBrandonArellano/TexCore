@@ -28,7 +28,7 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 
 1. ✅ ~~Reescribir `CHECKLIST_EVIDENCIA_MANUAL.md` como contraste con la tesis~~ (12-oct). Las correcciones al texto quedan en `CORRECCIONES_TESIS.md`.
 2. ✅ ~~Reescribir `REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento del 8-oct~~ (12-oct).
-3. ✅ ~~Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia~~ (14-oct, tarde): evidencia por sprint regenerada, auditoría del backlog cerrada, `AUDITORIA_CALIDAD.md` con su contraste al día y **RS-19** abierto (datos personales sin cifrar, único ❌ del contraste).
+3. ✅ ~~Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia~~ (14-oct, tarde): evidencia por sprint regenerada, auditoría del backlog cerrada y `AUDITORIA_CALIDAD.md` con su contraste al día. **RS-19** (datos personales sin cifrar, único ❌ del contraste) quedó ✅ ~~cerrado el 19-oct~~: cifrado en reposo con Fernet e índice ciego, y el contraste de §I.5 ya no tiene ❌.
 4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct) y ✅ ~~verificar RNF-01 en el stack~~ (13-oct).
 5. ✅ ~~Correr mypy y pip-audit~~ (13-oct, en la imagen `texcore-django-test`: ambos en 0).
 6. Usabilidad, a cargo del usuario:
@@ -42,7 +42,9 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 12. Verificación con React DevTools Profiler de la división de dashboards (único punto abierto de ese plan).
 13. ✅ ~~Historial de mantenimiento y paros de máquina para el Jefe de Área~~ (14-oct, tarde): paro automático por cambio de estado, `GET /api/paros-maquina/historial/`, PDF del printing_service y `HistorialMantenimientoPanel`. Pedido del usuario, cerrado con gates en verde y probado en el stack.
 14. Pegarle el SHA a `.git-blame-ignore-revs` cuando exista el commit del reformateo de Ruff (`git log -1 --format=%H`) y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
-15. Al final: staging, TEX-54 y la corrección del texto de la tesis (`CORRECCIONES_TESIS.md`).
+15. ✅ ~~RS-19: cifrar los datos personales en reposo y precisar lo que la tesis afirma sobre la LOPDP~~ (19-oct). El texto para pegar está en `CORRECCIONES_TESIS.md` §3.
+16. **Al desplegar `MES`:** generar `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` de producción **antes** de `migrate` (la `0010` no arranca sin ellas), respaldo previo, y `manage.py cifrar_datos_personales` para verificar. Guardar `FIELD_ENCRYPTION_KEYS` fuera del servidor: sin ella los datos cifrados no se recuperan (`docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §5).
+17. Al final: staging, TEX-54 y el resto de la corrección del texto de la tesis (`CORRECCIONES_TESIS.md` §1 y §2).
 
 #### Estado del entorno Linux (14-oct)
 
@@ -54,6 +56,33 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1017 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
+
+### 19 de Octubre de 2026 — RS-19: cifrado de los datos personales en reposo (LOPDP) — sin commitear
+
+Pedido del usuario: resolver **RS-19**, el único ❌ del contraste con la tesis, con un enfoque mixto — cifrar de verdad los datos (opción **a** del riesgo) **y** precisar la redacción de la tesis (opción **c**), en lugar de usar la corrección del texto para rebajar la afirmación. TDE (opción **b**) se descarta como medida única: depende de la edición de SQL Server que licencie la organización (**RS-18**) y no protege frente a quien tenga credenciales de lectura; queda como complementaria.
+
+**Qué se cifra.** `Cliente.ruc_cedula` (cédula o RUC) y `CustomUser.date_of_birth`, los dos datos de identificación que la tesis nombra. El resto (razón social, dirección, correo) son datos de contacto comercial que el sistema necesita filtrar y ordenar en la base, y quedan fuera del alcance a propósito.
+
+| Pieza | Qué hace |
+|---|---|
+| `gestion/crypto.py` | Fernet (AES-128-CBC + HMAC-SHA256) con `MultiFernet` para rotar claves, e `indice_ciego()` (HMAC-SHA256 con clave). `descifrar()` **lanza** `ErrorDeCifrado` en vez de devolver el valor crudo: una fila que no descifra es una fila sin migrar, y leerla «en claro» esconde el fallo |
+| `gestion/model_fields.py` | `EncryptedCharField` y `EncryptedDateField` heredan de `CharField`/`DateField`, así que `max_length` y el formato de fecha siguen validando el valor **en claro** y la API no cambia de contrato; la columna es `nvarchar(max)` vía `get_internal_type()`. `BlindIndexField` recalcula el índice en `pre_save()`, el único punto por el que pasan todas las escrituras (`bulk_create` incluido) |
+| `gestion/migrations/0010` | Por campo: columna nueva → copia cifrada en lotes de 500 → se borra la columna en claro → se renombra. No un `AlterField` en sitio: dejaría el texto en claro dentro de la columna nueva, y la conversión de `date` a texto en SQL Server depende del estilo de `CONVERT` |
+| `manage.py cifrar_datos_personales` | Verifica (por omisión, sin escribir), `--reparar` (cifra lo que quedó en claro) y `--recalcular-indices` (tras cambiar `BLIND_INDEX_KEY`). Lee con SQL directo porque el ORM descifraría y reventaría en la primera fila en claro, que es la que hay que encontrar |
+
+**Lo que el cifrado rompía y cómo se resolvió.** Fernet usa IV aleatorio: el mismo RUC produce un texto distinto en cada escritura, así que la unicidad `(ruc_cedula, sede)` no detectaría ningún duplicado y `filter(ruc_cedula=…)` devolvería vacío **en silencio**.
+
+- La unicidad pasa a `unique_together = ("ruc_cedula_hash", "sede")` — mismo SQL, misma semántica. `Cliente.clean()` calcula el índice antes de `validate_unique()`, de modo que un duplicado sigue dando **400** y no un 500, con el mensaje «Ya existe un cliente con esa identificación en esta sede».
+- Los campos cifrados solo admiten el lookup `isnull`; cualquier otro lanza `FieldError` con el camino correcto en el mensaje. Se arreglaron los 4 sitios que lo usaban: `load_million` (contaba por `ruc_cedula__startswith`) y los `get_or_create(ruc_cedula=…)` de `seed_data`, `stress_test_data` y `stress_ventas_data`, que pasan por los nuevos `Cliente.objects.por_identificacion()` y `obtener_o_crear_por_identificacion()`.
+- `AuditLog` no está cifrado, así que `date_of_birth` se audita por su HMAC truncado (`hmac:…`): delata el cambio sin registrar la fecha.
+
+**Claves nuevas, las dos *fail-fast* como `SECRET_KEY`.** `FIELD_ENCRYPTION_KEYS` (lista; la primera cifra, todas descifran) y `BLIND_INDEX_KEY` (estable). **Ninguna se deriva de `SECRET_KEY`**, que también firma los JWT y se rota cada año: derivar de ella volvería ilegibles los datos en cada rotación. Añadidas a `.env.example`, `.env.prod.example`, `.env.test`, `settings_test_local.py`, `ci.yml`, los dos compose, `Dockerfile.prod`, `staging_efimero.sh` y los dos guiones de pruebas; marcadas con `pragma: allowlist secret` donde son de CI o de prueba.
+
+**Verificación (local, SQLite por `settings_test_local`).** 34 pruebas nuevas en `gestion/tests/test_cifrado_datos_personales.py` (columna sin el valor en claro leída con SQL directo, descifrado por el ORM, no determinismo del cifrado, índice ciego, `FieldError` en `exact` y `startswith`, unicidad por sede, normalización, `bulk_create`, rotación de claves, auditoría redactada, los tres modos del comando y el contrato de la API). Suite completa: **1860 pasan**; los 4 fallos restantes ya estaban en rojo en `HEAD` antes de este cambio (3 de `test_despliegue_produccion` y 1 de `test_paro_por_estado`, contaminado por `test_stress_test_data` — en la línea base fallan 2). Microservicios: `scanning_service` 58 (92,0 %), `printing_service` 114 (98,1 %), `reporting_excel` 75 (98,3 %). Gates: `ruff check` 0, `ruff format` 0, `mypy` 0 sobre 307 archivos, `tsc` 0 y detect-secrets sin hallazgos nuevos. La migración se probó de ida y de vuelta sobre una base con filas en claro.
+
+**Lo que queda dicho, no supuesto:** `dumpdata` sigue exportando los valores en claro (serializa lo que el ORM entrega), la marcha atrás de la `0010` descifra pero no recrea las columnas borradas —hay que restaurar el respaldo—, y TDE sigue pendiente de la edición licenciada. Todo en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §7.
+
+**Texto para la tesis:** `CORRECCIONES_TESIS.md` §3 (párrafo para pegar, el enunciado del RNF-01 y las fronteras del alcance que conviene declarar).
 
 ### 16 de Octubre de 2026 — Despacho: PDF en blanco, detalle angosto, impresión de la página visible y orden de carga de las pruebas (sin commitear)
 

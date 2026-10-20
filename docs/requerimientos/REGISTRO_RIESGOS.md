@@ -41,7 +41,7 @@
 | RS-16 | **Credenciales en claro por el puerto 80** — nginx servía todo el sitio por HTTP sin redirigir; un login por `http://` en producción viajaba sin cifrar (RNF-01) | 3 | 5 | 15 🟠 | ✅ Mitigado (2026-10-13) | `NGINX_REDIRIGIR_HTTP=1` en `docker-compose.prod.yml`: el puerto 80 responde 301 hacia HTTPS (TLS 1.2/1.3 con HSTS). Las cookies de sesión, CSRF y JWT llevan `Secure`. `gestion/tests/test_nginx_redireccion_https.py`, `gestion/tests/test_cookies_seguras_produccion.py` y `docs/gestion-proyecto/evidencia/sprint-0/2026-10-13_nginx-https.txt` |
 | RS-17 | **El gate de detect-secrets no bloqueaba** — complementa RS-07: el paso del CI (`detect-secrets scan --baseline`) solo reescribía la línea base y siempre terminaba en 0 | 3 | 4 | 12 🟠 | ✅ Mitigado (2026-10-12) | `detect-secrets-hook` sobre `git ls-files` y la línea base auditada por completo, ambos bloqueantes en `ci.yml`. Exclusiones (JUnit, resultados de Locust, graphify-out, lockfiles) en los filtros de la línea base |
 | RS-18 | **SQL Server en edición Developer en el compose de producción** — `MSSQL_PID=Developer` estaba fijo; esa edición no está licenciada para producción | 2 | 4 | 8 🟡 | ✅ Mitigado en configuración (2026-10-12) | `MSSQL_PID` se toma del `.env`. `.env.prod.example` indica la edición licenciada (Standard), ver `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` |
-| RS-19 | **Datos personales sin cifrado en reposo** — `Cliente.ruc_cedula` (cédula o RUC) y la fecha de nacimiento del usuario se guardan en claro. La tesis afirma «privacidad desde el diseño» con las medidas técnicas de la LOPDP (2021) y los principios de la ISO/IEC 27001, así que hoy el texto afirma más de lo que el sistema hace. Era el defecto `SEC-08` de la auditoría de abril, diferido y nunca retomado | 2 | 4 | 8 🟡 | ⚠️ Abierto (reabierto el 2026-10-14 al contrastar con la tesis) | Pendiente de decisión del usuario entre: (a) cifrado a nivel de campo (`Fernet` o `django-encrypted-model-fields`), que impide buscar y ordenar por el campo cifrado y obliga a migrar los datos existentes; (b) cifrado transparente de la base (TDE), sujeto a la edición de SQL Server que licencie la organización (ver RS-18); o (c) corregir el texto de la tesis para que afirme solo el cifrado en tránsito, el control de acceso y la trazabilidad, que sí existen. Contraste completo en `AUDITORIA_CALIDAD.md` §I.5 |
+| RS-19 | **Datos personales sin cifrado en reposo** — `Cliente.ruc_cedula` (cédula o RUC) y la fecha de nacimiento del usuario se guardaban en claro. La tesis afirma «privacidad desde el diseño» con las medidas técnicas de la LOPDP (2021) y los principios de la ISO/IEC 27001, así que el texto afirmaba más de lo que el sistema hacía. Era el defecto `SEC-08` de la auditoría de abril, diferido y nunca retomado | 2 | 4 | 8 🟡 | ✅ Mitigado (2026-10-19) | Se tomó la opción **(a) cifrado a nivel de campo**, descartando TDE como *única* medida (depende de la edición licenciada, ver RS-18) y complementándola con la corrección de la redacción de la tesis, que ahora describe con precisión lo que existe. Fernet (AES-128-CBC + HMAC) en `gestion/crypto.py` y `gestion/model_fields.py`; la unicidad `(RUC, sede)` y la búsqueda por identificación pasan a un **índice ciego** HMAC-SHA256 (`Cliente.ruc_cedula_hash`), porque el texto cifrado de un mismo valor cambia en cada escritura. Dos claves nuevas *fail-fast*: `FIELD_ENCRYPTION_KEYS` (rotable, `MultiFernet`) y `BLIND_INDEX_KEY` (estable), ninguna derivada de `SECRET_KEY`. Migración `gestion/0010_cifrar_datos_personales` (cifra lo existente en lotes de 500) y `manage.py cifrar_datos_personales` para verificar, reparar y reindexar. La fecha de nacimiento se audita por su HMAC, no en claro, porque `AuditLog` no está cifrado. 34 pruebas en `gestion/tests/test_cifrado_datos_personales.py`. Detalle en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md`; contraste en `AUDITORIA_CALIDAD.md` §I.5 |
 
 ---
 
@@ -93,10 +93,10 @@
 
 | Estado | Cantidad | Exposición Promedio |
 |--------|----------|-------------------|
-| ✅ Mitigado | 30 | — |
+| ✅ Mitigado | 31 | — |
 | ⚠️ Parcial | 3 | 11 (🟡 Medio) |
 | 🔄 Pendiente | 1 | 10 (🟡 Medio) |
-| ⚠️ Abierto / Aceptado (14-oct-2026) | 3 | 5,7 (🟡 Medio) — RS-19 datos personales sin cifrar, RC-09 esquema OpenAPI, RC-10 estado de máquina fuera de la API |
+| ⚠️ Abierto / Aceptado (19-oct-2026) | 2 | 4,5 (🟡 Medio) — RC-09 esquema OpenAPI, RC-10 estado de máquina fuera de la API |
 
 ### Próxima revisión
 
@@ -111,6 +111,5 @@
 | RD-01 | Health check real en `reporting_excel` (verificar conexión a SQL Server) |
 | RD-03 | Tarea de infraestructura — fuera del alcance del equipo de desarrollo |
 | RD-05 | Probar las migraciones DJ001 sobre un respaldo de producción en SQL Server antes del despliegue de `MES` |
-| RS-19 | Decidir entre cifrar los datos personales (campo o TDE) o corregir lo que la tesis afirma sobre la LOPDP — es el único ❌ del contraste con la tesis |
 | RC-09 | Barrido del esquema OpenAPI: extensión del autenticador, tipos en los parámetros de ruta y `@extend_schema` en las acciones compuestas (plan propio, pendiente de decisión) |
 | RD-06 | ✅ Cerrado el 8-oct (ver `EVIDENCIA_RENDIMIENTO_USABILIDAD.md`). Al desplegar, dimensionar la BD según la concurrencia esperada (§5) |

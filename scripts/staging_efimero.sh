@@ -44,6 +44,8 @@ cat > "$TMP/staging.env" <<EOF
 CI_REGISTRY_IMAGE=texcore-staging
 TAG=staging
 SECRET_KEY=$(aleatorio 32)
+FIELD_ENCRYPTION_KEYS=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+BLIND_INDEX_KEY=$(aleatorio 32)
 ALLOWED_HOSTS=localhost
 CSRF_TRUSTED_ORIGINS=https://localhost:$PUERTO_HTTPS
 CORS_ALLOWED_ORIGINS=https://localhost:$PUERTO_HTTPS

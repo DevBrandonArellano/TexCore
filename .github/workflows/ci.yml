@@ -266,6 +266,9 @@ jobs:
       DJANGO_SETTINGS_MODULE: TexCore.settings_test
       DEBUG: "0"
       SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      # RS-19: claves de cifrado en reposo. Solo para CI, nunca en producción.
+      FIELD_ENCRYPTION_KEYS: "XlejxlU-TjcZMY6ub4Qy9Y2sSvQcp17J3DBw0uh6fv8=" # pragma: allowlist secret
+      BLIND_INDEX_KEY: "-xCQ08_ZmqAiZIQIPIOegGJZj1XY09_QZJX7LNuqzfM" # pragma: allowlist secret
       ALLOWED_HOSTS: "localhost,127.0.0.1"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       CSRF_TRUSTED_ORIGINS: "http://localhost:3000"

@@ -412,7 +412,10 @@ class Command(BaseCommand):
 
     def _fase4_clientes(self, ctx, batch_size, **kw):
         TARGET = 10_000
-        existing = Cliente.objects.filter(ruc_cedula__startswith="STR").count()
+        # RS-19: `ruc_cedula` está cifrado y no admite `startswith`. Estos clientes
+        # sintéticos se reconocen por el « #» de su razón social, que ningún otro
+        # comando de carga genera.
+        existing = Cliente.objects.filter(nombre_razon_social__contains=" #").count()
         to_create = max(0, TARGET - existing)
 
         if to_create == 0:

@@ -63,6 +63,10 @@ services:
     command: gunicorn --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     environment:
       - SECRET_KEY=${SECRET_KEY}
+      # RS-19: cifrado de datos personales en reposo. Si se pierden, los datos
+      # cifrados no se recuperan (ver SECURITY.md, rotación de claves).
+      - FIELD_ENCRYPTION_KEYS=${FIELD_ENCRYPTION_KEYS}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY}
       - DEBUG=0
       # Las migraciones corren en el despliegue (respaldo → preparar_bd.sh → up), no al
       # arrancar: un rollback de imagen no debe encontrar el esquema migrado a medias.

@@ -49,6 +49,9 @@ services:
       - "8000:8000"
     environment:
       - SECRET_KEY=insecure-dev-key
+      # RS-19: claves de desarrollo, no sirven para producción.
+      - FIELD_ENCRYPTION_KEYS=${FIELD_ENCRYPTION_KEYS:-g5dLOjt6b67-KsjBugmB7RgRyIptRFfP76DoJ96aONs=}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY:-yXfHHKpCQyfsts6J3c8iW4uY4_mwygwkHC1h9LnDhF4}
       - DEBUG=True
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
@@ -181,6 +184,9 @@ services:
       - ../../:/app
     environment:
       - SECRET_KEY=insecure-dev-key
+      # RS-19: claves de desarrollo, no sirven para producción.
+      - FIELD_ENCRYPTION_KEYS=${FIELD_ENCRYPTION_KEYS:-g5dLOjt6b67-KsjBugmB7RgRyIptRFfP76DoJ96aONs=}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY:-yXfHHKpCQyfsts6J3c8iW4uY4_mwygwkHC1h9LnDhF4}
       - DEBUG=True
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db

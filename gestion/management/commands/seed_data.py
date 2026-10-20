@@ -548,8 +548,8 @@ class Command(BaseCommand):
             ("RUC-004", "Confecciones Premium", "Quito, Pichincha", "normal", "2000.00"),
         ]
         for ruc, nombre, direccion, nivel, limite in defs:
-            cliente, _ = Cliente.objects.get_or_create(
-                ruc_cedula=ruc,
+            cliente, _ = Cliente.objects.obtener_o_crear_por_identificacion(
+                ruc,
                 sede=self.sede,
                 defaults={
                     "nombre_razon_social": nombre,

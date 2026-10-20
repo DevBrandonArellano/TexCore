@@ -71,6 +71,8 @@ Ve a **Settings → Secrets and variables → Actions → New repository secret*
 |---------|-------------|
 | `DB_PASSWORD` | Contraseña de SQL Server en producción |
 | `SECRET_KEY` | Django SECRET_KEY (mínimo 50 caracteres, aleatorio) |
+| `FIELD_ENCRYPTION_KEYS` | Claves Fernet del cifrado de datos personales en reposo (RS-19), separadas por comas; la primera cifra. **Si se pierde, los datos cifrados no se recuperan** |
+| `BLIND_INDEX_KEY` | Clave HMAC del índice ciego de la identificación (RS-19); estable, no se rota sin reindexar |
 | `ALLOWED_HOSTS` | Dominio sin protocolo (ej: `texcore.miempresa.com`) |
 | `CORS_ALLOWED_ORIGINS` | Origins CORS con protocolo (ej: `https://texcore.miempresa.com`) |
 | `CSRF_TRUSTED_ORIGINS` | Origins CSRF con protocolo (igual que CORS) |

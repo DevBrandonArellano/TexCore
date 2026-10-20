@@ -69,6 +69,8 @@ ENV STATIC_ROOT=/home/appuser/app/staticfiles
 # collectstatic no toca la base de datos ni firma JWT — estos son placeholders
 # solo para satisfacer el fail-fast de settings.py (get_env_variable) al importar.
 RUN SECRET_KEY=temporary_key_for_build \
+    FIELD_ENCRYPTION_KEYS=Zm9yLWJ1aWxkLW9ubHktbm90LWEtcmVhbC1rZXktMDA= \
+    BLIND_INDEX_KEY=build_placeholder \
     CORS_ALLOWED_ORIGINS=http://localhost \
     CSRF_TRUSTED_ORIGINS=http://localhost \
     DB_ENGINE=mssql \

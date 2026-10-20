@@ -41,6 +41,8 @@ Los secretos de la aplicación viven solo en `.env.prod` del servidor (permisos 
 |---|---|---|
 | `SECRET_KEY` | Anual | Exposición del servidor o del archivo. Invalida las sesiones activas. |
 | Par RSA `INTERNAL_JWT_*` | Anual | Exposición de la clave privada. Recrear los 6 servicios. |
+| `FIELD_ENCRYPTION_KEYS` (datos personales en reposo, RS-19) | Anual | Exposición. Rotación **sin parada**: la clave nueva va primera y la vieja se queda detrás, `manage.py cifrar_datos_personales --reparar` reescribe lo guardado, y luego se retira la vieja. **Si se pierde, los datos cifrados no se recuperan**: guárdala también junto al respaldo cifrado. Ver `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §4. |
+| `BLIND_INDEX_KEY` (índice ciego, RS-19) | No se rota por calendario | Exposición. Al cambiarla, las búsquedas por identificación dejan de encontrar nada hasta correr `manage.py cifrar_datos_personales --recalcular-indices`. |
 | `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` | Anual | Exposición. `register_services --force` y recrear el satélite. |
 | `DB_PASSWORD` (cuenta `sa`) | Anual | Exposición. `ALTER LOGIN sa WITH PASSWORD` y recrear backend y db. |
 | Certificado TLS | Al vencer (Let's Encrypt: automática cada 90 días) | Compromiso de la clave privada. |

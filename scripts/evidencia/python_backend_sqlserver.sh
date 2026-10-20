@@ -13,6 +13,7 @@ ARGS=$(printf '%q ' "$@")
 docker run --rm --network $NET -v "$P":"$P" -w "$P" \
   -e DJANGO_SETTINGS_MODULE=TexCore.settings_test -e DEBUG=0 \
   -e SECRET_KEY=ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx \
+  -e FIELD_ENCRYPTION_KEYS=XlejxlU-TjcZMY6ub4Qy9Y2sSvQcp17J3DBw0uh6fv8= -e BLIND_INDEX_KEY=-xCQ08_ZmqAiZIQIPIOegGJZj1XY09_QZJX7LNuqzfM \
   -e CORS_ALLOWED_ORIGINS=http://localhost:3000 -e CSRF_TRUSTED_ORIGINS=http://localhost:3000 \
   -e DB_ENGINE=mssql -e DB_NAME=texcore_ci -e DB_USER=sa -e "DB_PASSWORD=$PW" -e DB_HOST=$SQL -e DB_PORT=1433 \
   -e "DB_DRIVER=ODBC Driver 18 for SQL Server" \

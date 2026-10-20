@@ -2,14 +2,14 @@
 
 > **Este documento tiene dos partes.**
 >
-> - **Parte I — Contraste con la tesis (14-oct-2026):** lo que la tesis afirma sobre calidad, seguridad y gobierno, frente al sistema de hoy.
+> - **Parte I — Contraste con la tesis (19-oct-2026):** lo que la tesis afirma sobre calidad, seguridad y gobierno, frente al sistema de hoy.
 > - **Parte II — Historial de la auditoría (27-mar a 10-abr-2026, v1.5):** el documento original, con los 45 defectos y los 6 sprints de remediación. Sus afirmaciones describen el sistema **de ese momento**; donde hoy serían falsas llevan una nota `[Al 14-oct-2026: …]`. El historial de la remediación posterior está en `CHANGELOG.md`, los ADR y `REGISTRO_RIESGOS.md`.
 
 ---
 
-# Parte I — Contraste con la tesis (14-oct-2026)
+# Parte I — Contraste con la tesis (19-oct-2026)
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0009` · **Fecha:** 14-oct-2026
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0010` · **Fecha:** 19-oct-2026
 > **Propósito:** respaldar el paso a producción contrastando con el sistema lo que la tesis afirma sobre calidad, seguridad y gobierno.
 > **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
 > **Fuente de la tesis:** `docs/Anteproyecto_Capstone_Final_Version.pdf` — marco de calidad y de gobierno (§«validación global de los atributos del sistema», ISO/IEC 25010:2023, COBIT 2019, ITIL v4, NIST SP 800-207, OWASP Top 10, ISO/IEC 27001 y LOPDP) y la Tabla 11 (matriz de decisión según ISO/IEC 25010:2023).
@@ -28,7 +28,7 @@ Esta parte **no vuelve a puntuar** las dimensiones: las notas sobre 5 de la Part
 | Compatibilidad | Monolito modular con servicios satélite que interoperan | Los 3 satélites se consumen por contrato HTTP con JWT RS256 y corren aislados (`MICROSERVICIOS.md`); esquema OpenAPI publicado en `/api/docs/` (`TexCore/urls.py:48`) | ⚠️ ✅ con reserva: el esquema describe de menos lo que la API hace (**124 avisos**, riesgo **RC-09** abierto con su plan) |
 | Capacidad de interacción | RNF-05: tareas frecuentes en ≤ 3 pasos, capacitación ≤ 2 h | Las rutas están implementadas; la cuenta de pasos se demuestra con las grabaciones y capturas que hace el usuario (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4) | ⏳ pendiente de las grabaciones; la capacitación es 📅 de la puesta en marcha |
 | Fiabilidad | Operación sin fallos bajo carga y contenedores saludables | **0,09 %** de error con 100 usuarios y **0,31 %** con 250, todos rechazos correctos de negocio; ningún proceso reiniciado; `HEALTHCHECK` propio en las 5 imágenes y el de `db` en el compose, los 6 contenedores en `healthy`; **stock = kárdex en 51 994 combinaciones** y 0 saldos negativos tras la concurrencia | ⚠️ ✅ en lo medido; sin réplica de base de datos (**RD-03** abierto) y `reporting_excel` con health check que no verifica la base (**RD-01** parcial) |
-| Seguridad | OWASP Top 10, Zero Trust y protección de datos (ver I.2, I.4 y I.5) | Gates en **0**: Semgrep ERROR, detect-secrets (línea base auditada por completo), `pip-audit` en los 4 servicios Python y `npm audit` de producción y de desarrollo; Trivy por digest y firma **cosign** verificada antes de desplegar (`release.yml`); RBAC de los 11 roles, aislamiento por sede y área, auditoría inmutable con justificación obligatoria, JWT RS256 en cookies `HttpOnly`/`Secure`, HTTPS con HSTS y límite de 5 intentos/min en `/api/token/`; los 18 riesgos `RS-01`…`RS-18` mitigados | ⚠️ ✅ salvo el **cifrado de los datos personales en reposo**, que no existe (**RS-19**, ver I.5) |
+| Seguridad | OWASP Top 10, Zero Trust y protección de datos (ver I.2, I.4 y I.5) | Gates en **0**: Semgrep ERROR, detect-secrets (línea base auditada por completo), `pip-audit` en los 4 servicios Python y `npm audit` de producción y de desarrollo; Trivy por digest y firma **cosign** verificada antes de desplegar (`release.yml`); RBAC de los 11 roles, aislamiento por sede y área, auditoría inmutable con justificación obligatoria, JWT RS256 en cookies `HttpOnly`/`Secure`, HTTPS con HSTS y límite de 5 intentos/min en `/api/token/`; los 19 riesgos `RS-01`…`RS-19` mitigados | ✅ (incluido el **cifrado de los datos personales en reposo** desde el 19-oct-2026: **RS-19** cerrado, ver I.5) |
 | Mantenibilidad | Código verificable y sostenible (criterio de la Tabla 11) | Cobertura **92,2 %** en el backend (gate bloqueante del 90 %) sobre 1814 pruebas en SQL Server 2022; frontend con sus 4 métricas sobre 90 % (1972 pruebas); `printing_service` 98,89 %, `scanning_service` y `reporting_excel` con su umbral propio. `ruff check` 0, `ruff format` 420 archivos conformes, `mypy` 0 sobre 302 archivos, `tsc` 0, `typecheck:tests` 0 y ESLint 0; complejidad acotada por `C901` (máx. 15); 7 ADR y el grafo de conocimiento `graphify-out/` al día | ✅ |
 | Flexibilidad | Operación multi-sede y multi-empresa, parametrizable | Aislamiento por sede en todo el modelo; equivalencias de empaque configurables por sede sin constantes en el código (**ADR-011**), MRP por sede (**ADR-012**), recursos y dominios por `.env`, y el mismo compose en cualquier host con Docker | ✅ |
 | Protección (*safety*) | Característica nueva de la edición 2023, citada por la tesis en el análisis de alternativas | Validaciones de negocio en `Model.clean()`, `select_for_update()` en cada movimiento de stock, 5 CHECK nativos de T-SQL (`database/V2__optimize_sqlserver2022_texcore.sql`), auditoría que no se puede editar ni borrar y paros de máquina manuales inmutables | ✅ |
@@ -38,7 +38,7 @@ Esta parte **no vuelve a puntuar** las dimensiones: las notas sobre 5 de la Part
 | Riesgo | Control en el sistema | Veredicto |
 |---|---|---|
 | A01 Control de acceso roto | RBAC de los 11 roles, autenticación obligatoria como permiso por omisión de la API, aislamiento por sede y área en cada consulta; `/api/groups/` cerrado (hallazgo C-1) | ✅ |
-| A02 Fallas criptográficas | TLS 1.2/1.3 con HSTS y redirección 301 del puerto 80; cookies `Secure`, `HttpOnly` y `SameSite`; conexión a SQL Server con `Encrypt=yes` | ⏳ falta el cifrado en reposo de los datos personales (**RS-19**) |
+| A02 Fallas criptográficas | TLS 1.2/1.3 con HSTS y redirección 301 del puerto 80; cookies `Secure`, `HttpOnly` y `SameSite`; conexión a SQL Server con `Encrypt=yes`; datos personales de identificación cifrados en reposo con Fernet y clave en el entorno (**RS-19** cerrado el 19-oct-2026, ver I.5) | ✅ |
 | A03 Inyección | ORM de Django en todas las rutas de negocio, SQL nativo solo en migraciones e índices, reglas `S` de Ruff y Semgrep como gates | ✅ |
 | A04 Diseño inseguro | Decisiones de diseño con su ADR y su registro de riesgos; reglas de negocio en el modelo, no en la interfaz | ✅ |
 | A05 Configuración incorrecta | `DEBUG=0` verificado por prueba, secretos sin valor por omisión (fail-fast), CORS y CSRF por lista explícita, puerto 1433 sin publicar | ✅ |
@@ -71,7 +71,7 @@ Esta parte **no vuelve a puntuar** las dimensiones: las notas sobre 5 de la Part
 
 La tesis no promete mTLS ni políticas por dispositivo, así que no se contrastan: el alcance comprometido es la autenticación continua entre servicios, que sí está.
 
-## I.5 ISO/IEC 27001 y LOPDP — el punto que no cumple
+## I.5 ISO/IEC 27001 y LOPDP
 
 | Afirmación de la tesis | Estado | Veredicto |
 |---|---|---|
@@ -79,18 +79,19 @@ La tesis no promete mTLS ni políticas por dispositivo, así que no se contrasta
 | Cifrado de las comunicaciones | TLS 1.2/1.3 con HSTS en el perímetro y `Encrypt=yes` hacia la base | ✅ |
 | Gestión de riesgos de la información | `REGISTRO_RIESGOS.md`, revisado en cada cambio | ✅ |
 | Respaldo y recuperación | Respaldo previo a cada migración y `scripts/respaldar_bd.sh`; sin réplica (**RD-03**) | ⚠️ parcial |
-| «Privacidad desde el diseño» con las medidas técnicas que exige la LOPDP para los datos de identificación | **No hay cifrado de los datos personales en reposo**: `Cliente.ruc_cedula` y la fecha de nacimiento del usuario están en claro en la base. Era el defecto `SEC-08` de abril, diferido y nunca retomado | ❌ como está redactado — queda abierto como **RS-19** en `REGISTRO_RIESGOS.md`, con su decisión pendiente |
+| «Privacidad desde el diseño» con las medidas técnicas que exige la LOPDP para los datos de identificación | **Cifrado selectivo en reposo desde el 19-oct-2026**: `Cliente.ruc_cedula` y `CustomUser.date_of_birth` se guardan cifrados con Fernet (AES-128-CBC + HMAC-SHA256) con la clave en el entorno (`FIELD_ENCRYPTION_KEYS`, rotable), y la búsqueda por identificación y la unicidad `(RUC, sede)` van por un índice ciego HMAC-SHA256. La fecha de nacimiento se audita por su HMAC, no en claro. Migración `gestion/0010`, 34 pruebas en `gestion/tests/test_cifrado_datos_personales.py`, detalle en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md`. Cierra el defecto `SEC-08` de abril y el riesgo **RS-19** | ✅ |
 | Políticas organizativas (consentimiento, retención, responsable de datos) | Corresponden a Interfibra S.A. | 📅 de la puesta en marcha (§5.4 de la tesis) |
 
 ## I.6 Lo que esta parte deja abierto
 
 | # | Punto | Dónde se sigue |
 |---|---|---|
-| 1 | Cifrado de datos personales en reposo (LOPDP) | **RS-19** |
-| 2 | Esquema OpenAPI incompleto (124 avisos) | **RC-09** |
-| 3 | Usabilidad medida (RNF-05): grabaciones y capturas | `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4 |
-| 4 | Acciones en GitHub para que el release pueda desplegar | Hoja de ruta del `CHANGELOG`, paso 9 |
-| 5 | Réplica de base de datos y health check real de `reporting_excel` | **RD-03** y **RD-01** |
+| 1 | Esquema OpenAPI incompleto (124 avisos) | **RC-09** |
+| 2 | Usabilidad medida (RNF-05): grabaciones y capturas | `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4 |
+| 3 | Acciones en GitHub para que el release pueda desplegar | Hoja de ruta del `CHANGELOG`, paso 9 |
+| 4 | Réplica de base de datos y health check real de `reporting_excel` | **RD-03** y **RD-01** |
+
+> El cifrado de datos personales en reposo (**RS-19**), que era el único ❌ de este contraste, quedó cerrado el 19-oct-2026 (ver §I.5). TDE sigue siendo una medida complementaria sujeta a la edición de SQL Server que se licencie (**RS-18**).
 
 ---
 
@@ -687,6 +688,8 @@ class Cliente(AuditableModelMixin):
 Bajo la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP), los datos de identificación personal requieren medidas técnicas adecuadas de protección.
 
 **Recomendación:** Evaluar `django-encrypted-model-fields` o cifrado a nivel de campo con `Fernet`.
+
+`[Al 19-oct-2026: resuelto. Se tomó el cifrado a nivel de campo con Fernet (AES-128-CBC + HMAC-SHA256), no la dependencia externa: `gestion/crypto.py` y `gestion/model_fields.py`, migración `gestion/0010`. Los dos campos que cita este hallazgo son justo los que se cifran. La búsqueda por identificación y la unicidad (RUC, sede) pasan a un índice ciego HMAC-SHA256, porque el texto cifrado de un mismo valor cambia en cada escritura. Detalle en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md`; el dictamen vigente está en la Parte I, §I.5.]`
 
 ---
 
@@ -2135,7 +2138,7 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 
 **Veredicto (abril de 2026):** El proyecto está **operativo en staging y apto para producción** sin acciones pendientes bloqueantes. Los 2 ítems diferidos (tests de integración BD real, PII encryption) no bloquean el funcionamiento del sistema.
 
-`[Al 14-oct-2026: el veredicto vigente es el de la Parte I. De los 2 diferidos, las pruebas de integración sobre base real se cubren desde entonces (la suite completa corre en SQL Server 2022, 1814 pruebas, 92,2 % de cobertura), y el cifrado de PII sigue sin implementarse: quedó registrado como RS-19 y es el único ❌ del contraste con la tesis.]`
+`[Al 19-oct-2026: el veredicto vigente es el de la Parte I. Los 2 diferidos están cerrados: las pruebas de integración sobre base real se cubren desde el 14-oct (la suite completa corre en SQL Server 2022, 92,2 % de cobertura) y el cifrado de PII se implementó el 19-oct (RS-19, ver §I.5 y el hallazgo SEC-08 de esta misma parte). El contraste con la tesis ya no tiene ningún ❌.]`
 
 ---
 
