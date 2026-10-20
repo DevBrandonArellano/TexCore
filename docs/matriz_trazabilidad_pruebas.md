@@ -1,7 +1,7 @@
 # Matriz de Trazabilidad de Pruebas — TexCore
 
 > **Última actualización:** 20-oct-2026. Plan vigente: `docs/requerimientos/PLAN_PRUEBAS_ISTQB.md`.
-> Backend: **1918 pruebas** en SQL Server 2022 (1931 con el gate ISTQB en SQLite), cobertura **92,5 %** (`fail_under = 90`).
+> Backend: **1944 pruebas** en SQL Server 2022, cobertura **92,5 %** (`fail_under = 90`).
 > Frontend: **1981 pruebas** en 138 archivos. Microservicios: `scanning_service` 66, `printing_service` 114 y `reporting_excel` 76.
 > Cada archivo de prueba declara sus técnicas ISTQB y cada nombre sigue la convención; lo verifica
 > `scripts/auditar_convencion_pruebas.py`.

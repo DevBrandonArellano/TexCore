@@ -1040,9 +1040,9 @@
     "semantic_hash": "5ad3d859eb08ce3ab937055c92173ec6"
   },
   "gestion/tests/test_produccion_kpi_service.py": {
-    "mtime": 1792511543.7984533,
-    "ast_hash": "ff8d4ad42226cc940b62cff1111e4c13",
-    "semantic_hash": "ff8d4ad42226cc940b62cff1111e4c13"
+    "mtime": 1792522562.2716842,
+    "ast_hash": "a9997f3f12e021bfb18f2656f6ab58ba",
+    "semantic_hash": "a9997f3f12e021bfb18f2656f6ab58ba"
   },
   "gestion/tests/test_production_views.py": {
     "mtime": 1791984669.6615782,
