@@ -194,7 +194,6 @@ export function ManageOrdenesProduccion({
     if (onOrderStatusChange) {
       await onOrderStatusChange(id, newStatus);
     } else {
-      // Fallback if not provided, though it should be
       toast.error('La función de cambio de estado no está implementada.');
     }
   };

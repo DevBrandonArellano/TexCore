@@ -108,8 +108,8 @@ export function usePedidosVendedor(pedidos: PedidoVenta[], orderSearchTerm: stri
     }
 
     try {
-      // Map frontend expected format into API exactly
-      // Notice the API actually does the IVA logic if its enabled, but just for payload:
+      // Convierte el formato esperado por el frontend al formato exacto de la API
+      // La API aplica el IVA si está activo; esto es solo para el payload
       const orderData = {
         ...orderForm,
         cliente: parseInt(orderForm.cliente),
@@ -146,7 +146,7 @@ export function usePedidosVendedor(pedidos: PedidoVenta[], orderSearchTerm: stri
       document.body.appendChild(link);
       link.click();
 
-      // Clean up
+      // Limpieza
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
 

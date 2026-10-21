@@ -183,7 +183,7 @@ export function ManageLineas({ areaId, onChange }: ManageLineasProps) {
         </table>
       </div>
 
-      {/* Dialog Crear / Editar */}
+      {/* Diálogo Crear / Editar */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -261,7 +261,7 @@ export function ManageLineas({ areaId, onChange }: ManageLineasProps) {
         </DialogContent>
       </Dialog>
 
-      {/* AlertDialog Eliminar */}
+      {/* AlertDialog de eliminación */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -85,7 +85,7 @@ export function DespachoDashboard() {
     const navigate = useNavigate();
     const searchTerm = searchParams.get('search') || '';
 
-    // Dispatch/Scanning State
+    // Estado de despacho/escaneo
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [barcodeInput, setBarcodeInput] = useState("");
     const [isValidating, setIsValidating] = useState(false);
@@ -97,7 +97,7 @@ export function DespachoDashboard() {
 
     const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-    // Focus barcode input when in despacho mode
+    // Enfoca el input del código de barras en modo despacho
     useEffect(() => {
         if (isDespachoMode && barcodeInputRef.current) {
             barcodeInputRef.current.focus();
@@ -113,8 +113,7 @@ export function DespachoDashboard() {
             if (!pedido) return;
 
             pedido.detalles?.forEach((det) => {
-                // Assuming detail has product name/description. If not, fallback to ID.
-                // In production, backend serializes 'producto_descripcion' or 'producto_nombre'
+                // En producción, el backend serializa 'producto_descripcion' o 'producto_nombre'
                 const prodName = det.producto_descripcion || `Producto ${det.producto}`;
                 if (!reqs[prodName]) {
                     reqs[prodName] = { required: 0, scanned: 0 };
@@ -147,10 +146,10 @@ export function DespachoDashboard() {
     const handleStartDespacho = () => {
         if (selectedPedidos.length === 0) return;
 
-        // Verify all selected orders belong to same client
+        // Verifica que todas las órdenes seleccionadas pertenezcan al mismo cliente
         const firstOrder = pedidos.find(p => p.id === selectedPedidos[0]);
-        // Note: checking client ID or name correctness depends on dataset quality. 
-        // Ideally enforce strict check.
+        // Nota: la verificación del ID o nombre del cliente depende de la calidad de los datos. 
+        // Idealmente, aplicar una verificación estricta.
         const differentClient = selectedPedidos.some(pid => {
             const p = pedidos.find(o => o.id === pid);
             return p?.cliente !== firstOrder?.cliente;
@@ -177,7 +176,7 @@ export function DespachoDashboard() {
 
         setIsValidating(true);
         try {
-            // Call scanning microservice to validate lote
+            // Llama al microservicio de escaneo para validar el lote
             const res = await apiClient.post('/scanning/validate', { code: codigoEscaneado });
 
             if (res.data.valid) {
@@ -263,7 +262,7 @@ export function DespachoDashboard() {
         for (const pid of selectedPedidos) {
             try {
                 const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/${query}`, { responseType: 'blob' });
-                // Open in new tab is better for multiple downloads
+                // Se abre en pestaña nueva para permitir varias descargas
                 abrirPdfEnPestana(response.data);
             } catch (e) {
                 console.error("Print error", e);
@@ -305,7 +304,7 @@ export function DespachoDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Scanning Area */}
+                    {/* Área de escaneo */}
                     <Card className="h-fit">
                         <CardHeader>
                             <CardTitle>Pistoleo de Etiquetas</CardTitle>
@@ -367,7 +366,7 @@ export function DespachoDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Requirements Status */}
+                    {/* Estado de requisitos */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Estado de la Carga</CardTitle>
@@ -467,7 +466,7 @@ export function DespachoDashboard() {
         );
     }
 
-    // Default Selection Mode
+    // Modo de selección por defecto
     return (
         <div className="space-y-6 p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

@@ -34,7 +34,7 @@ class CookieJWTAuthenticationTestCase(TestCase):
         return req
 
     def test_auth_dado_sin_cookie_cuando_autentica_entonces_none(self):
-        # Caja blanca: rama raw_token is None -> return None
+        # Caja blanca: rama raw_token es None -> return None
         req = self.rf.get("/api/protegido/")
         self.assertIsNone(self.backend.authenticate(req))
 

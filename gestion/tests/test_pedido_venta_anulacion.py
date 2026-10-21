@@ -34,7 +34,7 @@ class TestAnulacionPedido_Permisos(TestCase):
     def setUp(self):
         self.sede = SedeFactory()
         self.cliente = ClienteFactory(sede=self.sede)
-        # Use admin_sistemas so pedido is visible regardless of vendedor_asignado
+        # admin_sistemas ve el pedido sin importar vendedor_asignado
         self.admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.pedido = _make_pedido(self.sede, self.cliente)
         self.url = f"/api/pedidos-venta/{self.pedido.pk}/anular/"
@@ -42,7 +42,7 @@ class TestAnulacionPedido_Permisos(TestCase):
         self.client = APIClient()
 
     def test_pedido_dado_usuario_vendedor_cuando_anular_entonces_200(self):
-        # Vendedor must own the pedido to see it in queryset
+        # El vendedor debe ser dueño del pedido para verlo en el queryset
         vendedor = CustomUserFactory(sede=self.sede, groups=["vendedor"])
         pedido = _make_pedido(self.sede, self.cliente, vendedor=vendedor)
         self.client.force_authenticate(user=vendedor)
@@ -57,7 +57,7 @@ class TestAnulacionPedido_Permisos(TestCase):
     def test_pedido_dado_usuario_sin_grupo_cuando_anular_entonces_403(self):
         user = CustomUserFactory(sede=self.sede)
         self.client.force_authenticate(user=user)
-        # superuser=False, no groups → 403 before queryset check
+        # superuser=False, sin grupos → 403 antes de revisar el queryset
         r = self.client.post(self.url, self.payload, format="json")
         self.assertIn(r.status_code, [403, 404])
 
@@ -72,7 +72,7 @@ class TestAnulacionPedido_Validaciones(TestCase):
     def setUp(self):
         self.sede = SedeFactory()
         self.cliente = ClienteFactory(sede=self.sede)
-        # Use admin_sistemas to bypass vendedor queryset filter
+        # admin_sistemas evita el filtro de vendedor
         self.user = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)

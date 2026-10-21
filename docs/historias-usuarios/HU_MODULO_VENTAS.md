@@ -47,7 +47,7 @@ El sistema proporciona una interfaz intuitiva para el vendedor que centraliza:
 *   **Generación de Documentos**: Descarga directa de notas de venta en PDF via servicio satélite de impresión.
 
 ## 4. Pruebas de Integración (Suite Unificada)
-Las funcionalidades del vendedor están validadas mediante tests integrados en `gestion/tests_integrados.py` que cubren:
+Las funcionalidades del vendedor están validadas mediante tests integrados en `gestion/tests/tests_integrados.py` que cubren:
 *   `test_clientes_dado_vendedor_cuando_lista_entonces_solo_ve_los_asignados`: Aislamiento de cartera.
 *   `test_pedido_dado_monto_sobre_limite_de_credito_cuando_crea_entonces_lo_rechaza`: Control de riesgo.
 *   `test_saldo_cliente_dado_pedidos_y_pagos_cuando_calcula_entonces_saldo_pendiente_correcto`: Integridad de saldos.

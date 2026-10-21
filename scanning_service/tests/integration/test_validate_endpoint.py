@@ -18,7 +18,7 @@ from src.schemas.validate import LoteInfo, ValidateResponse
 SESION = {"X-Texcore-Sede-Id": "3", "X-Texcore-Ve-Todas": "0"}
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Auxiliares
 # ---------------------------------------------------------------------------
 
 

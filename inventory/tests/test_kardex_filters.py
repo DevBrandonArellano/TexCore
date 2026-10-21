@@ -20,7 +20,7 @@ User = get_user_model()
 class KardexFilterTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="admin", password="password")
-        # Assign required groups or superuser if needed
+        # Asigna los grupos requeridos o superusuario si hace falta
         self.user.is_superuser = True
         self.user.save()
 

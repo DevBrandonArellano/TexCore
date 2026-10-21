@@ -6,22 +6,22 @@ from datetime import UTC, datetime
 
 class RFC5424Formatter(logging.Formatter):
     """
-    RFC 5424 Syslog Formatter
-    Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [SD-ELEMENT] MSG
-    (VERSION is 1)
+    Formateador Syslog RFC 5424
+    Formato: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [SD-ELEMENT] MSG
+    (VERSION es 1)
     """
 
     def __init__(self, facility=18, app_name=None):
         super().__init__()
         self.facility = facility
         self.app_name = app_name or os.environ.get("APP_NAME", "texcore-printing")
-        # Ensure max 48 chars, no spaces for app_name
+        # Máximo 48 caracteres, sin espacios en app_name
         self.app_name = self.app_name.replace(" ", "-")[:48]
         self.hostname = socket.gethostname()[:255]
         self.procid = str(os.getpid())[:128]
 
     def _escape(self, value: str) -> str:
-        """Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3"""
+        """Escapa la barra invertida, las comillas dobles y el corchete derecho según RFC 5424 §6.3.3"""
         return value.replace("\\", "\\\\").replace('"', '\\"').replace("]", "\\]")
 
     def _build_sd(self, params: dict) -> str:
@@ -41,7 +41,7 @@ class RFC5424Formatter(logging.Formatter):
     def format(self, record):
         # Severity mapping: EMERGENCY=0, ALERT=1, CRITICAL=2, ERROR=3, WARNING=4, NOTICE=5, INFO=6, DEBUG=7
         severity_map = {logging.CRITICAL: 2, logging.ERROR: 3, logging.WARNING: 4, logging.INFO: 6, logging.DEBUG: 7}
-        severity = severity_map.get(record.levelno, 6)  # Default INFO
+        severity = severity_map.get(record.levelno, 6)  # INFO por defecto
         pri = (self.facility * 8) + severity
 
         timestamp = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds")

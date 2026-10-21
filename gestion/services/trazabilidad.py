@@ -70,7 +70,7 @@ class TrazabilidadService:
             "siguiente": TrazabilidadService._siguiente(orden, profundidad, _visitadas),
         }
 
-    # ----------------------------------------------------------------- helpers
+    # ----------------------------------------------------------------- auxiliares
 
     @staticmethod
     def _siguiente(orden, profundidad, visitadas):

@@ -74,7 +74,7 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
 Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBOK (matriz de trazabilidad) para maximizar cobertura desde 58.0% a 63.5%, descubrir y corregir defectos reales.
 
 -   **[x] Suite de Pruebas Integradas:**
-    - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
+    - Creado `gestion/tests/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
     - Validado el funcionamiento de roles y permisos.
     - **[x] Estabilización Backend (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server.
     - **[x] Estabilización Backend Fase 14 (Junio 2026):** Correcciones en `test_pago_reversion.py` (`incluye_iva=False` en DetallePedido de tests, guardado de `pago_id` antes de `delete()`). Resultado: **184 tests — 0 fallos — 0 errores — 14 skipped** (tests de `BultoEmpaque`/`ConfiguracionEmpaque` obsoletos marcados con `@skipUnless`).

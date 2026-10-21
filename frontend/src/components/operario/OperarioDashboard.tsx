@@ -33,14 +33,14 @@ export function OperarioDashboard() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
 
-  // Form State for Lote
+  // Estado del formulario de lote
   const [pesoNeto, setPesoNeto] = useState('');
   const [bobinas, setBobinas] = useState('1');
   const [pesoMerma, setPesoMerma] = useState('');
   const [tipoMerma, setTipoMerma] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Recent entries state
+  // Estado de registros recientes
   const [fichaLote, setFichaLote] = useState<LoteProduccion | null>(null);
   const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
   const [editPesoNeto, setEditPesoNeto] = useState('');
@@ -48,7 +48,7 @@ export function OperarioDashboard() {
   const [editPesoMerma, setEditPesoMerma] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Delete confirmation state
+  // Estado de confirmación de eliminación
   const [deleteConfirmLote, setDeleteConfirmLote] = useState<LoteProduccion | null>(null);
   const [deleteJustificacion, setDeleteJustificacion] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -125,9 +125,8 @@ export function OperarioDashboard() {
     setIsSubmitting(true);
     try {
       const now = new Date();
-      // Simple logic: Start time is now - 1 hour (approx) or just now for logging
-      // In a real app, the operator would "Start" then "Stop".
-      // Assuming straightforward registration here.
+      // Simplificación: el inicio es una hora atrás (aprox.)
+      // Se asume un registro directo aquí.
 
       const numMerma = pesoMerma ? parseFloat(pesoMerma) : 0;
       const payload = {
@@ -204,7 +203,7 @@ export function OperarioDashboard() {
     }
   };
 
-  // --- Delete handler (with inventory reversion via rechazar endpoint) ---
+  // --- Manejador de eliminación (con reversión de inventario vía el endpoint rechazar) ---
   const handleDeleteLote = async () => {
     if (!deleteConfirmLote) return;
 
@@ -227,7 +226,7 @@ export function OperarioDashboard() {
     }
   };
 
-  // --- Helpers ---
+  // --- Auxiliares ---
   const getProgressPercent = (orden: OrdenProduccion): number => {
     const producido = Number(orden.peso_producido ?? 0);
     const requerido = Number(orden.peso_neto_requerido);
@@ -251,7 +250,7 @@ export function OperarioDashboard() {
   };
 
   const getOrdenCodigoForLote = (lote: LoteProduccion): string => {
-    // Find orden from our loaded list
+    // Busca la orden en la lista cargada
     const orden = ordenes.find(o => o.id === lote.orden_produccion);
     return orden?.codigo || `OP-${lote.orden_produccion}`;
   };

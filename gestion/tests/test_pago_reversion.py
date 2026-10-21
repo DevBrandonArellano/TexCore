@@ -120,7 +120,7 @@ class PagoReversionTestCase(TransactionTestCase):
         self.assertEqual(deuda_con_pago, Decimal("7000.00"))
 
         # 5. Revertir pago
-        pago_id = pago.id  # save before delete() sets pk to None
+        pago_id = pago.id  # guarda antes de que delete() ponga pk en None
         resultado = PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="Error en entrada de datos")
 
         # 6. Verificar resultado

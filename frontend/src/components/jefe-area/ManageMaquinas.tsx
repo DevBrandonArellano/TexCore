@@ -147,7 +147,7 @@ export function ManageMaquinas({ areaId, operarios, onChange }: ManageMaquinasPr
         onSaved={() => onChange?.()}
       />
 
-      {/* AlertDialog Eliminar */}
+      {/* AlertDialog de eliminación */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

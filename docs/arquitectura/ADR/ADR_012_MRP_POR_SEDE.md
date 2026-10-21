@@ -32,7 +32,7 @@ No hay lista de materiales: un producto fabricado no se desglosa en compras salv
 - **Disponible:** stock de las bodegas de la sede menos `stock_comprometido`.
 - **Una orden abierta** (`pendiente` o `en_proceso`) necesita:
   - lo que falta de su producto de entrada: `peso_neto_requerido − Σ lotes producidos`, en relación 1:1 con el peso de salida (supuesto documentado, el mismo de TEX-28);
-  - sus químicos, **solo si no se descargaron** (`DescargaQuimicoOP` aplicada), con la misma dosificación que la descarga (`calcular_dosificacion_de_orden`, extraída a `gestion/services_formula.py`).
+  - sus químicos, **solo si no se descargaron** (`DescargaQuimicoOP` aplicada), con la misma dosificación que la descarga (`calcular_dosificacion_de_orden`, extraída a `gestion/services/services_formula.py`).
 - **Orden sin peso** (corrida continua): no se calcula y queda como advertencia.
 - **Unidades:** la dosificación y el stock están en kg; un producto en otra unidad se excluye con advertencia.
 - **Sugerencia de compra**, por producto comprado de la sede: `requerido + stock_mínimo − disponible`, si es mayor que 0. El stock mínimo funciona como stock de seguridad. Es **informativa**: la compra se gestiona fuera del sistema y no tiene estados.

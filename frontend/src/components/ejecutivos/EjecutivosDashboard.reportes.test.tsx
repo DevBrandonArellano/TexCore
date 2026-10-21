@@ -5,7 +5,7 @@
  *            - Validación de rango de fechas (inicio > fin, inicio === fin, sin fechas)
  *            - Bloqueo de doble descarga simultánea
  *            - Llamada correcta a cada endpoint de reporting
- *            - Feedback visual: toast.success / toast.error
+ *            - Retroalimentación visual: toast.success / toast.error
  *            - Spinner y disabled durante descarga / re-habilitación tras error
  *            - Propagación de sede_id cuando hay filtro activo (presente y ausente)
  *            - Deudores: no valida rango de fechas (sin params de fecha)
@@ -91,7 +91,7 @@ global.URL.revokeObjectURL = vi.fn();
 
 import { EjecutivosDashboard } from './EjecutivosDashboard';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Auxiliares ───────────────────────────────────────────────────────────────────
 
 
 /** Respuestas vacías para todos los endpoints de carga del dashboard */

@@ -5,7 +5,7 @@ import { AuthContext, type Profile } from './auth';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start as true to check session on load
+  const [isLoading, setIsLoading] = useState(true); // Empieza en true para verificar la sesión al cargar
   const navigate = useNavigate();
 
   const logout = useCallback(async () => {
@@ -21,7 +21,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // The backend now returns user data on login, and sets the HttpOnly cookie.
       const response = await apiClient.post<Profile>('/token/', { username, password });
       setProfile(response.data);
       return true;
@@ -31,17 +30,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // This effect runs once on app load to check if a valid session cookie exists.
+  // Al cargar la app verifica si hay una cookie de sesión válida
   useEffect(() => {
     const checkUserSession = async () => {
       try {
-        // The browser will automatically send the HttpOnly cookie.
-        // If the session is valid, this will return the user's profile.
         const response = await apiClient.get<Profile>('/profile/');
         setProfile(response.data);
       } catch {
-        // If the request fails (e.g., 401 Unauthorized), it means no valid session.
-        // The profile state will remain null.
         setProfile(null);
         console.log('No active session found.');
       } finally {
@@ -68,8 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
   };
 
-  // While checking the session, you might want to show a loading spinner
-  // instead of rendering the children (which might redirect to /login).
   return (
     <AuthContext.Provider value={value}>
       {isLoading ? null : children} 

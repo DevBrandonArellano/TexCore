@@ -49,7 +49,7 @@ class KPIAreaView(APIView):
                     {"error": "No tienes un área asignada para ver KPIs."}, status=status.HTTP_403_FORBIDDEN
                 )
         else:
-            # Admins can specify an area or use their own if available
+            # Admin puede indicar un área; si no, usa la suya
             if area_id:
                 # jefe_planta elige área, pero solo de su sede (otra sede → 404).
                 area = get_object_or_404(filtrar_por_sede(Area.objects.all(), user), id=area_id)
@@ -63,7 +63,7 @@ class KPIAreaView(APIView):
 
         # KPIs
         # 1. Output (Producción Total)
-        # Filter Lotes by Maquinas in this Area
+        # Filtra lotes por las máquinas del área
         maquinas_area = Maquina.objects.filter(area=area)
         lotes_area = LoteProduccion.objects.filter(maquina__in=maquinas_area)
 
@@ -90,18 +90,18 @@ class KPIAreaView(APIView):
         rendimiento_yield = (float(total_output) / entrada) if entrada > 0 else 0.0
         first_pass_yield = (float(neto_primera) / float(total_output)) if total_output else 0.0
 
-        # 3. Avg Time per Operator
+        # 3. Tiempo promedio por operario
         # time = hora_final - hora_inicio
         avg_duration = lotes_area.annotate(
             duration=ExpressionWrapper(F("hora_final") - F("hora_inicio"), output_field=DurationField())
         ).aggregate(Avg("duration"))["duration__avg"]
 
-        # Format duration to hours/minutes
+        # Formatea la duración en horas/minutos
         avg_minutes = 0
         if avg_duration:
             avg_minutes = avg_duration.total_seconds() / 60
 
-        # OEE (R4): Disponibilidad x Rendimiento x Calidad (OEE for Operators).
+        # OEE (R4): Disponibilidad x Rendimiento x Calidad (OEE para operarios).
         # Sin acotar por fecha — igual que el resto de este endpoint (histórico
         # completo del área, no una ventana de tiempo).
         oee = OeeService.calcular_oee_area(area)

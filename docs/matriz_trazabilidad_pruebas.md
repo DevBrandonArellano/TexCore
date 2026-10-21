@@ -135,7 +135,7 @@ fuera del alcance del usuario responde igual que una inexistente (400 «No encon
 |---|---|---|---|
 | Rutas retiradas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos) → 404; detalle REST sin uso (stock, auditoría, operaciones) → 404 con su listado vigente; GET de detalle de procesos de tintorería → 405 (la ruta solo admite PATCH); usuarios y catálogo con los helpers únicos de sede (un usuario sin sede no ve ni modifica lo global) | `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` | EP, BVA | ✅ |
 | Configuración de planta: etapas, transferencias interárea, máquinas, líneas y paros acotados por sede y área; escrituras con área, máquina, órdenes, bodegas y operarios de la misma sede; paros y transferencias sin edición ni borrado; transferencias: crea Jefe de Planta / Admin de Sistemas, lista también Admin de Sede | `gestion/tests/test_alcance_sede_configuracion_planta.py` | EP, TD, BVA | ✅ |
-| Ventas: pedidos y pagos sin edición ni borrado genérico (`modificar`, `anular`, `revertir`); detalles anidados validados al crear (precio ≥ costo base, peso > 0, producto global o de la sede del cliente); venta de contado sin pago registrado permitida (decisión del usuario) | `gestion/tests/test_sales_views_extra.py` (`PagoClienteRevertirExtraTestCase`, `VentaDeContadoTestCase`), `gestion/tests/test_control_acceso_sede.py`, `gestion/tests_integrados.py` | EP, BVA, TD | ✅ |
+| Ventas: pedidos y pagos sin edición ni borrado genérico (`modificar`, `anular`, `revertir`); detalles anidados validados al crear (precio ≥ costo base, peso > 0, producto global o de la sede del cliente); venta de contado sin pago registrado permitida (decisión del usuario) | `gestion/tests/test_sales_views_extra.py` (`PagoClienteRevertirExtraTestCase`, `VentaDeContadoTestCase`), `gestion/tests/test_control_acceso_sede.py`, `gestion/tests/tests_integrados.py` | EP, BVA, TD | ✅ |
 | MRP: requerimientos y sugerencias para bodeguero, ejecutivo y admins; `ejecutar-mrp` sin rol → 403 sin lanzar el motor; sugerencias sin edición | `inventory/tests/test_views_extra.py` | TD, EP | ✅ |
 | Escrituras de stock (movimientos, transferencias, transformaciones): solo bodegas operables, destino en la sede del origen, lotes de la sede, transformaciones con rol de inventario, sin entradas fantasma en el kárdex; 500 sin detalle interno (CWE-209) | `inventory/tests/test_alcance_escrituras_inventario.py`, `inventory/tests/test_transform_view.py` | EP, TD, CB-D | ✅ |
 | Recepción de MP F0-001 como única vía de compra: bodega operable, producto y proveedor de la sede; COMPRA enlazada a su lote (editar no baja de lo consumido, borrar exige lote sin consumos); listado por sede y bodega, paginado | `gestion/tests/test_recepcion_materia_prima_alcance.py` | EP, BVA, STT | ✅ |
@@ -544,9 +544,9 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
     de proyecto, `create_admin`) y una variante de contenedores Windows que solo levantaba `db` y
     `backend`. Se eliminaron; queda un único camino.
 
-## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
+## Fase 6 — Limpieza de `gestion/tests/tests_integrados.py` (2026-09-02)
 
-`gestion/tests_integrados.py` (2472 líneas, sin convención ISTQB) se redujo a solo
+`gestion/tests/tests_integrados.py` (2472 líneas, sin convención ISTQB) se redujo a solo
 `UnifiedBusinessLogicTestCase` (1517 líneas). Se eliminaron o migraron 4 clases:
 
 - `test_seguridad_permisos_operario` y `RBACMatrixTestCase` completa (4 tests, uno de

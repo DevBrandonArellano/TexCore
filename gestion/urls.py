@@ -3,7 +3,6 @@ from rest_framework.routers import DefaultRouter
 
 from inventory.reporting_proxy import ReportingProxyView
 
-from .profile_views import UserProfileView, VerificarSesionView
 from .views import (
     AreaViewSet,
     BodegaViewSet,
@@ -45,6 +44,7 @@ from .views import (
     TrazabilidadPorCodigoLoteView,
 )
 from .views.materia_prima_views import MateriaPrimaLoteViewSet, TraceabilityViewSet
+from .views.profile_views import UserProfileView, VerificarSesionView
 
 router = DefaultRouter()
 router.register(r"groups", GroupViewSet, basename="group")

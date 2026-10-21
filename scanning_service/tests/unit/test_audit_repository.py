@@ -15,7 +15,7 @@ from src.database.models import ScanAuditLog
 from src.database.repository import AuditRepository, IAuditRepository, build_scan_record
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Auxiliares
 # ---------------------------------------------------------------------------
 
 

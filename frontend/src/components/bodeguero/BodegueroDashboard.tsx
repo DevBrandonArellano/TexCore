@@ -412,7 +412,7 @@ export function BodegueroDashboard() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Tarjetas de estadísticas */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -446,7 +446,7 @@ export function BodegueroDashboard() {
         </Card>
       </div>
 
-      {/* Main Content Tabs */}
+      {/* Pestañas de contenido principal */}
       <Tabs defaultValue="inventario" className="flex flex-col">
         <TabsList className="flex flex-wrap w-full sm:w-auto gap-1">
           <TabsTrigger value="inventario" className="gap-2 flex-1 sm:flex-initial">

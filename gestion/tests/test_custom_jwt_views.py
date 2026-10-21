@@ -1,5 +1,5 @@
 """
-Pruebas de gestion/custom_jwt_views.py — login/refresh/logout basados en JWT
+Pruebas de gestion/views/custom_jwt_views.py — login/refresh/logout basados en JWT
 por cookie httponly (CustomTokenObtainPairView, CustomTokenRefreshView,
 LogoutView).
 

@@ -679,7 +679,7 @@ class EjecucionProduccionServiceTestCase(_EscenarioMES):
         )
         lote_tela = LoteProduccion.objects.get(codigo_lote="LOT-TELA-TRACE")
 
-        # Consulta Trace-Back
+        # Consulta de trazabilidad hacia atrás
         trazabilidad = GenealogiaService.obtener_trazabilidad_hacia_atras(lote_tela)
 
         self.assertEqual(trazabilidad["nodo_raiz"]["codigo_lote"], "LOT-TELA-TRACE")

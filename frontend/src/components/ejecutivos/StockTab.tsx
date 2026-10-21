@@ -91,7 +91,7 @@ function StockTabImpl({
           onClose={() => setBodegaSeleccionada(null)}
         />
 
-        {/* Horizontal bar: top alertas */}
+        {/* Barra horizontal: top alertas */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">

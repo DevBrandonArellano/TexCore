@@ -2,7 +2,7 @@ import os
 
 import django
 
-# Setup Django environment
+# Configura el entorno de Django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TexCore.settings")
 django.setup()
 

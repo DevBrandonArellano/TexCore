@@ -11,7 +11,7 @@ interface AuthContextType {
   login: (username: string, password:string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
-  isLoading: boolean; // Add a loading state for session checking
+  isLoading: boolean; // Estado de carga mientras se verifica la sesión
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

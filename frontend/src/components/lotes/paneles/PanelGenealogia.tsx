@@ -263,7 +263,7 @@ export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
               )}
             </div>
 
-            {/* SECCIÓN TRACE-BACK */}
+            {/* SECCIÓN DE TRAZABILIDAD HACIA ATRÁS */}
             {direccion === 'atras' && (
               <div className="space-y-4">
                 {/* 1. Materias Primas de Proveedor */}
@@ -375,7 +375,7 @@ export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
               </div>
             )}
 
-            {/* SECCIÓN TRACE-FORWARD */}
+            {/* SECCIÓN DE TRAZABILIDAD HACIA ADELANTE */}
             {direccion === 'adelante' && (
               <div className="space-y-4">
                 {/* 1. Lote de Origen Raíz */}

@@ -64,7 +64,7 @@ class ProductoViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVi
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
-        # Security Filter: Salesmen strictly cannot see chemicals or inputs
+        # Filtro de seguridad: los vendedores no pueden ver químicos ni insumos
         if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
             queryset = queryset.filter(tipo__in=["hilo", "tela", "subproducto"])
 

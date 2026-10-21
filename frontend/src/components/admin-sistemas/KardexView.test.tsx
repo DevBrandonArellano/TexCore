@@ -121,7 +121,7 @@ describe('KardexView', () => {
     expect(screen.queryByText('Saldo')).not.toBeInTheDocument();
     expect(screen.getByText('+10')).toBeInTheDocument();
     expect(screen.getByText('-5')).toBeInTheDocument();
-    expect(screen.getByText('-')).toBeInTheDocument(); // documento_ref null
+    expect(screen.getByText('-')).toBeInTheDocument(); // documento_ref nulo
   });
 
   it('dado consulta de kardex con saldo cuando renderiza entonces muestra la columna de saldo con el valor formateado', () => {

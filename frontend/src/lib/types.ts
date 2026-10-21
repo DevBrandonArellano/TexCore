@@ -117,7 +117,7 @@ export interface KPIArea {
   oee?: OeeResultado;
 }
 
-// Reason codes = Seis Grandes Pérdidas (OEE for Operators — Productivity Press)
+// Códigos de motivo = Seis Grandes Pérdidas (OEE para operarios — Productivity Press)
 export type CategoriaParoMaquina =
   | 'AVERIA' | 'SETUP' | 'MICROPARO' | 'VELOCIDAD_REDUCIDA'
   | 'RECHAZO_ARRANQUE' | 'DEFECTO_PROCESO' | 'FALTA_MATERIAL'
@@ -449,10 +449,10 @@ export interface Cliente {
   direccion_envio: string;
   nivel_precio: 'mayorista' | 'normal';
   tiene_beneficio: boolean;
-  saldo_pendiente: number | string; // Updated type
+  saldo_pendiente: number | string; // Tipo actualizado
   limite_credito: number;
-  plazo_credito_dias?: number; // New field
-  cartera_vencida?: number | string; // New field
+  plazo_credito_dias?: number; // Campo nuevo
+  cartera_vencida?: number | string; // Campo nuevo
    sede?: number | null;
   vendedor_asignado?: number | null;
   pedidos?: PedidoVenta[];
@@ -560,7 +560,7 @@ export interface Movimiento {
   producto_nombre?: string;
 }
 
-// Legacy types (mantener compatibilidad)
+// Tipos heredados (mantener compatibilidad)
 export interface Sede {
   id: number;
   nombre: string;

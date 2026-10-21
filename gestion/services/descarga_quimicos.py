@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from gestion.models import Bodega, DescargaQuimicoOP
-from gestion.services_formula import calcular_dosificacion_de_orden
+from gestion.services.services_formula import calcular_dosificacion_de_orden
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
@@ -62,7 +62,7 @@ class DescargaQuimicosService:
 
         for insumo in resultado.insumos:
             try:
-                # Thread-safe get-or-create con savepoint
+                # Get-or-create seguro para hilos con savepoint
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=orden.bodega_quimicos,

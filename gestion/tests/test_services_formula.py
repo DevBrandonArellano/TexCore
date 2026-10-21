@@ -1,5 +1,5 @@
 """
-Pruebas de gestion/services_formula.py — cálculo de dosificación.
+Pruebas de gestion/services/services_formula.py — cálculo de dosificación.
 
 Completa la cobertura de caja blanca de DosificacionCalculator.calcular:
 ramas gr/L, %, fallbacks legacy (gramos_por_kilo) y tipo de cálculo desconocido.
@@ -15,7 +15,7 @@ from decimal import Decimal
 from django.test import TestCase
 
 from gestion.models import DetalleFormula
-from gestion.services_formula import (
+from gestion.services.services_formula import (
     DosificacionCalculator,
     calcular_dosificacion_gr_l,
     calcular_dosificacion_pct,

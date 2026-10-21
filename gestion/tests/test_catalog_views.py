@@ -145,7 +145,7 @@ class AreaViewSetTestCase(TestCase):
         self.area1 = AreaFactory(sede=self.sede1)
         self.area2 = AreaFactory(sede=self.sede1)
         self.area3 = AreaFactory(sede=self.sede2)
-        # List action solo requiere IsAuthenticated — cualquier usuario sirve
+        # La acción list solo requiere IsAuthenticated — cualquier usuario sirve
         self.user = CustomUserFactory(sede=self.sede1)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("area-list")

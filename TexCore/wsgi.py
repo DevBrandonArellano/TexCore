@@ -1,9 +1,9 @@
 """
-WSGI config for TexCore project.
+Configuración WSGI del proyecto TexCore.
 
-It exposes the WSGI callable as a module-level variable named ``application``.
+Expone el invocable WSGI como variable a nivel de módulo llamada ``application``.
 
-For more information on this file, see
+Para más información sobre este archivo, consulta
 https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
 """
 

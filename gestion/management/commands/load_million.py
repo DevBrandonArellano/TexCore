@@ -159,7 +159,7 @@ class Command(BaseCommand):
         }
 
         total_start = time.time()
-        ctx = {}  # shared context between phases
+        ctx = {}  # contexto compartido entre fases
 
         for num, (desc, fn) in fases.items():
             if fase != 0 and fase != num:

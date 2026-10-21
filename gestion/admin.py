@@ -22,23 +22,19 @@ from .models import (
     TransformacionProducto,
 )
 
-# Custom admin for CustomUser to properly show groups and permissions
-
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
 
-    # Fields to display in the list view
     list_display = ["username", "email", "first_name", "last_name", "sede", "area", "is_staff", "is_active"]
     list_filter = ["is_staff", "is_active", "sede", "area", "groups"]
 
-    # Fieldsets for the detail/edit view
     fieldsets = (
         *(UserAdmin.fieldsets or ()),
         ("Información Adicional", {"fields": ("sede", "area", "date_of_birth", "superior", "bodegas_asignadas")}),
     )
 
-    # Fieldsets for adding a new user
+    # Fieldsets para crear un usuario nuevo
     add_fieldsets = UserAdmin.add_fieldsets + (
         (
             "Información Adicional",
@@ -46,11 +42,11 @@ class CustomUserAdmin(UserAdmin):
         ),
     )
 
-    # Enable search
+    # Habilita la búsqueda
     search_fields = ["username", "email", "first_name", "last_name"]
     ordering = ["username"]
 
-    # Configure many-to-many fields
+    # Configura los campos muchos a muchos
     filter_horizontal = ["groups", "user_permissions", "superior", "bodegas_asignadas"]
 
 
@@ -71,7 +67,7 @@ class BodegaAdmin(admin.ModelAdmin):
     inlines = [BodegueroInline]
 
 
-# Register models
+# Registra los modelos
 admin.site.register(Sede)
 admin.site.register(Area)
 admin.site.register(ConfiguracionEmpaqueSede)

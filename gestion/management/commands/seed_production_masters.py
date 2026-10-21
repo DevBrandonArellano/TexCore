@@ -1,6 +1,6 @@
 """
-Management command to seed production master roles and permissions for a clean TexCore database launch.
-Usage: python manage.py seed_production_masters
+Comando de gestión para cargar los roles y permisos maestros de producción en una base de datos TexCore limpia.
+Uso: python manage.py seed_production_masters
 """
 
 import logging

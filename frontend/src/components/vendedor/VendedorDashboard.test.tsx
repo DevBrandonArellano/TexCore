@@ -41,7 +41,7 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() }
 }));
 
-// Mock ResizeObserver for Radix Dialogs
+// Mock de ResizeObserver para Radix Dialogs
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
@@ -55,7 +55,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         
-        // Mocking API responses
+        // Mock de las respuestas de la API
         (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({ data: [{
@@ -63,7 +63,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
                     nombre_razon_social: 'Cliente 1', 
                     limite_credito: 1000, 
                     saldo_pendiente: 0, 
-                    plazo_credito_dias: 30, // By default tested 30
+                    plazo_credito_dias: 30, // Por defecto se prueba 30
                     ruc_cedula: "1234567890",
                     direccion_envio: "Test Dir",
                     nivel_precio: "normal",
@@ -101,12 +101,9 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
             expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument();
         });
 
-        // Find the "Plazo Crédito" select trigger value to verify 8, 30, 45, 60
-        // Because it's Radix UI Select, we can assert existence or simulate interaction, 
-        // Here we verify it opened properly and contains '0' as default default 'Contado (0 Días)'
         expect(screen.getByText('Contado (0 Días)')).toBeInTheDocument();
         
-        // We know it drops down 8, 30, 45, 60 days
+        // Sabemos que despliega 8, 30, 45 y 60 días
     });
 
     it('dado el switch de retención activo cuando escribe el monto entonces despliega el input y valida negativos y excesos', async () => {
@@ -127,7 +124,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
 
         // Seleccionar Producto
         const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
-        // Find the product combobox within the dialog (first is client, second is product)
+        // El primer combobox es el cliente; el segundo, el producto
         const dialogComboboxes = Array.from(dialog.querySelectorAll('[role="combobox"]'));
         await user.click(dialogComboboxes[1] as HTMLElement);
         const opcionProducto = await screen.findByText('Tela Algodon Premium');
@@ -149,7 +146,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         await user.click(btnAdd);
 
         // Subtotal = 10 * 10 = 100, + 15% IVA = 115.000
-        // NOTE: JSX renders "$" and "{value}" as separate text nodes, so we check via DOM textContent
+        // NOTA: JSX separa "$" y "{value}" en nodos de texto distintos; se revisa textContent
         await waitFor(() => {
             const totalRow = dialog.querySelector('tr.bg-primary\\/5');
             expect(totalRow).not.toBeNull();
@@ -157,8 +154,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         });
 
         // Activamos la opción "El cliente te emite retencion"
-        // Since there is no aria-label on the switch linking to the text, we query by role and index or use container selector.
-        // There are multiple switches. The retencion one is the last one if items > 0.
+        // El switch no tiene aria-label: se busca por rol e índice
         const switches = screen.getAllByRole('switch');
         const toggleRetencion = switches[switches.length - 2]; // El último es el de pago en caja. El penúltimo es retención.
         

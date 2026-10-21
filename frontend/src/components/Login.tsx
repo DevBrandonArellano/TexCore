@@ -46,8 +46,7 @@ export function Login() {
     if (!success) {
       setError('Usuario o contraseña incorrectos');
     }
-    // If login is successful, the component will unmount, so no need to set loading to false.
-    // If it fails, we set it to false to allow another attempt.
+    // Si el login funciona el componente se desmonta; si falla se permite reintentar
     setIsLoading(false);
   };
 

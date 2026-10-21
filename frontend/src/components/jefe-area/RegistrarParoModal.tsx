@@ -19,7 +19,7 @@ import apiClient from '../../lib/axios';
 import type { CategoriaParoMaquina } from '../../lib/types';
 import { mensajeDeLaApi } from '../../lib/apiError';
 
-// Reason codes = Seis Grandes Pérdidas (OEE for Operators — Productivity Press)
+// Códigos de motivo = Seis Grandes Pérdidas (OEE para operarios — Productivity Press)
 const CATEGORIAS: { value: CategoriaParoMaquina; label: string }[] = [
     { value: 'AVERIA', label: 'Avería / Falla de Equipo' },
     { value: 'SETUP', label: 'Setup y Ajustes' },

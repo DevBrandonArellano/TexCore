@@ -120,7 +120,7 @@ export function HistorialDespachos() {
                 prev.delete('fecha_hasta');
             }
             
-            prev.set('page', '1'); // Reset to page 1 on filter
+            prev.set('page', '1'); // Vuelve a la página 1 al filtrar
             return prev;
         }, { replace: true });
     };
@@ -355,12 +355,12 @@ export function HistorialDespachos() {
                         </TableBody>
                     </Table>
 
-                    {/* Pagination Controls */}
+                    {/* Controles de paginación */}
                     {data && data.count > 0 && (
                         <div className="flex items-center justify-between px-6 py-4 border-t">
                             <span className="text-sm text-muted-foreground">
                                 Mostrando página <span className="font-medium text-slate-900">{page}</span> 
-                                {/* Assuming standard limit calculation if needed, else simple display */}
+                                {/* Cálculo de límite estándar si hace falta; si no, visualización simple */}
                             </span>
                             <div className="flex gap-2">
                                 <Button
@@ -402,7 +402,7 @@ export function HistorialDespachos() {
 
                     {selectedDespacho && (
                         <div className="space-y-6">
-                            {/* Summary Cards */}
+                            {/* Tarjetas de resumen */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <Card className="bg-slate-50 border-none shadow-none">
                                     <CardContent className="p-4 flex flex-col items-center justify-center">
@@ -425,7 +425,7 @@ export function HistorialDespachos() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Pedidos List */}
+                                {/* Lista de pedidos */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-sm text-slate-500 uppercase flex items-center gap-2 border-b pb-1">
                                         Pedidos Abarcados
@@ -442,7 +442,7 @@ export function HistorialDespachos() {
                                     </div>
                                 </div>
 
-                                {/* Lotes List */}
+                                {/* Lista de lotes */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-sm text-slate-500 uppercase flex items-center gap-2 border-b pb-1">
                                         Lotes Escaneados

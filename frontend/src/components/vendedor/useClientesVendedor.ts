@@ -116,12 +116,12 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
 
   const openClienteDetail = async (cliente: Cliente) => {
     try {
-      // Fetch the detailed client object that includes the `pedidos` and `pagos` arrays which are omitted in list views
+      // Trae el cliente detallado, con `pedidos` y `pagos` (omitidos en el listado)
       const res = await apiClient.get(`/clientes/${cliente.id}/`);
       setSelectedCliente(res.data);
     } catch (e) {
       console.error("Error fetching client details", e);
-      setSelectedCliente(cliente); // Fallback
+      setSelectedCliente(cliente); // Alternativa
     }
     setIsDetailOpen(true);
   };
