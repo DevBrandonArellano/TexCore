@@ -16,7 +16,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import React from 'react';
 
-// Mock apiClient
+// Mock de apiClient
 vi.mock('../../lib/axios', () => ({
   default: {
     get: vi.fn(() => Promise.resolve({ data: [] })),
@@ -35,7 +35,7 @@ vi.mock('../../lib/axios', () => ({
 }));
 import apiClient from '../../lib/axios';
 
-// Mock sonner toast
+// Mock de sonner toast
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
@@ -55,7 +55,7 @@ global.HTMLElement.prototype.scrollIntoView = vi.fn();
 global.HTMLElement.prototype.hasPointerCapture = vi.fn();
 global.HTMLElement.prototype.releasePointerCapture = vi.fn();
 
-// Mock URL.createObjectURL / revokeObjectURL
+// Mock de URL.createObjectURL / revokeObjectURL
 global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/fake-blob-url');
 global.URL.revokeObjectURL = vi.fn();
 
@@ -85,7 +85,7 @@ const fakeBlob = new Blob(['fake-excel-content'], {
   type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Auxiliares ───────────────────────────────────────────────────────────────────
 
 const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
 

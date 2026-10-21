@@ -244,7 +244,6 @@ class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializ
 
     def validate_tiene_beneficio(self, value):
         user = self.context["request"].user
-        # Check if the field is actually being changed
         if self.instance and self.instance.tiene_beneficio != value:
             is_authorized = (
                 user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "admin_sede", "vendedor"]).exists()
@@ -315,11 +314,11 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
 
     def validate(self, data):
-        # Allow initial_data access for nested validation
+        # Permite acceder a initial_data para validar anidados
         cliente = data.get("cliente")
         esta_pagado = data.get("esta_pagado", False)
 
-        # Sede is mandatory but usually derived from user
+        # La sede es obligatoria pero normalmente se deriva del usuario
         user = self.context["request"].user
         if not data.get("sede") and hasattr(user, "sede"):
             data["sede"] = user.sede
@@ -332,8 +331,8 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
                 mult = Decimal("1.15") if d.get("incluye_iva", True) else Decimal("1.00")
                 nuevo_total += d["peso"] * d["precio_unitario"] * mult
 
-            # Re-fetch via custom manager so saldo_calculado annotation
-            # is present
+            # Vuelve a consultar con el manager personalizado para que la anotación saldo_calculado
+            # esté presente
             from gestion.models import Cliente as ClienteModel
 
             cliente_annotated = ClienteModel.objects.get(pk=cliente.pk)

@@ -42,19 +42,16 @@ class AuditAndMRPTest(TestCase):
         self.cliente.save()
 
     def test_audit_log_dado_cambio_de_limite_justificado_cuando_guarda_entonces_registra_usuario_ip_y_valores(self):
-        # Update limit without justification shouldn't throw error if we don't handle it in view,
-        # wait, the logic says if not is_new and requiere_just_aud and not hasattr(): raise error
 
-        # We try to update
         self.cliente.limite_credito = Decimal("2000.00")
         with self.assertRaises(ValidationError):
             self.cliente.save()
 
-        # Give justification
+        # Aporta la justificación
         self.cliente._justificacion_auditoria = "Aumento de linea"
         self.cliente.save()
 
-        # Check audit log
+        # Verifica el registro de auditoría
         log = AuditLog.objects.filter(accion="UPDATE").first()
         self.assertIsNotNone(log)
         self.assertEqual(log.justificacion, "Aumento de linea")

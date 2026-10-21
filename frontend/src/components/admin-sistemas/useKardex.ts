@@ -122,7 +122,7 @@ function desdeMovimiento(f: FilaMovimientoApi, bodega: string): FilaKardex {
 export function useKardex() {
   const [selectedBodega, setSelectedBodega] = useState('all');
   const [selectedProducto, setSelectedProducto] = useState('all');
-  const [tipoOperacion, setTipoOperacion] = useState('all'); // all, entrada, salida
+  const [tipoOperacion, setTipoOperacion] = useState('all'); // todos, entrada, salida
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [kardexData, setKardexData] = useState<FilaKardex[]>([]);

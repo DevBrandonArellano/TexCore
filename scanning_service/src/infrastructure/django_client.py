@@ -117,5 +117,5 @@ class DjangoApiClient:
         )
 
     def get_stock_activo_por_lote(self, lote_id: int) -> StockBodega | None:
-        """Retorna StockBodega desde caché poblado por get_lote_by_codigo."""
+        """Devuelve StockBodega desde la caché poblada por get_lote_by_codigo."""
         return self._stock_cache.pop(lote_id, None)

@@ -40,7 +40,7 @@ class LoteStockAdjustmentService:
         producto_salida = orden.producto_salida or orden.producto_entrada
         producto_entrada = orden.producto_entrada or orden.producto_salida
 
-        # 1. Adjust Output Stock
+        # 1. Ajustar el stock de salida
         try:
             stock_output = StockBodega.objects.select_for_update().get(
                 bodega=bodega_salida, producto=producto_salida, lote=updated_lote
@@ -83,7 +83,7 @@ class LoteStockAdjustmentService:
                 },
             )
 
-        # 2. Adjust Raw Material
+        # 2. Ajustar la materia prima
         producto_input = producto_entrada
         stock_input, _ = safe_get_or_create_stock(
             StockBodega, bodega=bodega_entrada, producto=producto_input, lote=None
@@ -108,7 +108,7 @@ class LoteStockAdjustmentService:
             documento_ref=f"CORRECCION-LOTE-{updated_lote.codigo_lote}",
         )
 
-        # 3. Adjust Chemicals
+        # 3. Ajustar los químicos
         if orden.formula_color:
             from gestion.models import DetalleFormula
 
@@ -168,10 +168,9 @@ class LoteStockAdjustmentService:
         bodega_salida = orden.bodega_salida or orden.bodega_entrada
         bodega_entrada_op = orden.bodega_entrada or orden.bodega_salida
 
-        # 1. Reverse Output (Remove the produced lot from stock)
+        # 1. Revertir la salida (quitar el lote producido del stock)
         try:
-            # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
-            # We assume it's still there for a "rejection".
+            # Un rechazo asume que el stock sigue ahí; si ya se vendió o movió, falla
             stock_output = StockBodega.objects.select_for_update().get(
                 bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
             )
@@ -197,7 +196,7 @@ class LoteStockAdjustmentService:
             saldo_resultante=stock_output.cantidad,
         )
 
-        # 2.1 Raw Material
+        # 2.1 Materia prima
         producto_input = orden.producto_entrada or orden.producto_salida
         stock_input, _ = safe_get_or_create_stock(
             StockBodega, bodega=bodega_entrada_op, producto=producto_input, lote=None

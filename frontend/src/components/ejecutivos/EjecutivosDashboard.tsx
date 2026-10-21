@@ -89,7 +89,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
   });
 
   // ---------------------------------------------------------------------------
-  // Render helpers
+  // Funciones auxiliares de renderizado
   // ---------------------------------------------------------------------------
 
   if (dash.loading) {

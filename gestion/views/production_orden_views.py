@@ -32,10 +32,10 @@ from gestion.serializers import (
     TransformacionProductoSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.services.services_formula import calcular_dosificacion_desde_snapshot
 from gestion.services.transformacion import TransformacionService
 from gestion.services.trazabilidad import TrazabilidadService
 from gestion.services.versionado_formula import VersionadoFormulaService
-from gestion.services_formula import calcular_dosificacion_desde_snapshot
 
 from ._common import parse_int_param
 
@@ -125,7 +125,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             .all()
         )
 
-        # Filter by area if user is a Jefe de Área
+        # Filtra por área si el usuario es Jefe de Área
         if (
             user.groups.filter(name="jefe_area").exists()
             and not user.is_superuser
@@ -134,7 +134,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         ):
             queryset = queryset.filter(area=user.area)
 
-        # Filter for operators: only show assigned orders
+        # Filtro para operarios: solo muestra las órdenes asignadas
         if user.groups.filter(name="operario").exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
 

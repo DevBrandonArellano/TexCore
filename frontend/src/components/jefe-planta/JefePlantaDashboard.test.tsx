@@ -65,7 +65,7 @@ vi.mock('../produccion/TransferenciasInterarea', () => ({
   ),
 }));
 
-// Mock ResizeObserver for Radix UI
+// Mock de ResizeObserver para Radix UI
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
@@ -97,7 +97,7 @@ function mockEndpoints(overrides: Record<string, unknown> = {}) {
   };
   const data = { ...defaults, ...overrides };
   (apiClient.get as Mock).mockImplementation((url: string) => {
-    // If URL has query params, just match the base path
+    // Con query params, se compara solo la ruta base
     const basePath = url.split('?')[0];
     if (basePath in data) return Promise.resolve({ data: data[basePath] });
     return Promise.resolve({ data: [] });
@@ -172,7 +172,7 @@ describe('JefePlantaDashboard', () => {
     const btnAvance = screen.getByText(/reporte avance operativo/i).closest('div[role="menuitem"]');
     await userEvent.click(btnAvance!);
 
-    // Muestra success (sonner mockup)
+    // Muestra success (mock de sonner)
     await waitFor(() => {
       expect(toastSuccessMock).toHaveBeenCalledWith(expect.stringContaining('Reporte de Avance exportado correctamente'));
     });

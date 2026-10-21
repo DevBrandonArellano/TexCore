@@ -33,8 +33,8 @@ from gestion.serializers import (
     VersionFormulaResumenSerializer,
     VersionFormulaSerializer,
 )
+from gestion.services.services_formula import calcular_dosificacion_desde_snapshot
 from gestion.services.versionado_formula import VersionadoFormulaService
-from gestion.services_formula import calcular_dosificacion_desde_snapshot
 from gestion.utils import PrintingService
 
 from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
@@ -162,7 +162,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         POST /api/formula-colors/{id}/calcular-dosificacion/
         Body: { "peso": 100, "litros": 860 }
         """
-        from gestion.services_formula import DosificacionCalculator
+        from gestion.services.services_formula import DosificacionCalculator
 
         formula = self.get_object()
 

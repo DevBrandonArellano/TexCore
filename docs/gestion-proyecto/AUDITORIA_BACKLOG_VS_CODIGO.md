@@ -60,7 +60,7 @@ grabaciones y capturas que hace el usuario.
 
 ### C-1 · `/api/groups/` está expuesto sin autenticación
 
-> **Resuelto 2026-09-30.** `TexCore/settings.py` añade `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`, `GroupViewSet` (`gestion/views/core_views.py`) queda restringido a `IsSystemAdmin` y login/refresh (`gestion/custom_jwt_views.py`) declaran `AllowAny` explícito (simplejwt ya los deja abiertos); lo protegen `gestion/tests/test_permisos_por_defecto.py` (9 pruebas) y `AccesoPublicoYAdminTrasPermisoPorDefectoTestCase` en `gestion/tests/test_core_views.py` (4).
+> **Resuelto 2026-09-30.** `TexCore/settings.py` añade `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`, `GroupViewSet` (`gestion/views/core_views.py`) queda restringido a `IsSystemAdmin` y login/refresh (`gestion/views/custom_jwt_views.py`) declaran `AllowAny` explícito (simplejwt ya los deja abiertos); lo protegen `gestion/tests/test_permisos_por_defecto.py` (9 pruebas) y `AccesoPublicoYAdminTrasPermisoPorDefectoTestCase` en `gestion/tests/test_core_views.py` (4).
 
 **Incumple TEX-07 CA-3** («el 100 % exige autenticación y declara explícitamente los roles autorizados»).
 

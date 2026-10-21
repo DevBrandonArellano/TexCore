@@ -46,7 +46,7 @@ urlpatterns = [
         ValidateLoteView.as_view(),
         name="validate_lote",
     ),
-    # ── Reporting — Inventario ─────────────────────────────────────────────
+    # Reportes — Inventario ─────────────────────────────────────────────
     path("reports/kardex/", KardexView.as_view(), name="reports_kardex"),
     path("reports/productos/", ProductosView.as_view(), name="reports_productos"),
     path("reports/usuarios/", UsuariosView.as_view(), name="reports_usuarios"),
@@ -56,13 +56,13 @@ urlpatterns = [
     path("reports/rotacion/", RotacionView.as_view(), name="reports_rotacion"),
     path("reports/stock-cero/", StockCeroView.as_view(), name="reports_stock_cero"),
     path("reports/resumen-movimientos/", ResumenMovimientosView.as_view(), name="reports_resumen_movimientos"),
-    # ── Reporting — Vendedores ──────────────────────────────────────────────
+    # Reportes — Vendedores ──────────────────────────────────────────────
     path("vendedores/<int:vendedor_id>/ventas/", VentasVendedorView.as_view(), name="vendedores_ventas"),
     path(
         "vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(), name="vendedores_top_clientes"
     ),
     path("vendedores/<int:vendedor_id>/deudores/", DeudoresVendedorView.as_view(), name="vendedores_deudores"),
-    # ── Reporting — Gerencial ───────────────────────────────────────────────
+    # Reportes — Gerencial ───────────────────────────────────────────────
     path("gerencial/ventas/", VentasGerencialView.as_view(), name="gerencial_ventas"),
     path("gerencial/top-clientes/", TopClientesGerencialView.as_view(), name="gerencial_top_clientes"),
     path("gerencial/deudores/", DeudoresGerencialView.as_view(), name="gerencial_deudores"),

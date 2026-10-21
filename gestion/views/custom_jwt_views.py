@@ -32,7 +32,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     permission_classes = [AllowAny]  # type: ignore[assignment]
 
     def post(self, request, *args, **kwargs):
-        # We process the serializer ourselves to have access to the user object
+        # El serializer se procesa aquí para acceder al usuario
         serializer = self.get_serializer(data=request.data)
 
         try:
@@ -40,37 +40,25 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         except InvalidToken as e:
             raise InvalidToken(e.args[0]) from e
 
-        # At this point, serializer.validated_data contains 'access' and 'refresh'
-        # and serializer.user is populated.
-
         user = serializer.user
 
-        # Serialize user data
-        from .profile_views import get_user_role
-        from .serializers import CustomUserSerializer
+        from gestion.serializers import CustomUserSerializer
+        from gestion.views.profile_views import get_user_role
 
         user_serializer = CustomUserSerializer(user)
 
-        # Get user's primary role
         role = get_user_role(user)
 
-        # Get tokens from validated data
         access_token = serializer.validated_data["access"]
         refresh_token = serializer.validated_data["refresh"]
 
-        # Construct the response
         response_data = {"user": user_serializer.data, "role": role}
-
-        # Depending on settings, you might want to include tokens in the body or not.
-        # The previous code implied we want to overwrite response.data completely.
-        # But usually you want them in cookies AND maybe body if you weren't using cookies only.
-        # Given the previous code, we overwrite response.data entirely.
 
         response = Response(response_data, status=status.HTTP_200_OK)
         # Cookie `csrftoken` para las escrituras que siguen al login (CookieJWTAuthentication).
         get_token(request)
 
-        # Set cookies
+        # Establece las cookies
         access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
         refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
         secure_cookie = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SECURE", False)
@@ -138,9 +126,7 @@ class CustomTokenRefreshView(TokenRefreshView):
                 secure=secure_cookie,
                 path="/",
             )
-            # The new refresh token (if rotated) is already handled by the cookie middleware
-            # if it's being used, or by the super().post() response.
-            # For clarity, we can remove the access token from the response body.
+            # El refresh rotado ya lo maneja el middleware de cookies; el access no va en el cuerpo.
             if "access" in response.data:
                 del response.data["access"]
 

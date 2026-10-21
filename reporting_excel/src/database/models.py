@@ -25,10 +25,10 @@ class ReportAuditLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-    requested_by: Mapped[str] = mapped_column(String(200), nullable=False)  # JWT sub claim
+    requested_by: Mapped[str] = mapped_column(String(200), nullable=False)  # claim sub del JWT
     report_type: Mapped[str] = mapped_column(String(100), nullable=False)
     endpoint: Mapped[str] = mapped_column(String(200), nullable=False)
-    params_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # query params
+    params_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # parámetros de consulta
     format: Mapped[str | None] = mapped_column(String(10), nullable=True)  # 'xlsx' | 'csv'
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     error_detail: Mapped[str | None] = mapped_column(String(1000), nullable=True)

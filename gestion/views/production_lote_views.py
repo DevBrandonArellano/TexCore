@@ -129,7 +129,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # OWASP A01: también en retrieve y en las acciones de detalle (get_object → 404).
         queryset = filtrar_lotes_por_sede(queryset, user)
 
-        # Security: Jefe de Área only sees lots from their area
+        # Seguridad: el Jefe de Área solo ve los lotes de su área
         if user.groups.filter(name="jefe_area").exists() and not user.is_superuser:
             if hasattr(user, "area") and user.area:
                 queryset = queryset.filter(orden_produccion__area=user.area)
@@ -170,7 +170,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         self._validar_duenio(lote)
         old_peso_neto = lote.peso_neto_producido
 
-        # Save the updated lote
+        # Guarda el lote actualizado
         updated_lote = serializer.save()
 
         LoteStockAdjustmentService.ajustar_por_cambio_peso(
@@ -298,7 +298,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             detail = e.detail[0] if isinstance(e.detail, list) else e.detail
             return Response({"error": str(detail)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. Mark Lote as rejected or delete
+        # 3. Marca el lote como rechazado o lo elimina
         from gestion.middleware import clear_cascade_justification, set_cascade_justification
 
         try:
@@ -313,7 +313,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         finally:
             clear_cascade_justification()
 
-        # 4. Update order status
+        # 4. Actualiza el estado de la orden
         total_producido = orden.lotes.aggregate(Sum("peso_neto_producido"))["peso_neto_producido__sum"] or Decimal(
             "0.00"
         )
@@ -769,7 +769,7 @@ class TrazabilidadPorCodigoLoteView(APIView):
 
 class RegistrarLoteProduccionView(APIView):
     """
-    API View to register a production lot and handle all related inventory movements.
+    Vista de API para registrar un lote de producción y gestionar todos los movimientos de inventario relacionados.
     """
 
     permission_classes = [IsRegistroLoteRole]

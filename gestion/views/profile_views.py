@@ -3,15 +3,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .permissions import ve_todas_las_sedes
-from .serializers import CustomUserSerializer
+from gestion.permissions import ve_todas_las_sedes
+from gestion.serializers import CustomUserSerializer
 
 
 def get_user_role(user):
     if user.is_superuser:
-        return "admin_sistemas"  # Superusers are treated as system admins
+        return "admin_sistemas"  # Los superusuarios se tratan como administradores del sistema
 
-    # Prioritize roles
+    # Prioriza los roles
     groups = user.groups.values_list("name", flat=True)
     if "admin_sistemas" in groups:
         return "admin_sistemas"

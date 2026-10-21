@@ -1,7 +1,7 @@
 /**
- * Utility to format API errors into user-friendly messages with explanatory notes.
- * Strictly compliant with ISO 27001 (Information Security / Prevent Data Leakage)
- * & ISO 25010 (Usability & Informative Feedback).
+ * Utilidad para formatear errores de la API en mensajes amigables con notas explicativas.
+ * Cumple estrictamente ISO 27001 (seguridad de la información / prevención de fuga de datos)
+ * y ISO 25010 (usabilidad y retroalimentación informativa).
  */
 
 import type { AxiosError } from 'axios';
@@ -12,7 +12,7 @@ export interface FormattedError {
   fieldErrors?: Record<string, string>;
 }
 
-/** Map of backend technical field names to friendly domain labels */
+/*Mapa de nombres técnicos de campos del backend a etiquetas amigables del dominio */
 const FIELD_LABELS: Record<string, string> = {
   peso_neto_producido: 'Peso Neto Producido',
   peso_merma: 'Peso de Merma',
@@ -36,7 +36,7 @@ const FIELD_LABELS: Record<string, string> = {
   cantidad_kg: 'Cantidad (Kg)',
 };
 
-/** Convert snake_case field key to clean title case if not in map */
+/*Convierte una clave snake_case a título limpio si no está en el mapa */
 function getFieldLabel(key: string): string {
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
   return key
@@ -44,13 +44,13 @@ function getFieldLabel(key: string): string {
     .replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
-/** Filter out technical leak terms (SQL, stack traces, URLs, DB tables, ORM details) */
+/*Descarta términos técnicos que revelan detalles internos (SQL, trazas de pila, URLs, tablas de BD, detalles del ORM) */
 function sanitizeMessage(text: string): string {
   if (!text) return 'Solicitud no procesada.';
 
   const str = String(text);
 
-  // Check if string contains raw technical database/stacktrace/code leakage
+  // Verifica si la cadena contiene fugas de detalles técnicos (BD, traza de pila o código)
   const leakPatterns = [
     /SQL/i,
     /IntegrityError/i,
@@ -120,7 +120,7 @@ export function formatApiError(error: unknown): FormattedError {
     };
   }
 
-  // Raw HTML string or non-JSON responses from server (e.g. 502/504 gateways)
+  // Cadena HTML o respuestas no JSON del servidor (p. ej. pasarelas 502/504)
   if (typeof data === 'string') {
     const cleanStr = sanitizeMessage(data);
     return {
@@ -154,7 +154,7 @@ export function formatApiError(error: unknown): FormattedError {
 
   mainMessage = sanitizeMessage(String(mainMessage));
 
-  // Determine user-friendly explanatory note based on business context
+  // Determina la nota explicativa amigable según el contexto de negocio
   let note = 'Nota: Por favor revise la información ingresada en el formulario.';
 
   const msgLower = mainMessage.toLowerCase();

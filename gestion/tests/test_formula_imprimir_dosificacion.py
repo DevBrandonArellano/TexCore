@@ -171,7 +171,7 @@ class TextoDosisTestCase(TestCase):
 
     @staticmethod
     def _calculo(tipo, concentracion=None, porcentaje=None):
-        from gestion.services_formula import ResultadoInsumo
+        from gestion.services.services_formula import ResultadoInsumo
 
         return ResultadoInsumo(
             producto_id=1,

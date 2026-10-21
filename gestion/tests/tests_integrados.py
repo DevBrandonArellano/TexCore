@@ -366,7 +366,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             "es_anticipo": True,
         }
         response = self.client.post(url, data, format="json")
-        # should be 201 Created now that we relaxed permissions to [IsAuthenticated]
+        # 201: los permisos se relajaron a [IsAuthenticated]
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Error: {response.data}")
 
         # Verificamos que el pago se registró
@@ -387,14 +387,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             "detalles": [
                 {"producto": self.producto.id, "cantidad": 40, "piezas": 1, "peso": 40.0, "precio_unitario": 15.0}
             ],
-            "esta_pagado": False,  # Explicitly unpaid to trigger check
+            "esta_pagado": False,  # Explícitamente no pagado para disparar la validación
         }
 
         response = self.client.post(url, data, format="json")
-        # Expecting validation error
+        # Se espera un error de validación
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        # Note: Nested serializer validation might return generic 400 or specific field error.
-        # Our custom validation is on 'cliente' field in PedidoVentaSerializer.
+        # Nota: la validación del serializer anidado puede devolver un 400 genérico o un error de campo específico.
+        # La validación propia está en el campo 'cliente' de PedidoVentaSerializer.
         fields = response.data.get("error", {}).get("fields", response.data)
         self.assertIn("cliente", fields)
 
@@ -470,16 +470,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_stock_dado_actualizacion_por_api_cuando_guarda_entonces_conserva_precision_decimal(self):
         """Valida que las actualizaciones de stock mantengan precisión decimal via API."""
         self.client.force_authenticate(user=self.admin)
-        # Assuming 'movimiento-list' is not directly exposed as ViewSet but we are
-        # testing stock logic indirectly or if exposed.
         reverse("movimiento-list")
-        # Actually in views.py we didn't expose MovimientoInventarioViewSet broadly,
-        # but let's assume if we did or test logic differently.
-        # Since I can't see a MovimientoViewSet in views.py (only specific logic in RegistrarLote),
-        # I'll test the logic via model direct or RegistrarLote if applicable.
-        # But wait, the original test file had this. I will assume it's valid if ViewSet existed or I add it.
-        # Since I didn't add MovimientoViewSet to views.py in previous steps, this test as written would fail 404.
-        # I will adapt it to test the logic directly on the model for now to ensure SAFETY of logic.
+        # Sin ViewSet de movimientos: el stock se ajusta directo sobre el modelo.
 
         MovimientoInventario.objects.create(
             tipo_movimiento="VENTA",
@@ -489,9 +481,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             documento_ref="REF1",
             usuario=self.admin,
         )
-        # Update stock manually as the Signal/Logic usually handles it, OR the View handles it.
-        # In our architecture, the View handles stock updates (e.g. RegistrarLote).
-        # Assuming manual adjustment for this test case:
+        # En producción la vista ajusta el stock; aquí se hace a mano.
         stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= Decimal("0.33")
         stock._justificacion_auditoria = "Prueba de precision decimal"
@@ -501,10 +491,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
     def test_kardex_dado_movimientos_cuando_registra_entonces_calcula_saldo_resultante(self):
         """Valida que el saldo_resultante se calcule correctamente."""
-        # Testing logic manually since no direct generic endpoint
+        # Se prueba la lógica manualmente porque no hay un endpoint genérico
         cantidad = Decimal("10.00")
 
-        # Calculate resulting balance logic (simulating what view does)
+        # Calcula el saldo resultante (simulando lo que hace la vista)
         stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= cantidad
         stock._justificacion_auditoria = "Ajuste manual para test de kardex"
@@ -544,31 +534,13 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
         # Simulamos que registramos un lote de 10 KG
         # Esto debería descontar 10 KG de 'Tela Premium' (Mímesis: Input=Output) y sumar 10 KG al Stock.
-        # Wait, self.producto is both input and output in the view's simplified logic.
-        # Stock start: 100.
-        # Consume 10 (Input) -> Stock 90.
-        # Produce 10 (Output) -> Stock 100.
-        # Net change 0 if input==output in same bodega.
-        # Let's use a different product for Input to be clear.
 
         hilo_crudo = Producto.objects.create(
             codigo="HILO001", descripcion="Hilo Crudo", tipo="hilo", unidad_medida="kg", precio_base=5.00
         )
         StockBodega.objects.create(bodega=self.bodega, producto=hilo_crudo, cantidad=Decimal("100.00"))
 
-        # Update Order to use Hilo Crudo as "Producto" (Target)??
-        # The logic in RegistrarLoteProduccionView says:
-        # producto_a_consumir = orden.producto (Input)
-        # producto_final = orden.producto (Output)
-        # So it assumes transformation of same SKU (e.g. dyeing) or just counting.
-        # Let's stick to the existing logic: It consumes and produces the SAME product ID.
-        # So Stock: 100 -> Consume 10 -> 90 -> Produce 10 -> 100.
-        # Detailed Check:
-        # Move 1: CONSUMO 10. Origin: Bodega.
-        # Move 2: PRODUCCION 10. Dest: Bodega.
-        # Lote Created.
-
-        self.client.force_authenticate(user=self.jefe_area)  # Using Jefe Area who has permissions
+        self.client.force_authenticate(user=self.jefe_area)  # Usa el Jefe de Área, que tiene permisos
 
         url_create = reverse("registrar-lote", args=[orden.id])
         data_create = {
@@ -584,7 +556,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response_create.status_code, status.HTTP_201_CREATED)
         lote_id = response_create.data["id"]
 
-        # Verify Lote exists
+        # Verifica que el lote exista
         self.assertTrue(LoteProduccion.objects.filter(id=lote_id).exists())
 
         # B. Ejecutar Rechazo
@@ -595,7 +567,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response_rechazo.status_code, status.HTTP_200_OK)
 
         # C. Verificaciones
-        # 1. Lote deleted
+        # 1. Lote eliminado
         self.assertFalse(LoteProduccion.objects.filter(id=lote_id).exists())
 
         # 2. Movimientos de Reversión
@@ -610,11 +582,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertTrue(movs_ajuste.exists())
         self.assertTrue(movs_devolucion.exists())
 
-        # Check quantities
+        # Verifica las cantidades
         self.assertEqual(movs_ajuste.first().cantidad, Decimal("10.00"))
         self.assertEqual(movs_devolucion.first().cantidad, Decimal("10.00"))
 
-        # Stock should be back to initial (net effect of create+reject = 0)
+        # El stock vuelve al inicial (crear + rechazar = efecto neto 0)
         # Initial 100.
         stock_final = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         self.assertEqual(stock_final.cantidad, Decimal("100.00"))
@@ -623,7 +595,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Prueba que el endpoint de KPIs retorne datos coherentes."""
         self.client.force_authenticate(user=self.jefe_area)
 
-        # Create a dummy lote manually to populate stats
+        # Lote ficticio para poblar las estadísticas
         LoteProduccion.objects.create(
             codigo_lote="KPI-TEST",
             peso_neto_producido=Decimal("50.00"),
@@ -676,14 +648,12 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             "turno": "T1",
         }
 
-        # Test Insumo Consumption Logic (which is in View)
         response = self.client.post(url_create, data_create, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Insumo consumption from registrar-lote was removed in Fase 3 refactor — skipped.
-        # stock_insumo check removed: logic no longer runs in RegistroLoteService
+        # El consumo de insumos ya no corre en registrar-lote (Fase 3).
 
-        # 2. Test ZPL Generation
+        # 2. Generación de ZPL
         lote_id = response.data["id"]
         url_zpl = f"/api/lotes-produccion/{lote_id}/generate_zpl/"
         response_zpl = self.client.get(url_zpl)
@@ -764,7 +734,6 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response_lote = self.client.post(url_lote, data_lote, format="json")
         self.assertEqual(response_lote.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_lote.data["peso_neto_producido"], "25.500")
-        # Changed from self.jefe_planta.id to self.user_operario.id
         self.assertEqual(response_lote.data["operario"], self.user_operario.id)
 
     def test_registro_lote_dado_peso_bruto_tara_y_metros_cuando_registra_entonces_los_guarda(self):
@@ -862,7 +831,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Vendedor 1 solo ve 1 pedido
         self.client.force_authenticate(user=self.vendedor)
         response = self.client.get(url)
-        # filtered results might be in a list directly if not paginated or under 'results'
+        # La lista puede venir sin paginar o bajo 'results'
         res_data = (
             response.data.get("results")
             if isinstance(response.data, dict) and "results" in response.data
@@ -1207,11 +1176,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # DRF pagination returns `results`
+        # La paginación de DRF devuelve `results`
         results = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
         self.assertTrue(len(results) > 0)
 
-        # Verify the structure of the serialized data
         h_data = next((h for h in results if h["id"] == historial.id), None)
         self.assertIsNotNone(h_data)
         # total_peso es DecimalField(decimal_places=3) -> 3 decimales

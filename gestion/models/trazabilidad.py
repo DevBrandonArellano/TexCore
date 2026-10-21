@@ -59,7 +59,7 @@ class MateriaPrimaLote(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
 
 class ConsumoMateriaPrima(models.Model):
-    """Through-table: LoteProduccion <-> MateriaPrimaLote (inmutable post-registro)"""
+    """Tabla intermedia: LoteProduccion <-> MateriaPrimaLote (inmutable tras el registro)"""
 
     lote_produccion = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, related_name="consumos_materia_prima")
     materia_prima_lote = models.ForeignKey(MateriaPrimaLote, on_delete=models.PROTECT, related_name="consumos")

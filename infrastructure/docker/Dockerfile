@@ -1,31 +1,31 @@
-# Use an official Python runtime as a parent image
+# Usa una imagen oficial de Python como imagen base
 FROM python:3.12-slim
 
-# Set environment variables to make Python run better inside Docker
+# Define variables de entorno para que Python funcione mejor dentro de Docker
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set the working directory in the container
+# Define el directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Install system dependencies required for mssql-django
-# First, add Microsoft's official repository for the ODBC driver
+# Instala las dependencias del sistema necesarias para mssql-django
+# Primero, añade el repositorio oficial de Microsoft para el driver ODBC
 RUN apt-get update && apt-get install -y curl apt-transport-https gnupg
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg
 RUN curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list
 
-# Install the ODBC driver itself and related tools
-# The 'ACCEPT_EULA' is required for unattended installation
+# Instala el driver ODBC y las herramientas relacionadas
+# 'ACCEPT_EULA' es obligatorio para la instalación desatendida
 RUN apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18
-# Install the unixodbc developer package, which provides headers for compiling mssql-django
+# Instala el paquete de desarrollo unixodbc, que aporta las cabeceras para compilar mssql-django
 RUN apt-get install -y unixodbc-dev
 
-# Copy the requirements file into the container to leverage Docker layer caching
+# Copia el archivo de requisitos para aprovechar la caché de capas de Docker
 COPY requirements.txt .
 
-# Install Python dependencies
+# Instala las dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entrypoint script and make it executable
+# Copia el script de entrada y lo hace ejecutable
 COPY ./infrastructure/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

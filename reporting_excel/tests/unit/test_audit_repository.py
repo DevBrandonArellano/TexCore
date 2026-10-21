@@ -17,7 +17,7 @@ from src.database.models import ReportAuditLog
 from src.database.repository import AuditRepository, IAuditRepository, build_report_record
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Auxiliares
 # ---------------------------------------------------------------------------
 
 

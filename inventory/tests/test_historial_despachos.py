@@ -113,7 +113,7 @@ class HistorialDespachoUnitTests(TestCase):
         response = self.client.get("/api/inventory/historial-despachos/")
         self.assertEqual(response.status_code, 200)
 
-        # Handle paginated or non-paginated response
+        # Maneja respuestas paginadas o no paginadas
         results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
 
         self.assertEqual(len(results), 2)

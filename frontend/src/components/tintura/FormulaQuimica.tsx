@@ -233,7 +233,7 @@ export function FormulaQuimica({
     name: "fases"
   });
 
-  // Watcher for reactive calculations
+  // Observador (watch) para cálculos reactivos
   const fasesWatcher = useWatch({ control: form.control, name: "fases" });
 
   const abrirEditar = (formula: FormulaColor) => {
@@ -632,7 +632,7 @@ export function FormulaQuimica({
           </div>
         </div>
 
-        {/* CONTROLES / FOOTER STICKY */}
+        {/* CONTROLES / PIE FIJO */}
         <div className="flex justify-end gap-3 pt-3 pb-2 border-t bg-background mt-auto shrink-0">
           <Button type="button" variant="outline" onClick={() => setVista('lista')}>Cancelar</Button>
           <Button type="submit" disabled={guardando} className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[150px]">

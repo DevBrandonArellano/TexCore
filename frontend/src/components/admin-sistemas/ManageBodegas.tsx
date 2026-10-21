@@ -59,7 +59,7 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
   }
 
-  // Filtrar usuarios based on selected sede
+  // Filtra usuarios según la sede seleccionada
   const availableUsers = useMemo(() => {
     if (!formData.sede) return [];
     const sedeId = parseInt(formData.sede, 10);

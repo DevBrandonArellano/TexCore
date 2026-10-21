@@ -149,7 +149,7 @@ La tesis no promete mTLS ni políticas por dispositivo, así que no se contrasta
 | S1.6 | Rate limiting en Nginx (login: 5r/m, api: 100r/s) | `nginx/nginx.conf` | ✅ |
 | S1.7 | X-Forwarded-For validado contra redes de confianza | `gestion/middleware.py` | ✅ |
 | S1.8 | CORS restrictivo en reporting_excel | `reporting_excel/src/main.py` | ✅ |
-| S1.9 | JWT Blacklist — tokens revocados al hacer logout | `TexCore/settings.py`, `gestion/custom_jwt_views.py` | ✅ |
+| S1.9 | JWT Blacklist — tokens revocados al hacer logout | `TexCore/settings.py`, `gestion/views/custom_jwt_views.py` | ✅ |
 | S1.10 | Archivo de test renombrado (nombre incorrecto) | `InventoryDashboard.reportes.test.tsx` | ✅ |
 
 ### Cambios técnicos detallados del Sprint 1
@@ -182,7 +182,7 @@ La tesis no promete mTLS ni políticas por dispositivo, así que no se contrasta
 - Cleanup con `_local.__dict__.pop()` en bloque `finally` — garantiza limpieza incluso con excepciones
 - Añadido `logger = logging.getLogger(__name__)`
 
-**`gestion/custom_jwt_views.py`** — 2 cambios:
+**`gestion/views/custom_jwt_views.py`** — 2 cambios:
 - Importados `RefreshToken`, `TokenError` de simplejwt
 - `LogoutView.post()` ahora llama `token.blacklist()` antes de borrar la cookie — tokens revocados son inválidos inmediatamente en el servidor
 
@@ -1745,7 +1745,7 @@ operations = [
 | S1.6  | Rate limiting: login(5r/m), refresh(10r/m), api(100r/s) | `nginx/nginx.conf`                                                | ✅ Implementado          |
 | S1.7  | X-Forwarded-For validado contra redes Docker de confianza| `gestion/middleware.py`                                           | ✅ Implementado          |
 | S1.8  | CORS restrictivo — solo orígenes internos, solo GET      | `reporting_excel/src/main.py`                                     | ✅ Implementado          |
-| S1.9  | JWT Blacklist — logout revoca token inmediatamente       | `TexCore/settings.py`, `gestion/custom_jwt_views.py`              | ✅ Implementado          |
+| S1.9  | JWT Blacklist — logout revoca token inmediatamente       | `TexCore/settings.py`, `gestion/views/custom_jwt_views.py`              | ✅ Implementado          |
 | S1.10 | Archivo de test renombrado a nombre correcto             | `InventoryDashboard.reportes.test.tsx`                            | ✅ Implementado          |
 
 > ⚠️ **Acción requerida post-Sprint 1:** ejecutar `python manage.py migrate` para aplicar tablas de JWT Blacklist (`rest_framework_simplejwt.token_blacklist`).

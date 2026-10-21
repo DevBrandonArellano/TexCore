@@ -33,7 +33,7 @@ function toLocalDatetimeInput(d: Date): string {
         + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Schema for packaging validation
+// Esquema para la validación de empaquetado
 /** Ventana horaria sugerida para un lote nuevo: la última hora hasta ahora. */
 function horarioPorDefecto() {
     const ahora = Date.now();
@@ -47,7 +47,7 @@ const SIN_ORDENES: OrdenProduccion[] = [];
 
 const packagingSchema = z.object({
     orden_produccion: z.string().min(1, "Seleccione una orden"),
-    maquina: z.string().optional(), // No longer strictly required from user
+    maquina: z.string().optional(), // Ya no es obligatorio que lo ingrese el usuario
     codigo_lote: z.string().min(3, "Código de lote requerido"),
     presentacion: z.string().min(1, "Presentación requerida"),
     peso_bruto: z.coerce.number().min(0.01, "Peso bruto debe ser mayor a 0"),
@@ -126,7 +126,7 @@ export function EmpaquetadoDashboard() {
             try {
                 window.localStorage.setItem('texcore_preferred_printer', mode);
             } catch {
-                /* ignore storage errors in test env */
+                /* ignora errores de almacenamiento en el entorno de pruebas */
             }
         }
         toast.info(`Modo de impresión cambiado a: ${mode === 'zebra' ? 'Zebra ZPL Nativo' : mode === 'pdf' ? 'PDF Universal' : 'Automático'}`);
@@ -140,7 +140,7 @@ export function EmpaquetadoDashboard() {
         defaultValues: {
             orden_produccion: "",
             maquina: "",
-            codigo_lote: "", // Will be suggested by backend
+            codigo_lote: "", // Lo sugerirá el backend
             presentacion: "Caja",
             peso_bruto: 0,
             tara: 0,
@@ -152,7 +152,7 @@ export function EmpaquetadoDashboard() {
         }
     });
 
-    // Watch presentation to auto-suggest tare
+    // Observa la presentación para sugerir la tara automáticamente
     const [presentationWatch, pesoBruto, tara] = useWatch({
         control: form.control,
         name: ["presentacion", "peso_bruto", "tara"],
@@ -160,9 +160,9 @@ export function EmpaquetadoDashboard() {
 
     useEffect(() => {
         if (presentationWatch === 'Caja') {
-            form.setValue('tara', 0.5); // Example default tare for Box
+            form.setValue('tara', 0.5); // Tara de ejemplo por defecto para caja
         } else if (presentationWatch === 'Funda') {
-            form.setValue('tara', 0.1); // Example default for Bag
+            form.setValue('tara', 0.1); // Tara de ejemplo por defecto para bolsa
         } else if (presentationWatch === 'Cono') {
             form.setValue('tara', 0.05);
         }
@@ -176,7 +176,7 @@ export function EmpaquetadoDashboard() {
                 return;
             }
 
-            // Request port
+            // Solicita el puerto
             const selectedPort = await (navigator as NavegadorConSerial).serial.requestPort();
             await selectedPort.open({ baudRate: 9600 }); // Configuración común de balanzas
 
@@ -210,7 +210,7 @@ export function EmpaquetadoDashboard() {
                     // Supongamos que la balanza envía datos terminados en \r o \n
                     if (buffer.includes('\n') || buffer.includes('\r')) {
                         const lines = buffer.split(/\r?\n/);
-                        buffer = lines.pop() || ""; // keep incomplete part
+                        buffer = lines.pop() || ""; // conserva la parte incompleta
                         
                         for (const line of lines) {
                             const cleanLine = line.trim();
@@ -245,7 +245,7 @@ export function EmpaquetadoDashboard() {
 
         setIsSubmitting(true);
         try {
-            // Calculate Net Weight for display/check (Backend validates too)
+            // Peso neto para mostrar/verificar (el backend también valida)
             const peso_neto = Number((data.peso_bruto - data.tara).toFixed(2));
 
             const maquinaId = selectedOrden.maquina_asignada != null
@@ -254,7 +254,7 @@ export function EmpaquetadoDashboard() {
 
             const payload = {
                 ...data,
-                // Inherit machine from order; omit key when unassigned so backend skips lookup
+                // Hereda la máquina de la orden; sin asignar se omite la clave
                 ...(maquinaId !== undefined ? { maquina: maquinaId } : {}),
                 peso_neto_producido: peso_neto,
                 hora_inicio: new Date(data.hora_inicio).toISOString(),
@@ -265,10 +265,10 @@ export function EmpaquetadoDashboard() {
 
             toast.success(`Lote ${res.data.codigo_lote} registrado correctamente. Peso Neto: ${peso_neto}kg`);
 
-            // Auto-trigger Label Print?
+            // ¿Disparar la impresión de la etiqueta automáticamente?
             handlePrintLabel(res.data.id);
 
-            // Reset and refresh (keep connection and specific states)
+            // Reinicia y refresca (conserva conexión y estados específicos)
             form.reset({
                 orden_produccion: data.orden_produccion, // Mantener la misma orden seleccionada ayuda a la rapidez
                 maquina: data.maquina, // Mantener máquina
@@ -276,7 +276,7 @@ export function EmpaquetadoDashboard() {
                 presentacion: data.presentacion,
                 peso_bruto: 0, // Reset pesos
                 cantidad_metros: undefined,
-                tara: data.tara, // Maintain tare assuming same packaging
+                tara: data.tara, // Mantiene la tara asumiendo el mismo empaque
                 unidades_empaque: data.unidades_empaque,
                 turno: data.turno,
                 ...horarioPorDefecto(),
@@ -356,7 +356,7 @@ export function EmpaquetadoDashboard() {
                 </div>
             </div>
 
-            {/* Operator KPIs Section */}
+            {/* Sección de KPIs del operario */}
             <div className="grid gap-4 md:grid-cols-3">
                 <Card className="bg-linear-to-br from-blue-50/50 to-white border-blue-100">
                     <CardContent className="p-4 flex items-center justify-between">
@@ -395,7 +395,7 @@ export function EmpaquetadoDashboard() {
 
 
             <div className="grid gap-6 md:grid-cols-2">
-                {/* Registration Form */}
+                {/* Formulario de registro */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Registrar Nuevo Bulto/Caja</CardTitle>
@@ -416,7 +416,7 @@ export function EmpaquetadoDashboard() {
                                                     field.onChange(val);
                                                     const ord = ordenes.find(o => o.id.toString() === val);
                                                     setSelectedOrden(ord || null);
-                                                    // Leave empty so backend generates the correct sequential sequence
+                                                    // Déjalo vacío para que el backend genere la secuencia correcta
                                                     form.setValue('codigo_lote', "");
                                                 }}
                                                 defaultValue={field.value}
@@ -606,7 +606,7 @@ export function EmpaquetadoDashboard() {
                                     />
                                 )}
 
-                                {/* Calculated Net Weight Display */}
+                                {/* Visualización del peso neto calculado */}
                                 <div className="p-6 bg-linear-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
                                     <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Peso Neto Calculado</span>
                                     <div className="flex items-baseline space-x-2">
@@ -649,7 +649,7 @@ export function EmpaquetadoDashboard() {
                     </CardContent>
                 </Card>
 
-                {/* Recent List */}
+                {/* Lista de recientes */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Historial Reciente</CardTitle>

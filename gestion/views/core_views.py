@@ -237,7 +237,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = CustomUser.objects.select_related("sede", "area").prefetch_related("groups", "superior").all()
 
-        # Security: Jefe de Área only sees their area members by default
+        # Seguridad: el Jefe de Área solo ve los miembros de su área por defecto
         if user.groups.filter(name="jefe_area").exists() and not user.is_superuser:
             if hasattr(user, "area") and user.area:
                 queryset = queryset.filter(area=user.area)

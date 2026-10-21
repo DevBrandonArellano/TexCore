@@ -2,13 +2,13 @@
 # Sin driver ODBC: el servicio valida lotes por la Internal API de Django, no por la base.
 FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
 
-# Set environment variables
+# Define variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copy requirements and build wheels
+# Copia los requisitos y compila los wheels
 COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
@@ -16,34 +16,34 @@ RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 # --- Stage 2: Final production image ---
 FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
 
-# Set environment variables
+# Define variables de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Create a non-root user and set the working directory
+# Crea un usuario sin privilegios de root y define el directorio de trabajo
 RUN useradd --create-home appuser && mkdir -p /data
 WORKDIR /home/appuser/app
 
-# Copy wheel files from the builder stage
+# Copia los wheels desde la etapa de compilación
 COPY --from=builder /app/wheels /wheels
 
-# Copy the application code
+# Copia el código de la aplicación
 COPY . .
 
-# Set ownership
+# Asigna la propiedad
 RUN chown -R appuser:appuser /home/appuser/app /wheels /data
 
-# Switch to the non-root user
+# Cambia al usuario sin privilegios de root
 USER appuser
 
 
-# Install dependencies from wheels
+# Instala las dependencias desde los wheels
 RUN pip install --no-cache --user /wheels/*
 
-# Add the user's local bin directory to the PATH
+# Añade el directorio bin local del usuario al PATH
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 
-# Expose the port
+# Expone el puerto
 EXPOSE 8000
 
 # Salud: /health responde 503 si la Internal API de Django no contesta; el
@@ -51,5 +51,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --start-interval=5s --retries=3 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
 
-# Run the application
+# Ejecuta la aplicación
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

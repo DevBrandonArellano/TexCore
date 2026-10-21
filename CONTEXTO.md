@@ -102,7 +102,7 @@ Corregidos los 3 P0 confirmados + el bug raíz de colas de facturas. Tests escri
 docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_seguridad_p0 gestion.tests.test_descarga_quimicos_stock_p0 -v 2
 
 # Regresión de suites relacionadas
-docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_reversion gestion.tests.test_descarga_quimicos_tdd gestion.tests_integrados
+docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_reversion gestion.tests.test_descarga_quimicos_tdd gestion.tests.tests_integrados
 ```
 
 ### Decisiones de diseño registradas
@@ -150,7 +150,7 @@ docker exec texcore-backend-1 python manage.py migrate gestion
 docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_seguridad_p0 gestion.tests.test_descarga_quimicos_stock_p0 gestion.tests.test_anticipos_pagos_parciales_p1 -v 2
 
 # Regresión
-docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_reversion gestion.tests.test_descarga_quimicos_tdd gestion.tests_integrados
+docker exec texcore-backend-1 python manage.py test gestion.tests.test_pago_reversion gestion.tests.test_descarga_quimicos_tdd gestion.tests.tests_integrados
 ```
 
 ### Pendiente frontend (Sprint 2b — tras validar backend)

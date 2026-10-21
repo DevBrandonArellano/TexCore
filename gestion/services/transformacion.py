@@ -106,7 +106,7 @@ class TransformacionService:
         )
         return transformacion
 
-    # ----------------------------------------------------------------- helpers
+    # ----------------------------------------------------------------- auxiliares
 
     @staticmethod
     def _derivar_producto_entrada(orden, ultima, producto_entrada_ref):

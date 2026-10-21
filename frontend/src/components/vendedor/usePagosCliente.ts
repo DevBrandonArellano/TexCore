@@ -45,7 +45,7 @@ export function usePagosCliente(
       setIsPagoDialogOpen(false);
       setPagoForm(EMPTY_PAGO_FORM);
 
-      // Refresh selected client data to show new balance/payment
+      // Actualiza los datos del cliente seleccionado para mostrar el nuevo saldo/pago
       const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
       setSelectedCliente(updatedClient.data);
       fetchData();
@@ -80,7 +80,7 @@ export function usePagosCliente(
       setPagoRevertir(null);
       setPagoReversionJustificacion('');
 
-      // Refresh selected client data
+      // Actualiza los datos del cliente seleccionado
       if (selectedCliente) {
         const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
         setSelectedCliente(updatedClient.data);

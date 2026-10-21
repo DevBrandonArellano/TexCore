@@ -66,3 +66,11 @@ _rsa_env_snippet.txt
 infrastructure/gitlab/certs/
 infrastructure/gitlab/.env
 infrastructure/gitlab/secretos/
+
+# graphify: archivos temporales de la corrida
+graphify-out/.graphify_ast.json
+graphify-out/.graphify_chunk_*.json
+graphify-out/.graphify_detect.json
+graphify-out/.graphify_incremental.json
+graphify-out/.graphify_old.json
+graphify-out/.graphify_uncached*.txt

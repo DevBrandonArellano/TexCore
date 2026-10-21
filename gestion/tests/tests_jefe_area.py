@@ -46,7 +46,7 @@ class JefeAreaLogicTest(TestCase):
             nombre="M2", capacidad_maxima=500, eficiencia_ideal=0.8, area=self.area_empaquetado
         )
 
-        # Product & Production
+        # Producto y producción
         self.producto = Producto.objects.create(codigo="P1", descripcion="Tela RT", tipo="tela", unidad_medida="kg")
         self.op = OrdenProduccion.objects.create(
             codigo="OP1",
@@ -83,12 +83,12 @@ class JefeAreaLogicTest(TestCase):
     def test_jefe_area_dado_su_area_cuando_lista_maquinas_y_usuarios_entonces_solo_ve_los_suyos(self):
         self.client.force_authenticate(user=self.jefe_tintoreria)
 
-        # Test machines list
+        # Prueba de la lista de máquinas
         response = self.client.get("/maquinas/")
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["nombre"], "M1")
 
-        # Test users list
+        # Prueba de la lista de usuarios
         response = self.client.get("/users/")
         # Jefe + Operario = 2
         users_list = (
@@ -109,7 +109,7 @@ class JefeAreaLogicTest(TestCase):
         # 250 / 1000 = 25%
         self.assertEqual(float(data["maquinas"][0]["eficiencia"]), 25.0)
 
-        # Operario stats
+        # Estadísticas del operario
         op_data = data["operarios"][0]
         self.assertEqual(op_data["total_lotes"], 2)
         self.assertEqual(float(op_data["produccion_total_kg"]), 250.0)

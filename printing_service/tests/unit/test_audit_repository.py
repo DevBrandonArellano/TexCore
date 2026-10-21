@@ -15,7 +15,7 @@ from src.database.models import PrintAuditLog
 from src.database.repository import AuditRepository, IAuditRepository, build_print_record
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Auxiliares
 # ---------------------------------------------------------------------------
 
 

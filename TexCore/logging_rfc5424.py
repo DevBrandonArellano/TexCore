@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 # Constantes de protocolo
 # ---------------------------------------------------------------------------
 
-# Private Enterprise Number placeholder (IANA not registered — uso interno)
+# Marcador de Private Enterprise Number (IANA no registrado — uso interno)
 SD_ID = "texcore@32473"
 
 # Facility 16 = local0 → backend Django principal
@@ -76,7 +76,7 @@ class RFC5424Formatter(logging.Formatter):
         self._facility = facility
         self._app_name = (app_name or os.environ.get("APP_NAME") or "texcore-backend")[
             :48
-        ]  # RFC 5424 §6.2.5 — max 48 chars
+        ]  # RFC 5424 §6.2.5 — máx. 48 caracteres
 
     # ------------------------------------------------------------------
     # Interfaz pública

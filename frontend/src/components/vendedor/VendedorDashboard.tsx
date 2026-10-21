@@ -196,7 +196,7 @@ export function VendedorDashboard() {
         </div>
       </div>
 
-      {/* Summary Stats */}
+      {/* Estadísticas de resumen */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-primary/5 border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

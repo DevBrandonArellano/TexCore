@@ -79,14 +79,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        # On updates, 'groups' might not be in the payload. We get them from the instance.
-        # On creates, 'groups' will be in data or None.
+        # En updates 'groups' puede faltar en el payload: se toma de la instancia
         groups = data.get("groups", None)
         if groups is None and self.instance:
             groups = self.instance.groups.all()
 
         sede = data.get("sede", None)
-        # If sede is not being updated, get it from the instance
         if sede is None and self.instance:
             sede = self.instance.sede
 
@@ -105,15 +103,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
                 {"area": f"El área '{area.nombre}' no pertenece a la sede '{sede.nombre}'."}
             )
 
-        # If there are no groups assigned yet (e.g., during initial creation steps),
-        # we can't validate yet, so we allow it to proceed.
+        # Sin grupos asignados aún (creación por pasos) no se puede validar
         if not groups:
             return data
 
-        # Check if any of the assigned groups is 'admin_sistemas'
         is_admin_sistemas = any(group.name == "admin_sistemas" for group in groups)
 
-        # If the user is not an 'admin_sistemas' and no 'sede' is provided, raise an error.
         if not is_admin_sistemas and not sede:
             raise serializers.ValidationError(
                 {"sede": "La sede es requerida para todos los roles excepto para el Administrador de Sistemas."}

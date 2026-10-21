@@ -16,7 +16,7 @@ from decimal import Decimal
 from django.db.models import Sum
 
 from gestion.models import DescargaQuimicoOP, Producto
-from gestion.services_formula import calcular_dosificacion_de_orden
+from gestion.services.services_formula import calcular_dosificacion_de_orden
 
 from .reglas import CERO, UNIDAD_MRP, pendiente_de_orden
 

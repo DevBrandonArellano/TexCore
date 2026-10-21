@@ -229,7 +229,7 @@ class DespachoReversionService:
                 # Devolución al stock (3 decimales — precisión estándar del sistema,
                 # StockBodega.cantidad es DECIMAL(12,3) pero cantidad_calculada_kg es
                 # DECIMAL(12,6); sin este quantize, full_clean() revienta con
-                # "Ensure that there are no more than 3 decimal places" y la
+                # el error de Django por exceder 3 decimales y la
                 # reversión completa del despacho fallaba con 500, ver descarga_quimicos.py).
                 cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal("0.001"))
                 stock.cantidad += cantidad_revertir

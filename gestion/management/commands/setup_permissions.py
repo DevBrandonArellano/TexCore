@@ -33,7 +33,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Setting up groups and permissions...")
 
-        # Define roles and their associated permissions for the current models
         permissions_map = {
             "operario": {
                 "models": [LoteProduccion, TransformacionProducto, MovimientoInventario],
@@ -157,7 +156,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.WARNING(f"Group {role_name} already exists."))
 
-            # Clear existing permissions for the group to avoid duplicates on re-run
+            # Limpia permisos previos para no duplicar al re-ejecutar
             group.permissions.clear()
 
             for model_class in config["models"]:

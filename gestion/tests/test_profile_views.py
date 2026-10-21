@@ -1,5 +1,5 @@
 """
-Pruebas de gestion/profile_views.py — UserProfileView y get_user_role.
+Pruebas de gestion/views/profile_views.py — UserProfileView y get_user_role.
 
 get_user_role resuelve el rol principal de un usuario por prioridad de grupo
 (superuser siempre es admin_sistemas; luego el primer grupo que coincida en
@@ -16,8 +16,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from gestion.profile_views import get_user_role
 from gestion.tests.factories import CustomUserFactory
+from gestion.views.profile_views import get_user_role
 
 
 class GetUserRoleTestCase(TestCase):

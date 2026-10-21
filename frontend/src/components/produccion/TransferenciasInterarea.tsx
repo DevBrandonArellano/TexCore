@@ -118,7 +118,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
 
     try {
 
-      // Fetch the orders to get their bodega details
+      // Trae las órdenes para obtener su bodega
       const [ordenOrigenRes, ordenDestinoRes] = await Promise.all([
         apiClient.get(`/ordenes-produccion/${ordenOrigenId}/`),
         apiClient.get(`/ordenes-produccion/${ordenDestinoId}/`)

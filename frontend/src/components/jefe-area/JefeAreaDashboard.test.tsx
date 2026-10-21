@@ -17,7 +17,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, LineaProduccion } from '../../lib/types';
 
-// Mock axios / apiClient — JefeAreaDashboard usa apiClient directamente
+// Mock de axios / apiClient — JefeAreaDashboard usa apiClient directamente
 // y ManageMaquinas usa useQuery (TanStack Query) sobre apiClient
 const mockGet = vi.fn();
 const mockPost = vi.fn();

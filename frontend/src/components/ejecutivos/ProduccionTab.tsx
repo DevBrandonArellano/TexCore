@@ -135,7 +135,7 @@ function ProduccionTabImpl({
                 </SelectContent>
               </Select>
 
-              {/* Toggle Diario / Semanal / Mensual */}
+              {/* Alternar Diario / Semanal / Mensual */}
               <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-lg p-0.5 bg-slate-100/50 dark:bg-slate-900/50 h-8">
                 {(['diario', 'semanal', 'mensual'] as const).map(opcion => (
                   <button

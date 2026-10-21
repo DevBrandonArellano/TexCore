@@ -89,7 +89,7 @@ class DespachReversionTestCase(TransactionTestCase):
         self.producto_final = Producto.objects.create(
             codigo="TELA-AZUL-001",
             descripcion="Tela Azul",
-            tipo="tela",  # 'producto_final' is not in choices, 'tela' is.
+            tipo="tela",  # 'producto_final' no está en las opciones, 'tela' sí.
             stock_minimo=Decimal("0.00"),
             unidad_medida="kg",
         )

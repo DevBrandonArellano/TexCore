@@ -135,7 +135,7 @@ class PagoClienteViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
         # El pago pertenece a la sede de su cliente (PagoCliente.sede puede venir vacía).
         queryset = filtrar_por_sede(queryset, user, "cliente__sede")
 
-        # Filtering: Salesmen only see payments of their assigned clients
+        # Filtrado: los vendedores solo ven los pagos de sus clientes asignados
         if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
             queryset = queryset.filter(cliente__vendedor_asignado=user)
 
@@ -215,7 +215,7 @@ class PagoClienteViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
 
                 resultado = PagoReversionService.revertir_pago(pago, request.user, justificacion)
 
-                # Trigger Reconciliation for the client after reversal
+                # Reconcilia al cliente tras la reversión
                 PaymentReconciler.reconcile_client_orders(pago.cliente)
 
             return Response(
@@ -296,7 +296,7 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                 raise ValidationError({"estado": f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."})
             queryset = queryset.filter(estado__in=estados_solicitados)
 
-        # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
+        # Solo en list: omite pedidos antiguos para no sobrecargar memoria
         if self.action == "list":
             limit = self.request.query_params.get("limit", 100)
             try:
@@ -345,7 +345,7 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             "detalles": items,
         }
 
-        # Call microservice
+        # Llama al microservicio
         pdf_content = PrintingService.generate_nota_venta_pdf(data)
 
         if pdf_content:
@@ -432,12 +432,7 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                 extra={"sd": {"entity": "PedidoVenta", "id": serializer.instance.id, "user": user.username}},
             )
 
-            # Trigger Reconciliation
-            # Note: serializer.save() returns the instance, but
-            # perform_create doesn't return anything by default in DRF
-            # ViewSet logic unless overridden in standard create()
-            # However, serializer.instance is populated.
-
+            # Reconcilia con la instancia ya guardada (serializer.instance)
             if serializer.instance:
                 PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
         except Exception as e:
