@@ -68,6 +68,70 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 26 de Octubre de 2026 — Topes de memoria del CI más bajos (sin commitear)
+
+Ajuste de los topes de memoria de los jobs, para que la corrida de pipeline no sature el equipo:
+
+| Dónde | Antes | Después |
+|---|---|---|
+| SQL Server de `test:backend` (`MSSQL_MEMORY_LIMIT_MB`, `.gitlab-ci.yml` y `scripts/run_backend_tests.sh`) | 2048 MB | 1024 MB |
+| Heap de Node en `test:frontend` (`NODE_OPTIONS`) | 2048 MB | 1536 MB |
+| Procesos de Vitest en `test:frontend` (`--maxWorkers`) | 4 | 2 |
+
+Validación con los nuevos topes:
+
+| Suite | Resultado | Tiempo (antes) |
+|---|---|---|
+| Frontend (`tsc` + `vitest run --coverage --maxWorkers=2`) | `tsc` OK, 1981 pruebas OK | 238 s (80 s con 4 procesos) |
+| Backend (`scripts/run_backend_tests.sh`) | 1944 pruebas OK, cobertura 92.5 % | 204 s (196 s) |
+
+El frontend tarda unos 3 veces más. El backend casi no cambia.
+
+### 26 de Octubre de 2026 — Reducción de memoria de GitLab (sin commitear)
+
+Cambio en `infrastructure/gitlab/docker-compose.gitlab.yml` (`GITLAB_OMNIBUS_CONFIG`), pedido tras la auditoría de recursos:
+
+- `puma['worker_processes']` de 2 a 0 (modo single): se eliminan dos workers de Rails de ~1 GiB cada uno.
+- `sidekiq['concurrency']` de 10 a 5.
+- `gitlab_kas['enable'] = false`: se desactiva el agente de Kubernetes, que no se usa.
+
+Medición con el contenedor recreado (`up -d --wait`):
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Memoria del contenedor (reposo) | 4.0 GiB | 3.17 GiB |
+| Tiempo hasta responder `/users/sign_in` con 200 | — | ~90 s |
+
+Observación: Docker marcó el contenedor como `healthy` a los 17 s, pero la web no respondió hasta ~90 s después. El estado `healthy` no es buena señal de que GitLab esté listo para pipelines; conviene esperar al 200 de `/users/sign_in`.
+
+### 26 de Octubre de 2026 — Validación de la suite de pruebas del frontend (sin commitear)
+
+Corrida de validación pedida por el usuario, con los mismos límites que `test:frontend` del CI (`NODE_OPTIONS=--max-old-space-size=2048`, `--maxWorkers=4`). Sin cambios de código.
+
+| Comprobación | Resultado |
+|---|---|
+| `npx tsc --noEmit` | Sin errores |
+| `npx vitest run --maxWorkers=4` | 138 archivos y 1981 pruebas, todas OK (80 s) |
+
+Los errores `Error: boom` que aparecen en la salida provienen de `ErrorBoundary.test.tsx`: lanzan un error a propósito para probar el componente y no indican fallo.
+
+Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`, sin argumentos):
+
+| Comprobación | Resultado |
+|---|---|
+| `manage.py test gestion inventory internal_api` | 1944 pruebas OK, 0 fallos (196 s) |
+| Cobertura (`.coveragerc`, con ramas) | 92.5 % (umbral 90 %) |
+
+Microservicios, cada uno en un contenedor `python:3.12-bookworm` limpio, como los jobs `test:scanning`, `test:reporting` y `test:printing` del CI:
+
+| Servicio | Pruebas | Cobertura | Umbral |
+|---|---|---|---|
+| `scanning_service` | 66 OK | 94.0 % | 90 % |
+| `reporting_excel` | 76 OK | 98.3 % | 90 % |
+| `printing_service` (sin `weasyprint`, como el CI) | 114 OK | 98.6 % | 95 % |
+
+Con esto queda validada toda la batería: frontend, backend y microservicios.
+
 ### 21 de Octubre de 2026 — Reorganización de archivos, comentarios en español y verificación completa (sin commitear)
 
 Cinco bloques de trabajo, en orden. Ninguno se commiteó.
