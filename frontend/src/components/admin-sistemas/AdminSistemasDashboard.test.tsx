@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que monta el componente / sedes obtenidas sin sede en la url / una sede
+ *   seleccionada / respuestas en formato paginado ({results:[...]}) / datos aún no resueltos.
+ * - Caja blanca (CB): ramas de error — un error al obtener los datos de la sede / un error 403 / un error 401.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -5,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminSistemasDashboard } from './AdminSistemasDashboard';
 import type { Sede, Area, User, Producto, Quimico, Bodega, OrdenProduccion, FormulaColor, Cliente, Proveedor } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -13,37 +20,40 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
+// La ficha de lote (TablaLotesPaginada) lee el rol para decidir sus pestañas.
+vi.mock('../../lib/auth', () => ({ useAuth: () => ({ profile: { role: 'admin_sistemas' } }) }));
+
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 vi.mock('./ManageUsers', () => ({
-  ManageUsers: (props: any) => (
+  ManageUsers: (props: import('react').ComponentProps<typeof import('./ManageUsers').ManageUsers>) => (
     <div data-testid="manage-users-mock">
       <span data-testid="users-count">{props.users.length}</span>
       <span data-testid="users-loading">{String(props.loading)}</span>
       <span data-testid="users-selected-sede">{String(props.selectedSedeId)}</span>
-      <button onClick={() => props.onUserCreate({ username: 'nuevo', first_name: 'Nuevo' })}>crear-usuario</button>
-      <button onClick={() => props.onUserUpdate(20, { first_name: 'Editado' })}>actualizar-usuario</button>
+      <button onClick={() => props.onUserCreate(parcial({ username: 'nuevo', first_name: 'Nuevo' }))}>crear-usuario</button>
+      <button onClick={() => props.onUserUpdate(20, parcial({ first_name: 'Editado' }))}>actualizar-usuario</button>
       <button onClick={() => props.onUserDelete(20)}>eliminar-usuario</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageSedes', () => ({
-  ManageSedes: (props: any) => (
+  ManageSedes: (props: import('react').ComponentProps<typeof import('./ManageSedes').ManageSedes>) => (
     <div data-testid="manage-sedes-mock">
       <span data-testid="sedes-count">{props.sedes.length}</span>
       <span data-testid="sedes-loading">{String(props.sedesLoading)}</span>
@@ -55,85 +65,89 @@ vi.mock('./ManageSedes', () => ({
 }));
 
 vi.mock('./ManageAreas', () => ({
-  ManageAreas: (props: any) => (
+  ManageAreas: (props: import('react').ComponentProps<typeof import('./ManageAreas').ManageAreas>) => (
     <div data-testid="manage-areas-mock">
       <span data-testid="areas-count">{props.areas.length}</span>
       <span data-testid="areas-loading">{String(props.loading)}</span>
-      <button onClick={() => props.onAreaCreate({ nombre: 'Área Nueva' })}>crear-area</button>
-      <button onClick={() => props.onAreaUpdate(10, { nombre: 'Área Editada' })}>actualizar-area</button>
+      <button onClick={() => props.onAreaCreate(parcial({ nombre: 'Área Nueva' }))}>crear-area</button>
+      <button onClick={() => props.onAreaUpdate(10, parcial({ nombre: 'Área Editada' }))}>actualizar-area</button>
       <button onClick={() => props.onAreaDelete(10)}>eliminar-area</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageProductos', () => ({
-  ManageProductos: (props: any) => (
+  ManageProductos: (props: import('react').ComponentProps<typeof import('./ManageProductos').ManageProductos>) => (
     <div data-testid="manage-productos-mock">
       <span data-testid="productos-count">{props.productos.length}</span>
-      <button onClick={() => props.onProductCreate({ codigo: 'P1', descripcion: 'Producto 1', precio_base: '10.5' })}>crear-producto</button>
-      <button onClick={() => props.onProductUpdate(70, { codigo: 'P1', descripcion: 'Producto Editado', precio_base: '15.5' })}>actualizar-producto</button>
+      <button onClick={() => props.onProductCreate(parcial({ codigo: 'P1', descripcion: 'Producto 1', precio_base: 10.5 }))}>crear-producto</button>
+      <button onClick={() => props.onProductUpdate(70, parcial({ codigo: 'P1', descripcion: 'Producto Editado', precio_base: 15.5 }))}>actualizar-producto</button>
       <button onClick={() => props.onProductDelete(70)}>eliminar-producto</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageQuimicos', () => ({
-  ManageQuimicos: (props: any) => (
+  ManageQuimicos: (props: import('react').ComponentProps<typeof import('./ManageQuimicos').ManageQuimicos>) => (
     <div data-testid="manage-quimicos-mock">
       <span data-testid="quimicos-count">{props.quimicos.length}</span>
-      <button onClick={() => props.onChemicalCreate({ codigo: 'Q1', descripcion: 'Quimico 1', precio_base: '5' })}>crear-quimico</button>
-      <button onClick={() => props.onChemicalUpdate(80, { codigo: 'Q1', descripcion: 'Quimico Editado' })}>actualizar-quimico</button>
+      <button onClick={() => props.onChemicalCreate(parcial({ codigo: 'Q1', descripcion: 'Quimico 1', precio_base: 5 }))}>crear-quimico</button>
+      <button onClick={() => props.onChemicalUpdate(80, parcial({ codigo: 'Q1', descripcion: 'Quimico Editado' }))}>actualizar-quimico</button>
       <button onClick={() => props.onChemicalDelete(80)}>eliminar-quimico</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageFormulas', () => ({
-  ManageFormulas: (props: any) => (
+  ManageFormulas: (props: import('react').ComponentProps<typeof import('./ManageFormulas').ManageFormulas>) => (
     <div data-testid="manage-formulas-mock">
       <span data-testid="formulas-count">{props.formulas.length}</span>
-      <button onClick={() => props.onFormulaCreate({ codigo: 'F1', nombre_color: 'Rojo' })}>crear-formula</button>
-      <button onClick={() => props.onFormulaUpdate(50, { codigo: 'F1', nombre_color: 'Rojo Editado' })}>actualizar-formula</button>
+      <button onClick={() => props.onFormulaCreate(parcial({ codigo: 'F1', nombre_color: 'Rojo' }))}>crear-formula</button>
+      <button onClick={() => props.onFormulaUpdate(50, parcial({ codigo: 'F1', nombre_color: 'Rojo Editado' }))}>actualizar-formula</button>
       <button onClick={() => props.onFormulaDelete(50)}>eliminar-formula</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageBodegas', () => ({
-  ManageBodegas: (props: any) => (
+  ManageBodegas: (props: import('react').ComponentProps<typeof import('./ManageBodegas').ManageBodegas>) => (
     <div data-testid="manage-bodegas-mock">
       <span data-testid="bodegas-count">{props.bodegas.length}</span>
-      <button onClick={() => props.onBodegaCreate({ nombre: 'Bodega Nueva' })}>crear-bodega</button>
-      <button onClick={() => props.onBodegaUpdate(30, { nombre: 'Bodega Editada' })}>actualizar-bodega</button>
+      <button onClick={() => props.onBodegaCreate(parcial({ nombre: 'Bodega Nueva' }))}>crear-bodega</button>
+      <button onClick={() => props.onBodegaUpdate(30, parcial({ nombre: 'Bodega Editada' }))}>actualizar-bodega</button>
       <button onClick={() => props.onBodegaDelete(30)}>eliminar-bodega</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageClientes', () => ({
-  ManageClientes: (props: any) => (
+  ManageClientes: (props: import('react').ComponentProps<typeof import('./ManageClientes').ManageClientes>) => (
     <div data-testid="manage-clientes-mock">
       <span data-testid="clientes-count">{props.clientes.length}</span>
-      <button onClick={() => props.onClienteCreate({ nombre_razon_social: 'Cliente Nuevo' })}>crear-cliente</button>
-      <button onClick={() => props.onClienteUpdate(90, { nombre_razon_social: 'Cliente Editado' })}>actualizar-cliente</button>
+      <button onClick={() => props.onClienteCreate(parcial({ nombre_razon_social: 'Cliente Nuevo' }))}>crear-cliente</button>
+      <button onClick={() => props.onClienteUpdate(90, parcial({ nombre_razon_social: 'Cliente Editado' }))}>actualizar-cliente</button>
       <button onClick={() => props.onClienteDelete(90)}>eliminar-cliente</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageProveedores', () => ({
-  ManageProveedores: (props: any) => (
+  ManageProveedores: (props: import('react').ComponentProps<typeof import('./ManageProveedores').ManageProveedores>) => (
     <div data-testid="manage-proveedores-mock">
       <span data-testid="proveedores-count">{props.proveedores.length}</span>
-      <button onClick={() => props.onProveedorCreate({ nombre: 'Proveedor Nuevo' })}>crear-proveedor</button>
-      <button onClick={() => props.onProveedorUpdate(60, { nombre: 'Proveedor Editado' })}>actualizar-proveedor</button>
+      <button onClick={() => props.onProveedorCreate(parcial({ nombre: 'Proveedor Nuevo' }))}>crear-proveedor</button>
+      <button onClick={() => props.onProveedorUpdate(60, parcial({ nombre: 'Proveedor Editado' }))}>actualizar-proveedor</button>
       <button onClick={() => props.onProveedorDelete(60)}>eliminar-proveedor</button>
     </div>
   ),
 }));
 
+vi.mock('./ManageProcesos', () => ({
+  ManageProcesos: () => <div data-testid="manage-procesos-mock" />,
+}));
+
 vi.mock('./InventoryDashboard', () => ({
-  InventoryDashboard: (props: any) => (
+  InventoryDashboard: (props: import('react').ComponentProps<typeof import('./InventoryDashboard').InventoryDashboard>) => (
     <div data-testid="inventory-dashboard-mock">
       <span data-testid="inv-productos">{props.productos.length}</span>
       <span data-testid="inv-bodegas">{props.bodegas.length}</span>
@@ -144,7 +158,7 @@ vi.mock('./InventoryDashboard', () => ({
 }));
 
 vi.mock('../shared/AuditLogViewer', () => ({
-  AuditLogViewer: (props: any) => (
+  AuditLogViewer: (props: import('react').ComponentProps<typeof import('../shared/AuditLogViewer').AuditLogViewer>) => (
     <div data-testid="audit-log-mock">
       <span data-testid="audit-sede">{String(props.sedeId)}</span>
     </div>
@@ -172,13 +186,14 @@ const BODEGA_1: Bodega = { id: 30, nombre: 'Bodega Central', sede: 1 };
 const ORDEN_1: OrdenProduccion = {
   id: 40, codigo: 'OP-1', producto: 70, formula_color: 50, peso_neto_requerido: 100,
   estado: 'pendiente', fecha_creacion: '2026-01-01T00:00:00', fecha_modificacion: '2026-01-01T00:00:00', sede: 1,
+  inventario_descontado: false, prioridad: 'normal',
 };
 const FORMULA_1: FormulaColor = {
   id: 50, codigo: 'F1', nombre_color: 'Rojo Carmesí', tipo_sustrato: 'algodon', version: 1, estado: 'aprobada',
 };
 const CLIENTE_1: Cliente = {
   id: 90, ruc_cedula: '123', nombre_razon_social: 'Cliente Uno', direccion_envio: 'Calle 1',
-  nivel_precio: 'normal', tiene_beneficio: false, saldo_pendiente: 0, limite_credito: 1000, sede: 1,
+  nivel_precio: 'normal', tiene_beneficio: false, saldo_pendiente: 0, limite_credito: 1000, sede: 1, is_active: true,
 };
 const PROVEEDOR_1: Proveedor = { id: 60, nombre: 'Proveedor Uno', sede: 1 };
 const PEDIDO_1 = {
@@ -197,6 +212,7 @@ const BODEGA_3: Bodega = { id: 32, nombre: 'Bodega Fallback', sede: 3 };
 const ORDEN_3: OrdenProduccion = {
   id: 42, codigo: 'OP-3', producto: 70, formula_color: 50, peso_neto_requerido: 50,
   estado: 'pendiente', fecha_creacion: '2026-01-01T00:00:00', fecha_modificacion: '2026-01-01T00:00:00', sede: 3,
+  inventario_descontado: false, prioridad: 'normal',
 };
 
 const LOTE_1 = {
@@ -215,10 +231,12 @@ const ORDENES_MANY: OrdenProduccion[] = Array.from({ length: 25 }, (_, i) => ({
   fecha_creacion: '2026-01-01T00:00:00',
   fecha_modificacion: '2026-01-01T00:00:00',
   sede: 1,
+  inventario_descontado: false,
+  prioridad: 'normal' as const,
 }));
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/sedes/': [SEDE_1, SEDE_2],
     '/groups/': [GROUP_1],
     '/users/': [],
@@ -227,7 +245,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/chemicals/': [],
     '/bodegas/': [],
     '/ordenes-produccion/': [],
-    '/lotes-produccion/': [],
+    '/lotes-produccion/': { count: 0, next: null, previous: null, results: [] },
     '/formula-colors/': [],
     '/pedidos-venta/': [],
     '/clientes/': [],
@@ -302,7 +320,8 @@ describe('AdminSistemasDashboard', () => {
       expect(mockGet).toHaveBeenCalledWith('/chemicals/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/bodegas/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/ordenes-produccion/', expectedParams);
-      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', expectedParams);
+      // Los lotes se piden paginados al abrir la pestaña Producción, no con el resto de la sede.
+      expect(mockGet).not.toHaveBeenCalledWith('/lotes-produccion/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/formula-colors/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/pedidos-venta/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/clientes/', expectedParams);
@@ -348,7 +367,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('navegación entre pestañas', () => {
-    it('dado que carga por defecto entonces muestra la pestaña Resumen con las estadísticas de la sede seleccionada', async () => {
+    it('dado la carga inicial cuando monta entonces muestra la pestaña Resumen con las estadísticas de la sede seleccionada', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
 
@@ -359,7 +378,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('almacenamiento activo').previousSibling).toHaveTextContent('1');
     });
 
-    it('dado clic en la pestaña Producción entonces muestra las órdenes de producción de la sede', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Producción entonces muestra sus órdenes de producción', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -370,7 +389,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('Hilo Poliéster')).toBeInTheDocument();
     });
 
-    it('dado clic en la pestaña Inventario entonces renderiza InventoryDashboard con los productos y bodegas de la sede', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Inventario entonces renderiza InventoryDashboard con sus productos y bodegas', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -383,7 +402,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('inv-sede')).toHaveTextContent('1');
     });
 
-    it('dado clic en refrescar dentro de InventoryDashboard entonces vuelve a pedir los datos de la sede', async () => {
+    it('dado la pestaña Inventario cuando hace clic en refrescar entonces vuelve a pedir los datos de la sede', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -395,7 +414,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/productos/', { params: { sede_id: '1' } }));
     });
 
-    it('dado clic en la pestaña Gestión entonces muestra la subpestaña de Usuarios por defecto', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Gestión entonces muestra la subpestaña Usuarios por defecto', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -404,6 +423,16 @@ describe('AdminSistemasDashboard', () => {
 
       expect(screen.getByTestId('manage-users-mock')).toBeInTheDocument();
       expect(screen.getByTestId('users-count')).toHaveTextContent('1');
+    });
+
+    it('dado clic en la subpestaña Procesos cuando está en Gestión entonces muestra el catálogo de procesos', async () => {
+      mockFullSedeData();
+      renderAt('/admin-sistemas?sede=1');
+      await userEvent.click(await screen.findByRole('tab', { name: 'Gestión' }));
+
+      await userEvent.click(screen.getByRole('tab', { name: /Procesos/ }));
+
+      expect(screen.getByTestId('manage-procesos-mock')).toBeInTheDocument();
     });
 
     it('dado clic en la subpestaña Sedes cuando está en Gestión entonces muestra ManageSedes con la lista completa de sedes', async () => {
@@ -505,7 +534,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('1 Usuarios')).toBeInTheDocument();
     });
 
-    it('dado clic en la pestaña Auditoría entonces muestra AuditLogViewer con la sede seleccionada', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Auditoría entonces muestra AuditLogViewer de esa sede', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -516,7 +545,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('audit-sede')).toHaveTextContent('1');
     });
 
-    it('dado clic en una sede distinta en el sidebar entonces actualiza la sede seleccionada y solicita sus datos', async () => {
+    it('dado otra sede en el sidebar cuando hace clic en ella entonces la selecciona y solicita sus datos', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -719,7 +748,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula eliminada exitosamente');
     });
 
-    it('dado clic en crear químico entonces arma el payload con los valores por defecto del backend', async () => {
+    it('dado un químico nuevo cuando hace clic en crear entonces arma el payload con los valores por defecto del backend', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 81 } });
       renderAt('/admin-sistemas?sede=1');
@@ -736,14 +765,14 @@ describe('AdminSistemasDashboard', () => {
           unidad_medida: 'kg',
           stock_minimo: 0,
           precio_base: 5,
-          presentacion: null,
+          presentacion: '',
           sede: 1,
         }),
       );
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico creado exitosamente');
     });
 
-    it('dado clic en crear producto entonces arma el payload con los valores por defecto del backend', async () => {
+    it('dado un producto nuevo cuando hace clic en crear entonces arma el payload con los valores por defecto del backend', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...PRODUCTO_1, id: 71 } });
       renderAt('/admin-sistemas?sede=1');
@@ -760,16 +789,16 @@ describe('AdminSistemasDashboard', () => {
           unidad_medida: 'kg',
           stock_minimo: 0,
           precio_base: 10.5,
-          presentacion: null,
-          pais_origen: null,
-          calidad: null,
+          presentacion: '',
+          pais_origen: '',
+          calidad: '',
           sede: 1,
         }),
       );
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto creado exitosamente');
     });
 
-    it('dado clic en crear proveedor entonces envía únicamente nombre y sede en el payload', async () => {
+    it('dado un proveedor nuevo cuando hace clic en crear entonces envía únicamente nombre y sede', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...PROVEEDOR_1, id: 61 } });
       renderAt('/admin-sistemas?sede=1');
@@ -800,7 +829,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('manejo de errores en operaciones CRUD', () => {
-    it('dado un error 403 al crear un área entonces muestra un toast indicando falta de permisos', async () => {
+    it('dado un error 403 cuando crea un área entonces muestra un toast de falta de permisos', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce({ response: { status: 403 } });
       renderAt('/admin-sistemas?sede=1');
@@ -812,7 +841,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No tienes permiso para crear el área'));
     });
 
-    it('dado un error 401 al eliminar un usuario entonces muestra un toast de sesión expirada', async () => {
+    it('dado un error 401 cuando elimina un usuario entonces muestra un toast de sesión expirada', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce({ response: { status: 401 } });
@@ -824,7 +853,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Sesión expirada. Inicia sesión de nuevo.'));
     });
 
-    it('dado un error genérico con detalle al actualizar una bodega entonces muestra el mensaje de detalle del backend', async () => {
+    it('dado un error con detalle cuando actualiza una bodega entonces muestra el detalle del backend', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'Error interno del servidor' } } });
       renderAt('/admin-sistemas?sede=1');
@@ -962,7 +991,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('rutas de error (catch) no cubiertas de las operaciones CRUD', () => {
-    it('dado un error al actualizar una sede entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza una sede entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -974,7 +1003,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar la sede'));
     });
 
-    it('dado un error al eliminar una sede entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una sede entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -987,7 +1016,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la sede'));
     });
 
-    it('dado un error al actualizar un área entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un área entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -999,7 +1028,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el área'));
     });
 
-    it('dado un error al eliminar un área entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un área entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1012,7 +1041,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el área'));
     });
 
-    it('dado un error al crear un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un usuario entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1023,7 +1052,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al crear el usuario'));
     });
 
-    it('dado un error al actualizar un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un usuario entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1034,7 +1063,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el usuario'));
     });
 
-    it('dado un error al eliminar un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un usuario entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1046,7 +1075,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el usuario'));
     });
 
-    it('dado un error al crear un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un cliente entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1071,7 +1100,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Cliente actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un cliente entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1097,7 +1126,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Cliente eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un cliente entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1125,7 +1154,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Bodega creada exitosamente');
     });
 
-    it('dado un error al crear una bodega entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea una bodega entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1164,7 +1193,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Bodega eliminada exitosamente');
     });
 
-    it('dado un error al eliminar una bodega entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una bodega entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1177,7 +1206,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la bodega'));
     });
 
-    it('dado un error al crear una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea una fórmula entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1202,7 +1231,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula actualizada exitosamente');
     });
 
-    it('dado un error al actualizar una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza una fórmula entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1214,7 +1243,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar la fórmula'));
     });
 
-    it('dado un error al eliminar una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una fórmula entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1227,7 +1256,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la fórmula'));
     });
 
-    it('dado un error al crear un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un químico entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1254,14 +1283,14 @@ describe('AdminSistemasDashboard', () => {
           descripcion: 'Quimico Editado',
           tipo: 'quimico',
           unidad_medida: 'kg',
-          presentacion: null,
+          presentacion: '',
           precio_base: 0,
         }),
       );
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un químico entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1287,7 +1316,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un químico entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1300,7 +1329,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el químico'));
     });
 
-    it('dado un error al crear un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un producto entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1328,7 +1357,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un producto entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1354,7 +1383,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un producto entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1367,7 +1396,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el producto'));
     });
 
-    it('dado un error al crear un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un proveedor entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1392,7 +1421,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Proveedor actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un proveedor entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1404,7 +1433,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el proveedor'));
     });
 
-    it('dado un error al eliminar un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un proveedor entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1419,7 +1448,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('rutas restantes de carga de datos y cálculo de estadísticas', () => {
-    it('dado un error al obtener sedes/grupos globales entonces registra el error en consola y de todas formas marca la carga de sedes como finalizada', async () => {
+    it('dado un error al obtener sedes y grupos cuando monta entonces registra el error en consola y marca la carga de sedes como finalizada', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockGet.mockImplementation((url: string) => {
         if (url === '/sedes/') return Promise.reject(new Error('network down'));
@@ -1446,7 +1475,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(mockGet).not.toHaveBeenCalledWith('/users/', expect.anything()));
     });
 
-    it('dado que un recurso responde con un objeto sin campo results ni arreglo entonces getData devuelve un arreglo vacío', async () => {
+    it('dado un recurso que responde sin results ni arreglo cuando carga entonces getData devuelve un arreglo vacío', async () => {
       mockEndpoints({ '/chemicals/': {} });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Gestión' }));
@@ -1456,7 +1485,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('quimicos-count')).toHaveTextContent('0');
     });
 
-    it('dado una sede sin conteos anotados por el backend entonces calcula las estadísticas a partir de los arreglos locales', async () => {
+    it('dado una sede sin conteos del backend cuando muestra el resumen entonces calcula las estadísticas con los arreglos locales', async () => {
       mockEndpoints({
         '/sedes/': [SEDE_3],
         '/areas/': [AREA_3],
@@ -1502,7 +1531,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('OP-M-1')).toBeInTheDocument();
     });
 
-    it('dado escribir un número de página y presionar Enter entonces navega directamente a esa página', async () => {
+    it('dado un número de página escrito cuando presiona Enter entonces navega directamente a esa página', async () => {
       mockEndpoints({ '/ordenes-produccion/': ORDENES_MANY });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));
@@ -1515,7 +1544,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
     });
 
-    it('dado escribir un número de página y quitar el foco (blur) entonces navega directamente a esa página', async () => {
+    it('dado un número de página escrito cuando quita el foco entonces navega directamente a esa página', async () => {
       mockEndpoints({ '/ordenes-produccion/': ORDENES_MANY });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));
@@ -1530,13 +1559,16 @@ describe('AdminSistemasDashboard', () => {
     });
 
     it('dado lotes de producción disponibles cuando se muestra la pestaña Producción entonces lista los lotes producidos', async () => {
-      mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
+      mockEndpoints({ '/lotes-produccion/': { count: 1, next: null, previous: null, results: [LOTE_1] } });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));
 
       expect(await screen.findByText('LT-1')).toBeInTheDocument();
       expect(screen.getByText('95 Kg')).toBeInTheDocument();
-      expect(screen.getByText(/1 - Turno mañana/)).toBeInTheDocument();
+      expect(screen.getByText('Máquina 1')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
+        params: { ordering: '-hora_final', sede_id: 1, page: 1, page_size: 120 },
+      });
     });
   });
 });

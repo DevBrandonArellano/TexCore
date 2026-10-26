@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -10,40 +10,45 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrdenProduccion, LoteProduccion } from '../../lib/types';
-import type { ConsumoInput, OrdenProduccion as OrdenProduccionNew } from '../../types/produccion';
-import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2, GitBranch } from 'lucide-react';
+import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2, GitBranch, Eye } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Separator } from '../ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { formatApiError } from '../../lib/errorUtils';
+import { lotesApi } from '../../lib/api/lotesApi';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
+import { toArray } from '../../lib/collections';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+
+const ULTIMOS_LOTES = 10;
 
 export function OperarioDashboard() {
   const { profile } = useAuth();
-  const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const operarioId = profile?.user?.id;
   const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
 
-  // Form State for Lote
+  // Estado del formulario de lote
   const [pesoNeto, setPesoNeto] = useState('');
   const [bobinas, setBobinas] = useState('1');
   const [pesoMerma, setPesoMerma] = useState('');
   const [tipoMerma, setTipoMerma] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Recent entries state
-  const [ultimosLotes, setUltimosLotes] = useState<LoteProduccion[]>([]);
-  const [loadingLotes, setLoadingLotes] = useState(false);
+  // Estado de registros recientes
+  const [fichaLote, setFichaLote] = useState<LoteProduccion | null>(null);
   const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
   const [editPesoNeto, setEditPesoNeto] = useState('');
   const [editUnidades, setEditUnidades] = useState('');
   const [editPesoMerma, setEditPesoMerma] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Delete confirmation state
+  // Estado de confirmación de eliminación
   const [deleteConfirmLote, setDeleteConfirmLote] = useState<LoteProduccion | null>(null);
   const [deleteJustificacion, setDeleteJustificacion] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -56,48 +61,38 @@ export function OperarioDashboard() {
     label: string
   }>>([]);
 
-  const fetchOrdenes = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await apiClient.get<OrdenProduccion[]>('/ordenes-produccion/');
-      const data = Array.isArray(res.data) ? res.data : (res.data as any).results || [];
-      const active = data.filter((o: any) => o.estado === 'en_proceso');
-      setOrdenes(active);
-    } catch (error) {
-      console.error('Error al cargar órdenes', error);
-      toast.error('No se pudieron cargar tus asignaciones.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const cargaOrdenes = useCargaRemota(
+    () =>
+      apiClient
+        .get<OrdenProduccion[]>('/ordenes-produccion/')
+        .then((res) => toArray<OrdenProduccion>(res.data).filter((o) => o.estado === 'en_proceso'))
+        .catch((error: unknown) => {
+          console.error('Error al cargar órdenes', error);
+          toast.error('No se pudieron cargar tus asignaciones.');
+          throw error;
+        }),
+    'ordenes-en-proceso',
+  );
+  const ordenes = cargaOrdenes.datos ?? [];
+  const loading = cargaOrdenes.cargando;
 
-  const fetchUltimosLotes = useCallback(async () => {
-    if (!profile?.user?.id) return;
-    try {
-      setLoadingLotes(true);
-      const res = await apiClient.get<LoteProduccion[]>('/lotes-produccion/', {
-        params: {
-          operario: profile.user.id,
-          ordering: '-hora_final',
-        }
-      });
-      const data = Array.isArray(res.data) ? res.data : (res.data as any).results || [];
-      // Client-side sort as safety net + limit to last 10 entries
-      const sorted = data.sort((a: LoteProduccion, b: LoteProduccion) =>
-        new Date(b.hora_final).getTime() - new Date(a.hora_final).getTime()
-      );
-      setUltimosLotes(sorted.slice(0, 10));
-    } catch (error) {
-      console.error('Error al cargar últimos lotes', error);
-    } finally {
-      setLoadingLotes(false);
-    }
-  }, [profile?.user?.id]);
-
-  useEffect(() => {
-    fetchOrdenes();
-    fetchUltimosLotes();
-  }, [fetchOrdenes, fetchUltimosLotes]);
+  // Una página de 10 ya ordenada por el servidor: no se descarga el historial.
+  const cargaLotes = useCargaRemota(
+    () =>
+      lotesApi
+        .listar(1, ULTIMOS_LOTES, { operario: operarioId, ordering: '-hora_final' })
+        .then((pagina) => pagina.results)
+        .catch((error: unknown) => {
+          console.error('Error al cargar últimos lotes', error);
+          throw error;
+        }),
+    operarioId,
+    { habilitado: operarioId !== undefined },
+  );
+  const ultimosLotes = cargaLotes.datos ?? [];
+  const loadingLotes = cargaLotes.cargando;
+  const { recargar: fetchOrdenes } = cargaOrdenes;
+  const { recargar: fetchUltimosLotes } = cargaLotes;
 
   const handleOpenRegistro = (orden: OrdenProduccion) => {
     setSelectedOrden(orden);
@@ -106,9 +101,8 @@ export function OperarioDashboard() {
     setPesoMerma('');
     setTipoMerma('');
     // Inicializar consumos si la OP tiene componentes de mezcla
-    const ordenAny = orden as any;
-    if (ordenAny.componentes_mezcla && ordenAny.componentes_mezcla.length > 0) {
-      setConsumos(ordenAny.componentes_mezcla.map((c: any) => ({
+    if (orden.componentes_mezcla && orden.componentes_mezcla.length > 0) {
+      setConsumos(orden.componentes_mezcla.map((c) => ({
         lote_origen_id: null,
         cantidad_kg: c.cantidad_kg,
         genera_nuevo_lote: true,
@@ -131,9 +125,8 @@ export function OperarioDashboard() {
     setIsSubmitting(true);
     try {
       const now = new Date();
-      // Simple logic: Start time is now - 1 hour (approx) or just now for logging
-      // In a real app, the operator would "Start" then "Stop".
-      // Assuming straightforward registration here.
+      // Simplificación: el inicio es una hora atrás (aprox.)
+      // Se asume un registro directo aquí.
 
       const numMerma = pesoMerma ? parseFloat(pesoMerma) : 0;
       const payload = {
@@ -160,7 +153,7 @@ export function OperarioDashboard() {
       setIsDialogOpen(false);
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });
@@ -201,7 +194,7 @@ export function OperarioDashboard() {
       setEditingLoteId(null);
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });
@@ -210,7 +203,7 @@ export function OperarioDashboard() {
     }
   };
 
-  // --- Delete handler (with inventory reversion via rechazar endpoint) ---
+  // --- Manejador de eliminación (con reversión de inventario vía el endpoint rechazar) ---
   const handleDeleteLote = async () => {
     if (!deleteConfirmLote) return;
 
@@ -224,7 +217,7 @@ export function OperarioDashboard() {
       setDeleteJustificacion('');
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });
@@ -233,7 +226,7 @@ export function OperarioDashboard() {
     }
   };
 
-  // --- Helpers ---
+  // --- Auxiliares ---
   const getProgressPercent = (orden: OrdenProduccion): number => {
     const producido = Number(orden.peso_producido ?? 0);
     const requerido = Number(orden.peso_neto_requerido);
@@ -257,7 +250,7 @@ export function OperarioDashboard() {
   };
 
   const getOrdenCodigoForLote = (lote: LoteProduccion): string => {
-    // Find orden from our loaded list
+    // Busca la orden en la lista cargada
     const orden = ordenes.find(o => o.id === lote.orden_produccion);
     return orden?.codigo || `OP-${lote.orden_produccion}`;
   };
@@ -269,12 +262,25 @@ export function OperarioDashboard() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Panel de Operario</h1>
         <p className="text-sm text-muted-foreground">
-          Bienvenido, {profile?.user.username}. Aquí están tus órdenes de producción activas.
+          Bienvenido, {profile?.user.username}. Gestiona tus órdenes asignadas o registra pesaje en producción continua.
         </p>
       </div>
 
-      {/* === ORDERS SECTION === */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <Tabs defaultValue="ordenes" className="space-y-4">
+        <TabsList className="grid w-full sm:w-[460px] grid-cols-2">
+          <TabsTrigger value="ordenes" className="gap-2">
+            <ClipboardList className="w-4 h-4" />
+            <span>Órdenes de Trabajo (OP)</span>
+          </TabsTrigger>
+          <TabsTrigger value="continua" className="gap-2">
+            <Timer className="w-4 h-4" />
+            <span>Producción Continua (MES)</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ordenes" className="space-y-6">
+          {/* === ORDERS SECTION === */}
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {ordenes.length > 0 ? (
           ordenes.map((orden) => {
             const progress = getProgressPercent(orden);
@@ -284,7 +290,7 @@ export function OperarioDashboard() {
             const isComplete = progress >= 100;
 
             return (
-              <Card key={orden.id} className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+              <Card key={orden.id} className="border-l-4 border-l-blue-500 shadow-xs hover:shadow-md transition-shadow">
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
                     <div>
@@ -509,6 +515,16 @@ export function OperarioDashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                onClick={() => setFichaLote(lote)}
+                                title="Ver ficha del lote"
+                                aria-label="Ver ficha"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-blue-600"
                                 onClick={() => handleStartEdit(lote)}
                                 title="Editar registro"
@@ -535,7 +551,14 @@ export function OperarioDashboard() {
             </CardContent>
           </Card>
         )}
-      </div>
+        <FichaLoteDialog lote={fichaLote} onClose={() => setFichaLote(null)} />
+        </div>
+        </TabsContent>
+
+        <TabsContent value="continua" className="space-y-4">
+          <CorridaContinuaDashboard restrictedMode />
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogo de Registro */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

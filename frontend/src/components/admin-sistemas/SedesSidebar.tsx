@@ -19,9 +19,9 @@ interface SedesSidebarProps {
 
 function SedesSidebarImpl({ sedes, selectedSedeId, onSelectSede, areas, users, bodegas, ordenes, pedidos }: SedesSidebarProps) {
   return (
-    <aside className="lg:w-80 flex-shrink-0 flex flex-col">
+    <aside className="lg:w-80 shrink-0 flex flex-col">
       <Card className="flex-1 flex flex-col min-h-0">
-        <CardHeader className="flex-shrink-0">
+        <CardHeader className="shrink-0">
           <CardTitle>Sedes</CardTitle>
           <CardDescription>Selecciona una sede para ver sus datos</CardDescription>
         </CardHeader>

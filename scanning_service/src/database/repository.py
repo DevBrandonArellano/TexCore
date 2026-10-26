@@ -6,9 +6,11 @@ LSP: cualquier implementación de IAuditRepository es intercambiable en tests.
 ISO 27001 A.12.4: trazabilidad de eventos de escaneo para auditoría de seguridad.
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
+
 import logging
 from typing import Protocol, runtime_checkable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..schemas.validate import ValidateResponse
@@ -50,20 +52,24 @@ class AuditRepository:
                 await session.commit()
             logger.info(
                 "Registro de auditoría de escaneo guardado",
-                extra={"sd": {
-                    "rfc5424_severity": 6,
-                    "table": ScanAuditLog.__tablename__,
-                    "valid": str(record.valid),
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 6,
+                        "table": ScanAuditLog.__tablename__,
+                        "valid": str(record.valid),
+                    }
+                },
             )
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de escaneo",
-                extra={"sd": {
-                    "rfc5424_severity": 4,
-                    "table": ScanAuditLog.__tablename__,
-                    "error": str(exc)[:200],
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 4,
+                        "table": ScanAuditLog.__tablename__,
+                        "error": str(exc)[:200],
+                    }
+                },
             )
 
 

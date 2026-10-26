@@ -30,6 +30,7 @@ La presente auditoría evalúa la arquitectura y el código fuente del sistema *
 
 ### 1.2 ANSI/ISA-88 (Control por Batches y Recetas)
 - **Modelo de Recetas**: Separación estricta entre `FormulaColor` (General Recipe), `FaseReceta` (Equipment/Master Recipe) y `DetalleFormula` (Control Recipe).
+- **Control de versiones de recetas** (actualización 25-sep-2026): cada aprobación o cambio de una receta aprobada genera una `VersionFormula` inmutable (snapshot JSON, motivo y autor), y la orden de producción congela la versión oficial al lanzarse (`OrdenProduccion.version_formula`), de modo que cada batch queda ligado a la receta exacta con que se ejecutó. Las fases referencian un catálogo de procesos por sede (`ProcesoTintoreria`) asignable a máquinas (`MaquinaProceso`), en línea con la separación receta/equipo de ISA-88.
 - **Ejecución por Lotes**: `DescargaQuimicoOP` y `ComponenteMezclaOP` garantizan la adición secuencial de químicos por fase de baño.
 - **Estado de Cumplimiento:** **98% (CONFORME)**.
   - *Evidencia*: Desglose automatizado de recetas químicas por kilogramo de tela/hilo y validación de dosis en el seed data.

@@ -12,20 +12,23 @@ los datos ya resueltos a reporting_excel solo para el formateo a Excel/CSV. Se
 mantienen como endpoints HTTP por compatibilidad y para poder probarlos/usarlos
 de forma independiente.
 """
+
 import logging
 
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from internal_api.services import reporting_data
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication
 from internal_api.permissions import HasScope, IsInternalService
+from internal_api.services import reporting_data
+from inventory.services.kardex_service import FiltroKardexInvalido
 
 logger = logging.getLogger(__name__)
 
 _AUTH = [JWTServiceAuthentication]
-_PERMS = [IsInternalService, HasScope("reports:read")]
+_PERMS: list[type[BasePermission]] = [IsInternalService, HasScope("reports:read")]
 
 
 def _audit(request, action: str, resource: str = "reports") -> None:
@@ -71,7 +74,7 @@ def resolve_sede_scope(request):
 
 
 class KardexView(APIView):
-    """GET /api/internal/v1/reports/kardex/?bodega_id=&fecha_desde=&fecha_hasta="""
+    """GET /api/internal/v1/reports/kardex/?bodega_id=&producto_id=&fecha_desde=&fecha_hasta=&tipo="""
 
     authentication_classes = _AUTH
     permission_classes = _PERMS
@@ -81,13 +84,17 @@ class KardexView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_kardex(
-            bodega_id,
-            producto_id=request.query_params.get("producto_id"),
-            fecha_desde=request.query_params.get("fecha_desde"),
-            fecha_hasta=request.query_params.get("fecha_hasta"),
-            lote_codigo=request.query_params.get("lote_codigo"),
-        )
+        try:
+            data = reporting_data.get_kardex(
+                bodega_id,
+                producto_id=request.query_params.get("producto_id"),
+                fecha_desde=request.query_params.get("fecha_desde"),
+                fecha_hasta=request.query_params.get("fecha_hasta"),
+                lote_codigo=request.query_params.get("lote_codigo"),
+                tipo=request.query_params.get("tipo"),
+            )
+        except FiltroKardexInvalido as exc:
+            return Response({"detail": str(exc)}, status=400)
         return Response(data)
 
 
@@ -130,9 +137,7 @@ class StockActualView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_stock_actual(
-            bodega_id, producto_id=request.query_params.get("producto_id")
-        )
+        data = reporting_data.get_stock_actual(bodega_id, producto_id=request.query_params.get("producto_id"))
         return Response(data)
 
 
@@ -161,9 +166,7 @@ class AgingView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_aging(
-            bodega_id, dias_minimos=request.query_params.get("dias_minimos", 30)
-        )
+        data = reporting_data.get_aging(bodega_id, dias_minimos=request.query_params.get("dias_minimos", 30))
         return Response(data)
 
 
@@ -418,10 +421,7 @@ class PlantaPulsoDiarioView(APIView):
         if sede_id:
             qs_lotes = qs_lotes.filter(orden_produccion__area__sede_id=sede_id)
 
-        aggs = qs_lotes.aggregate(
-            prod=Sum("peso_neto_producido"),
-            merma=Sum("peso_merma")
-        )
+        aggs = qs_lotes.aggregate(prod=Sum("peso_neto_producido"), merma=Sum("peso_merma"))
         kg_producidos_hoy = aggs["prod"] or 0.0
         kg_merma_hoy = aggs["merma"] or 0.0
 
@@ -433,9 +433,11 @@ class PlantaPulsoDiarioView(APIView):
 
         wip_estancado = qs_transferencias.aggregate(total=Sum("cantidad_transferida"))["total"] or 0.0
 
-        return Response({
-            "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
-            "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
-            "kg_merma_hoy": round(float(kg_merma_hoy), 2),
-            "wip_estancado": round(float(wip_estancado), 2),
-        })
+        return Response(
+            {
+                "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
+                "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
+                "kg_merma_hoy": round(float(kg_merma_hoy), 2),
+                "wip_estancado": round(float(wip_estancado), 2),
+            }
+        )

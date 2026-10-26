@@ -1,19 +1,26 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que carga / sin quimicos / quimicos existentes / un quimico sin alerta /
+ *   un quimico con alerta.
+ * - Caja blanca (CB): ramas de error — error en la peticion / error en la peticion de historial.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { StockQuimicosDashboard } from './StockQuimicosDashboard';
 
 const mockGet = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
@@ -105,5 +112,52 @@ describe('StockQuimicosDashboard', () => {
 
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se pudo cargar el stock de químicos.'));
     expect(screen.getByText('Sin químicos registrados')).toBeInTheDocument();
+  });
+
+  describe('Ver historial de descargas', () => {
+    // El historial de descargas es una acción del OrdenProduccionViewSet
+    // (/ordenes-produccion/descargas-quimico/), no un endpoint propio de
+    // /gestion/ — verificar que se llama a la ruta correcta evita que este
+    // botón vuelva a apuntar a una ruta inexistente sin que ningún test lo note.
+
+    it('dado click en ver historial cuando responde la api entonces consulta la ruta correcta y muestra el historial', async () => {
+      mockGet.mockResolvedValueOnce({ data: [QUIMICO_OK] });
+      render(<StockQuimicosDashboard />);
+      await waitFor(() => expect(screen.getByText('QUI-001')).toBeInTheDocument());
+
+      mockGet.mockResolvedValueOnce({
+        data: [{
+          id: 1,
+          producto: 1,
+          producto_descripcion: 'Soda Cáustica',
+          bodega_nombre: 'Bodega Principal',
+          cantidad_calculada_kg: '1.500000',
+          cantidad_real_kg: null,
+          estado: 'aplicada',
+          fecha_descarga: '2026-09-20T10:00:00Z',
+        }],
+      });
+
+      await userEvent.click(screen.getByLabelText('Ver historial de Soda Cáustica'));
+
+      expect(mockGet).toHaveBeenCalledWith(
+        '/ordenes-produccion/descargas-quimico/?producto_id=1&sede_id=3&limit=50'
+      );
+      await waitFor(() => expect(screen.getByText('Historial de Descargas: Soda Cáustica')).toBeInTheDocument());
+    });
+
+    it('dado error en la peticion de historial cuando falla la api entonces muestra toast de error', async () => {
+      mockGet.mockResolvedValueOnce({ data: [QUIMICO_OK] });
+      render(<StockQuimicosDashboard />);
+      await waitFor(() => expect(screen.getByText('QUI-001')).toBeInTheDocument());
+
+      mockGet.mockRejectedValueOnce({ response: { status: 404 } });
+
+      await userEvent.click(screen.getByLabelText('Ver historial de Soda Cáustica'));
+
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith('No se pudo cargar el historial de descargas.')
+      );
+    });
   });
 });

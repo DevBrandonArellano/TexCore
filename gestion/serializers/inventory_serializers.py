@@ -5,20 +5,17 @@ from gestion.models import Bodega, CustomUser
 
 class BodegaSerializer(serializers.ModelSerializer):
     usuarios_asignados = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=CustomUser.objects.all(),
-        required=False,
-        allow_empty=True
+        many=True, queryset=CustomUser.objects.all(), required=False, allow_empty=True
     )
     _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Bodega
-        fields = ['id', 'nombre', 'sede', 'usuarios_asignados', '_justificacion_auditoria']
+        fields = ["id", "nombre", "sede", "usuarios_asignados", "_justificacion_auditoria"]
 
     def create(self, validated_data):
-        usuarios = validated_data.pop('usuarios_asignados', [])
-        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        usuarios = validated_data.pop("usuarios_asignados", [])
+        justificacion = validated_data.pop("_justificacion_auditoria", None)
         bodega = Bodega.objects.create(**validated_data)
         if justificacion:
             bodega._justificacion_auditoria = justificacion
@@ -28,8 +25,8 @@ class BodegaSerializer(serializers.ModelSerializer):
         return bodega
 
     def update(self, instance, validated_data):
-        usuarios = validated_data.pop('usuarios_asignados', None)
-        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        usuarios = validated_data.pop("usuarios_asignados", None)
+        justificacion = validated_data.pop("_justificacion_auditoria", None)
         if justificacion:
             instance._justificacion_auditoria = justificacion
         for attr, value in validated_data.items():

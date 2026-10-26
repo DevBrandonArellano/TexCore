@@ -1,16 +1,18 @@
-# Script para ver cambios del frontend en TexCore
-# Ejecutar desde: c:\Users\Sistemas\Desktop\Texcore\TexCore
+# Reconstruye la imagen de nginx (que incluye el frontend compilado) en el entorno de
+# desarrollo para ver los cambios del frontend servidos por nginx. Ejecutar desde la raíz.
+
+$COMPOSE_FILE = "infrastructure/docker/docker-compose.yml"
 
 Write-Host "=== Reconstruyendo frontend (nginx) ===" -ForegroundColor Cyan
-docker compose -f infrastructure/docker/docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml build --no-cache nginx 2>&1 | Out-Null
+docker compose -f $COMPOSE_FILE build --no-cache nginx
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error en build. Ejecuta manualmente: docker compose -f infrastructure/docker/docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml build --no-cache nginx" -ForegroundColor Red
+    Write-Host "Error en build. Ejecuta manualmente: docker compose -f $COMPOSE_FILE build --no-cache nginx" -ForegroundColor Red
     exit 1
 }
 
 Write-Host "=== Reiniciando nginx ===" -ForegroundColor Cyan
-docker compose -f infrastructure/docker/docker-compose.yml -f infrastructure/docker/docker-compose.prod.yml up -d --force-recreate nginx
+docker compose -f $COMPOSE_FILE up -d --force-recreate nginx
 
-Write-Host "`nListo. Abre http://localhost o https://localhost y haz Ctrl+Shift+R (recarga forzada) para evitar cache del navegador." -ForegroundColor Green
-Write-Host "`nAlternativa rapida: usa http://localhost:5173 con el frontend en modo desarrollo (cambios al instante):" -ForegroundColor Yellow
-Write-Host "  docker compose -f infrastructure/docker/docker-compose.yml up -d frontend backend db" -ForegroundColor Gray
+Write-Host "`nListo. Abre https://localhost y haz Ctrl+Shift+R (recarga forzada) para evitar la caché del navegador." -ForegroundColor Green
+Write-Host "`nAlternativa rápida: http://localhost:5173 con el frontend en modo desarrollo (cambios al instante):" -ForegroundColor Yellow
+Write-Host "  docker compose -f $COMPOSE_FILE up -d frontend backend db" -ForegroundColor Gray

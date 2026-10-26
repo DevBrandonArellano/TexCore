@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin productos / loading / productos existentes / producto sin campos
+ *   opcionales / producto tipo merma.
+ * - Análisis de valores límite (BVA): editar un producto con campos opcionales en cero o vacios.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -5,31 +11,33 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ManageProductos } from './ManageProductos';
 
+import { Producto } from '../../lib/types';
+
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const PRODUCTO_1 = {
+const PRODUCTO_1: Producto = {
   id: 1,
   codigo: 'PR-001',
   descripcion: 'Hilo Algodón 30/1',
@@ -42,7 +50,7 @@ const PRODUCTO_1 = {
   calidad: 'Primera',
 };
 
-const PRODUCTO_2 = {
+const PRODUCTO_2: Producto = {
   id: 2,
   codigo: 'PR-002',
   descripcion: 'Tela Jersey',
@@ -55,7 +63,7 @@ const PRODUCTO_2 = {
   calidad: '',
 };
 
-const PRODUCTO_MERMA = {
+const PRODUCTO_MERMA: Producto = {
   id: 3,
   codigo: 'PR-003',
   descripcion: 'Retazo de Tela',
@@ -68,13 +76,20 @@ const PRODUCTO_MERMA = {
   calidad: '',
 };
 
-function renderComponent(props: Partial<{
-  productos: any[];
-  onProductCreate: (data: any) => Promise<boolean>;
-  onProductUpdate: (id: number, data: any) => Promise<boolean>;
-  onProductDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+const PRODUCTO_COLORANTE: Producto = {
+  id: 4,
+  codigo: 'COL-001',
+  descripcion: 'Colorante Reactivo Azul Marino',
+  tipo: 'colorante',
+  unidad_medida: 'kg',
+  stock_minimo: 25,
+  precio_base: 45.0,
+  presentacion: 'Tambor 25kg',
+  pais_origen: 'Alemania',
+  calidad: 'Primera',
+};
+
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageProductos>> = {}) {
   const defaults = {
     productos: [],
     onProductCreate: vi.fn().mockResolvedValue(true),
@@ -145,6 +160,14 @@ describe('ManageProductos', () => {
     expect(screen.getByText('merma')).toBeInTheDocument();
   });
 
+  it('dado producto tipo colorante cuando lista entonces muestra el badge correspondiente con texto Colorantes', () => {
+    renderComponent({ productos: [PRODUCTO_COLORANTE] });
+    const row = getRowFor('COL-001');
+    expect(within(row).getByText('COL-001')).toBeInTheDocument();
+    expect(within(row).getByText('Colorante Reactivo Azul Marino')).toBeInTheDocument();
+    expect(within(row).getByText('Colorantes')).toBeInTheDocument();
+  });
+
   it('dado busqueda por codigo cuando escribe en el buscador entonces filtra la lista', async () => {
     renderComponent({ productos: [PRODUCTO_1, PRODUCTO_2] });
     expect(screen.getByText('PR-002')).toBeInTheDocument();
@@ -166,8 +189,19 @@ describe('ManageProductos', () => {
     expect(screen.getByText('PR-003')).toBeInTheDocument();
   });
 
+  it('dado filtro por tipo colorante cuando selecciona Colorantes entonces filtra productos de ese tipo', async () => {
+    renderComponent({ productos: [PRODUCTO_1, PRODUCTO_COLORANTE] });
+    expect(screen.getByText('PR-001')).toBeInTheDocument();
+    expect(screen.getByText('COL-001')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Colorantes' }));
+
+    expect(screen.queryByText('PR-001')).not.toBeInTheDocument();
+    expect(screen.getByText('COL-001')).toBeInTheDocument();
+  });
+
   it('dado mas de 20 productos cuando carga entonces pagina de 20 en 20', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1,
       codigo: `PR-${String(i + 1).padStart(3, '0')}`,
       descripcion: `Producto ${i + 1}`,
@@ -193,7 +227,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando escribe una pagina valida en Ir a entonces navega', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
       tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
       presentacion: '', pais_origen: '', calidad: '',
@@ -207,7 +241,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
       tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
       presentacion: '', pais_origen: '', calidad: '',
@@ -273,8 +307,8 @@ describe('ManageProductos', () => {
     await userEvent.clear(within(dialog).getByLabelText('Precio Base Unitario'));
     await userEvent.type(within(dialog).getByLabelText('Precio Base Unitario'), '3.25');
     await userEvent.type(within(dialog).getByLabelText('Presentación'), 'Bulto 20kg');
-    await userEvent.type(within(dialog).getByLabelText('País de Origen'), 'Colombia');
-    await userEvent.type(within(dialog).getByLabelText('Calidad'), 'Segunda');
+    await userEvent.click(within(dialog).getByText('Colombia'));
+    await userEvent.click(within(dialog).getByText('Segunda'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Crear Producto' }));
 
@@ -335,8 +369,8 @@ describe('ManageProductos', () => {
     expect(within(dialog).getByLabelText('Stock Mínimo')).toHaveValue(50);
     expect(within(dialog).getByLabelText('Precio Base Unitario')).toHaveValue(8.75);
     expect(within(dialog).getByLabelText('Presentación')).toHaveValue('Cono 1kg');
-    expect(within(dialog).getByLabelText('País de Origen')).toHaveValue('Perú');
-    expect(within(dialog).getByLabelText('Calidad')).toHaveValue('Primera');
+    expect(within(dialog).getByText('País de Origen').closest('div')).toHaveTextContent('Perú');
+    expect(within(dialog).getByText('Calidad').closest('div')).toHaveTextContent('Primera');
   });
 
   it('dado editar cuando guarda entonces llama onProductUpdate con el id y los datos', async () => {
@@ -384,5 +418,73 @@ describe('ManageProductos', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onProductCreate).not.toHaveBeenCalled();
+  });
+
+  it('dado el dialogo abierto cuando se cierra con escape entonces limpia el formulario', async () => {
+    renderComponent({ productos: [PRODUCTO_1] });
+
+    const row = getRowFor('PR-001');
+    await userEvent.click(within(row).getAllByRole('button')[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await openCreateDialog();
+    expect(screen.getByLabelText(/Código/)).toHaveValue('');
+  });
+
+  it('dado editar un producto con campos opcionales en cero o vacios cuando abre el dialogo entonces usa los valores por defecto', async () => {
+    renderComponent({ productos: [PRODUCTO_2] });
+
+    const row = getRowFor('PR-002');
+    await userEvent.click(within(row).getAllByRole('button')[0]);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Stock Mínimo')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('Precio Base Unitario')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('Presentación')).toHaveValue('');
+  });
+
+  it('dado producto tipo producto_intermedio cuando lista entonces muestra el badge correspondiente', () => {
+    renderComponent({ productos: [{ ...PRODUCTO_1, id: 5, codigo: 'PI-001', tipo: 'producto_intermedio' }] });
+    const row = getRowFor('PI-001');
+    expect(within(row).getByText('Producto Intermedio')).toBeInTheDocument();
+  });
+
+  it('dado producto con precio_base nulo cuando lista entonces muestra cero', () => {
+    renderComponent({ productos: [{ ...PRODUCTO_1, id: 6, codigo: 'PR-006', precio_base: null as never }] });
+    const row = getRowFor('PR-006');
+    expect(within(row).getByText('$0')).toBeInTheDocument();
+  });
+
+  it('dado busqueda activa cuando limpia el campo entonces vuelve a mostrar todos los productos', async () => {
+    renderComponent({ productos: [PRODUCTO_1, PRODUCTO_2] });
+    const buscador = screen.getByPlaceholderText('Buscar por código o descripción...');
+    await userEvent.type(buscador, 'Hilo');
+    expect(screen.queryByText('PR-002')).not.toBeInTheDocument();
+
+    await userEvent.clear(buscador);
+
+    expect(screen.getByText('PR-001')).toBeInTheDocument();
+    expect(screen.getByText('PR-002')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 productos cuando escribe una pagina por debajo del rango entonces no cambia de pagina', async () => {
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
+      tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
+      presentacion: '', pais_origen: '', calidad: '',
+    }));
+    renderComponent({ productos: muchos });
+
+    await userEvent.click(screen.getByText('Siguiente'));
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '0{Enter}');
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
   });
 });

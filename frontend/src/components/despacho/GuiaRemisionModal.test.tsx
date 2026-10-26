@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): despachoId null / despachoId asignado / campos obligatorios vacios /
+ *   transporte de tercero sin nombre / formulario valido con transporte propio.
+ * - Análisis de valores límite (BVA): campos obligatorios vacios.
+ * - Caja blanca (CB): ramas de error — error del backend.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -6,15 +13,15 @@ import { GuiaRemisionModal } from './GuiaRemisionModal';
 
 const mockPost = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { post: (...args: any[]) => mockPost(...args) },
+  default: { post: (...args: unknown[]) => mockPost(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -99,6 +106,20 @@ describe('GuiaRemisionModal', () => {
     ));
     expect(toastSuccessMock).toHaveBeenCalledWith('Guía de remisión generada.');
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('dado una respuesta pdf sin tipo cuando genera entonces abre el pdf con tipo application/pdf en otra pestana', async () => {
+    // El blob de axios llega sin MIME en este caso; si se abriera tal cual, el navegador
+    // mostraria la pestana en blanco en lugar de renderizar el PDF.
+    mockPost.mockResolvedValueOnce({ data: new Blob(['%PDF-fake']) });
+    render(<GuiaRemisionModal despachoId={7} onOpenChange={vi.fn()} />);
+    await completarCamposObligatorios();
+
+    await userEvent.click(screen.getByRole('button', { name: /generar guía/i }));
+
+    await waitFor(() => expect(window.open).toHaveBeenCalledWith('blob:mock-url', '_blank'));
+    const blobAbierto = vi.mocked(window.URL.createObjectURL).mock.calls[0][0] as Blob;
+    expect(blobAbierto.type).toBe('application/pdf');
   });
 
   it('dado transporte de tercero completo cuando genera entonces incluye datos del transportista', async () => {

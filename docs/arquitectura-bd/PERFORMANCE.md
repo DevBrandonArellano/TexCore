@@ -13,7 +13,8 @@
 | `GET /api/ordenes-produccion/` | 🟠 ALTO | ~660ms (21K órdenes) | P1 |
 | `GET /api/lotes-produccion/` | 🟢 OK | ~150ms (43K lotes) | — |
 | `GET /api/productos/` | 🟢 OK | ~62ms (3.3K productos) | — |
-| `GET /api/inventory/movimientos/` | ⚠ PENDIENTE | ~?ms (750K movs) | P1 |
+| `GET /api/inventory/movimientos/` | 🟢 Corregido 2026-09-28 | 4 consultas por página (antes 258 por N+1); paginado con `page_size` ≤ 500 | — |
+| `GET /api/inventory/bodegas/{id}/kardex/` | 🟢 Corregido 2026-09-28 | 6 consultas por página, saldo en la base (`SUM` + `SUM() OVER`); última página de 5000 movimientos < 0.33 s in-process (antes 1.51 s devolviendo todo) | — |
 | `GET /api/pedidos-venta/` | 🟢 OK | ~17ms (30K pedidos) | — |
 | `GET /api/inventory/stock/` | 🟡 N+1 bajo carga concurrente | ~7ms (9.9K stock, 1 usuario) | — (ver actualización 2026-08-31: ✅ corregido) |
 
@@ -25,7 +26,7 @@
 ## Hotspots Detallados
 
 ### PERF-CRIT-01: `ClienteManager` — 3 subconsultas correlacionadas
-**Ubicación:** [`gestion/models.py:476-516`](../gestion/models.py#L476)
+**Ubicación:** [`gestion/models/ventas.py`](../../gestion/models/ventas.py) (`ClienteManager`; en la fecha del análisis, `gestion/models.py:476-516`)
 **Tiempo medido:** ~2.2s para page=1 de 10,505 clientes
 **Impacto:** Cada request a `/api/clientes/` ejecuta en SQL Server:
 
@@ -72,7 +73,7 @@ CREATE INDEX ix_detalle_pedido ON gestion_detallepedido (pedido_id) INCLUDE (tot
 ---
 
 ### PERF-CRIT-02: `ClienteViewSet` — deep `prefetch_related` innecesario
-**Ubicación:** [`gestion/views.py:654-658`](../gestion/views.py#L654)
+**Ubicación:** [`gestion/views/sales_views.py`](../../gestion/views/sales_views.py) (`ClienteViewSet`; en la fecha del análisis, `gestion/views.py:654-658`)
 **Problema:** Para LISTAR clientes se carga todo el árbol de pedidos en memoria:
 
 ```python
@@ -99,7 +100,7 @@ def get_queryset(self):
 ---
 
 ### PERF-03: `OrdenProduccionViewSet` — 660ms para 21K órdenes
-**Ubicación:** [`gestion/views.py:728-730`](../gestion/views.py#L728)
+**Ubicación:** [`gestion/views/production_orden_views.py`](../../gestion/views/production_orden_views.py) (`OrdenProduccionViewSet`; en la fecha del análisis, `gestion/views.py:728-730`)
 **Tiempo:** ~660ms
 **Causa probable:** `prefetch_related('lotes')` carga todos los lotes (43K) en memoria. Con 20K órdenes cada una con ~2 lotes: 40K objetos Python por request.
 
@@ -113,7 +114,7 @@ queryset = OrdenProduccion.objects.select_related(...).annotate(
 ---
 
 ### PERF-04: `MovimientoInventarioViewSet` — sin `select_related`, sin ordering explícito
-**Ubicación:** [`inventory/views.py:86-88`](../inventory/views.py#L86)
+**Ubicación:** [`inventory/views/movimiento_views.py`](../../inventory/views/movimiento_views.py) (`MovimientoInventarioViewSet`; en la fecha del análisis, `inventory/views.py:86-88`)
 
 ```python
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
@@ -142,7 +143,7 @@ CREATE INDEX ix_movimiento_fecha ON inventory_movimientoinventario (fecha DESC)
 ---
 
 ### PERF-05: `AuditableModelMixin.__init__` + `only()` — N+1 oculto
-**Ubicación:** [`gestion/models.py:125-127`](../gestion/models.py#L125)
+**Ubicación:** [`gestion/models/core.py`](../../gestion/models/core.py) (`AuditableModelMixin.__init__`; en la fecha del análisis, `gestion/models.py:125-127`)
 **Problema:** Cuando se usa `QuerySet.only('campo_a', 'campo_b')` en modelos auditables, el `__init__` llama `_get_auditable_data()` que hace `getattr(self, campo_auditable)` para cada campo en `campos_auditables`. Si ese campo fue diferido por `only()`, Django hace `SELECT campo FROM tabla WHERE id=X` por cada campo diferido, por cada instancia.
 
 **Impacto:** Si `ClienteViewSet` usa `only()` con 50 instancias y 4 campos auditables diferidos → 50 × 4 = 200 queries extra invisibles.
@@ -164,7 +165,7 @@ def _get_auditable_data(self):
 ---
 
 ### BUG-01: URLs inexistentes retornan `TemplateDoesNotExist: index.html`
-**Ubicación:** [`TexCore/urls.py:41`](../TexCore/urls.py#L41)
+**Ubicación:** [`TexCore/urls.py`](../../TexCore/urls.py) (línea 41 en la fecha del análisis)
 **Descripción:** El catch-all `re_path(r'^.*', TemplateView.as_view(template_name='index.html'))` captura cualquier URL no registrada y devuelve HTTP 500 cuando `index.html` no existe en el directorio de templates del backend. En producción el frontend React se sirve desde nginx, no desde Django — el template nunca está presente.
 
 **Impacto:** Errores engañosos en lugar de HTTP 404 para rutas API inexistentes. Durante el benchmarking inicial causó falsos positivos al usar `/api/pedidos/` en vez de `/api/pedidos-venta/`.

@@ -3,29 +3,28 @@ App factory del scanning_service — versión independiente (v3.0).
 Toda la configuración de BD fue reemplazada por JWT + Django Internal API.
 SRP: crea la app FastAPI, singletons y registra middleware/routers.
 """
+
 import logging
 import logging.handlers
 import os
+import pathlib
 import time
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from .database.engine import init_db
+from .infrastructure.django_client import DjangoApiClient
+from .infrastructure.jwt_token_manager import JWTTokenManager
 from .logging_rfc5424 import RFC5424Formatter
 from .routers import health as health_router
 from .routers import validate as validate_router
-from .infrastructure.jwt_token_manager import JWTTokenManager
-from .infrastructure.django_client import DjangoApiClient
 
 
 def _get_required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"Variable de entorno requerida no configurada: '{name}'"
-        )
+        raise RuntimeError(f"Variable de entorno requerida no configurada: '{name}'")
     return value
 
 
@@ -34,7 +33,7 @@ def _setup_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     handlers: list = [handler]
-    if os.path.exists("/dev/log"):
+    if pathlib.Path("/dev/log").exists():
         syslog_h = logging.handlers.SysLogHandler(address="/dev/log")
         syslog_h.setFormatter(formatter)
         handlers.append(syslog_h)
@@ -63,6 +62,7 @@ django_client = DjangoApiClient(
     base_url=DJANGO_INTERNAL_URL,
 )
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -88,16 +88,13 @@ async def log_requests_rfc5424(request: Request, call_next):
     finally:
         duration_ms = int((time.time() - start_time) * 1000)
         status_code = response.status_code if response else 500
-        level = (
-            logging.ERROR
-            if status_code >= 500
-            else logging.WARNING
-            if status_code >= 400
-            else logging.INFO
-        )
+        level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
         logging.getLogger("http-request").log(
             level,
-            f"{request.method} {request.url.path} {status_code}",
+            "%s %s %s",
+            request.method,
+            request.url.path,
+            status_code,
             extra={
                 "sd": {
                     "method": request.method,

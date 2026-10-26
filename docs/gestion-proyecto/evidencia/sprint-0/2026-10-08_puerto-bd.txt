@@ -1,0 +1,12 @@
+# TEX-02 CA-2 — puerto 1433 de la BD no publicado en el host (2026-10-08T08:44:47-05:00)
+## docker port texcore-prod-db-1:
+(vacío = sin puertos publicados; compose prod usa 'expose', no 'ports')
+## Puertos en escucha en el host (ss -ltn):
+LISTEN 0      4096         0.0.0.0:80         0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:443        0.0.0.0:*
+LISTEN 0      4096            [::]:80            [::]:*
+LISTEN 0      4096            [::]:443           [::]:*
+## Intento de conexión a 192.168.1.55:1433 desde el host:
+bash: connect: Conexión rehusada
+bash: línea 1: /dev/tcp/192.168.1.55/1433: Conexión rehusada
+rechazado/cerrado (esperado)

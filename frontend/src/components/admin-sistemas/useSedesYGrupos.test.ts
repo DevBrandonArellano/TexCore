@@ -1,6 +1,14 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): respuestas planas (array) / respuestas paginadas ({results}) / sin sede
+ *   seleccionada y hay sedes / sede ya seleccionada / error de red.
+ * - Caja blanca (CB): ramas de error — error de red.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useSedesYGrupos } from './useSedesYGrupos';
+
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -8,10 +16,10 @@ const mockPatch = vi.fn();
 const mockDelete = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -19,8 +27,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -101,7 +109,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = false;
-    await act(async () => { ok = await result.current.handleSedeCreate({ nombre: 'Nueva Sede' }); });
+    await act(async () => { ok = await result.current.handleSedeCreate(parcial({ nombre: 'Nueva Sede' })); });
     expect(ok).toBe(true);
     expect(toastSuccessMock).toHaveBeenCalled();
   });
@@ -113,7 +121,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = true;
-    await act(async () => { ok = await result.current.handleSedeCreate({ nombre: 'X' }); });
+    await act(async () => { ok = await result.current.handleSedeCreate(parcial({ nombre: 'X' })); });
     expect(ok).toBe(false);
     expect(toastErrorMock).toHaveBeenCalled();
   });
@@ -187,7 +195,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = true;
-    await act(async () => { ok = await result.current.handleAreaCreate({ nombre: 'Area X' }); });
+    await act(async () => { ok = await result.current.handleAreaCreate(parcial({ nombre: 'Area X' })); });
     expect(ok).toBe(false);
     expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining('Selecciona una sede'));
   });
@@ -198,7 +206,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = true;
-    await act(async () => { ok = await result.current.handleAreaCreate({ nombre: 'Area X' }); });
+    await act(async () => { ok = await result.current.handleAreaCreate(parcial({ nombre: 'Area X' })); });
     expect(ok).toBe(false);
     expect(toastErrorMock).toHaveBeenCalledWith(expect.stringContaining('No hay sedes disponibles'));
   });
@@ -210,7 +218,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = false;
-    await act(async () => { ok = await result.current.handleAreaCreate({ nombre: 'Area X' }); });
+    await act(async () => { ok = await result.current.handleAreaCreate(parcial({ nombre: 'Area X' })); });
     expect(ok).toBe(true);
     expect(mockPost).toHaveBeenCalledWith('/areas/', expect.objectContaining({ sede: 5 }));
   });
@@ -222,7 +230,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = true;
-    await act(async () => { ok = await result.current.handleAreaCreate({ nombre: 'X' }); });
+    await act(async () => { ok = await result.current.handleAreaCreate(parcial({ nombre: 'X' })); });
     expect(ok).toBe(false);
     expect(toastErrorMock).toHaveBeenCalled();
   });
@@ -234,7 +242,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = false;
-    await act(async () => { ok = await result.current.handleAreaUpdate(1, { nombre: 'Area Actualizada' }); });
+    await act(async () => { ok = await result.current.handleAreaUpdate(1, parcial({ nombre: 'Area Actualizada' })); });
     expect(ok).toBe(true);
   });
 
@@ -245,7 +253,7 @@ describe('useSedesYGrupos', () => {
     await waitFor(() => expect(result.current.sedesFetchDone).toBe(true));
 
     let ok = true;
-    await act(async () => { ok = await result.current.handleAreaUpdate(1, {}); });
+    await act(async () => { ok = await result.current.handleAreaUpdate(1, parcial({})); });
     expect(ok).toBe(false);
     expect(toastErrorMock).toHaveBeenCalled();
   });

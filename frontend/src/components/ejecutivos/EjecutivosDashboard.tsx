@@ -24,25 +24,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Warehouse,
-  AlertTriangle,
   RefreshCw,
   BarChart3,
   TrendingUp,
   Activity,
   Factory,
-  ShoppingCart,
-  CheckCircle2,
-  AlertCircle,
   Layers,
   ClipboardList,
   History,
   FileSpreadsheet,
+  PackageOpen,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { MRPDashboard } from '../shared/MRPDashboard';
+import { KpisMRP } from './KpisMRP';
 import { MovementApproval } from '../shared/MovementApproval';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
-import { KpiCard } from './KpiCard';
+import { ConfiguracionEmpaqueView } from '../shared/ConfiguracionEmpaqueView';
 import { useDashboardEjecutivoData } from './useDashboardEjecutivoData';
 import { useProduccionEjecutivo } from './useProduccionEjecutivo';
 import { useProduccionPorProducto } from './useProduccionPorProducto';
@@ -78,7 +76,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
     setProduccionResumen: produccion.setProduccionResumen,
     setTendencia: produccion.setTendencia,
     setAlertas: stockHook.setAlertas,
-    setStock: stockHook.setStock,
+    setResumenStock: stockHook.setResumenStock,
     setClientes: ventas.setClientes,
     setPedidos: ventas.setPedidos,
   });
@@ -91,7 +89,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
   });
 
   // ---------------------------------------------------------------------------
-  // Render helpers
+  // Funciones auxiliares de renderizado
   // ---------------------------------------------------------------------------
 
   if (dash.loading) {
@@ -117,7 +115,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
       {/* ── Header ── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             {isAdminSede ? 'Panel de Administrador de Sede' : 'Panel Ejecutivo'}
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
@@ -177,6 +175,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
           <TabsTrigger value="ventas" className="gap-1"><TrendingUp className="w-4 h-4" />Ventas</TabsTrigger>
           <TabsTrigger value="reportes" className="gap-1"><FileSpreadsheet className="w-4 h-4" />Reportes</TabsTrigger>
           {isAdminSede && <TabsTrigger value="auditoria" className="gap-1"><History className="w-4 h-4" />Auditoría</TabsTrigger>}
+          {isAdminSede && <TabsTrigger value="configuracion" className="gap-1"><PackageOpen className="w-4 h-4" />Configuración</TabsTrigger>}
         </TabsList>
 
         {isAdminSede && (
@@ -219,31 +218,22 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
 
         {/* ════════════════════════════════════════════════════════════
             TAB 3: MRP — CU-EJ-04
-            Reutiliza MRPDashboard existente (OCP — sin modificar el componente)
+            MRPDashboard con el filtro de sede del panel (el admin de sede usa la suya)
         ════════════════════════════════════════════════════════════ */}
         <TabsContent value="mrp" className="mt-4">
           {/* KPIs rápidos del MRP para contexto ejecutivo */}
           {!isAdminSede && (
-            <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
-              <KpiCard
-                titulo="OCS Pendientes"
-                valor={kp?.mrp.ocs_pendientes ?? '—'}
-                icon={<ShoppingCart className="w-4 h-4" />}
-                alerta={(kp?.mrp.ocs_pendientes ?? 0) > 0}
-                alertaTexto="Pendientes de aprobación"
-              />
-              <KpiCard titulo="Productos en Déficit" valor={kp?.mrp.productos_en_deficit ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} />
-              <KpiCard titulo="OCS Aprobadas" valor={kp?.mrp.ocs_aprobadas ?? '—'} icon={<CheckCircle2 className="w-4 h-4" />} />
-              <KpiCard titulo="OCS Rechazadas" valor={kp?.mrp.ocs_rechazadas ?? '—'} icon={<AlertCircle className="w-4 h-4" />} />
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 mb-6">
+              <KpisMRP mrp={kp?.mrp} />
             </div>
           )}
-          <MRPDashboard />
+          <MRPDashboard sedeId={isAdminSede ? undefined : dash.filtroSedeId} />
         </TabsContent>
 
         {/* TAB 4: STOCK — CU-EJ-05 */}
         <StockTab
           alertas={stockHook.alertas}
-          stock={stockHook.stock}
+          resumenStock={stockHook.resumenStock}
           busquedaAlertas={stockHook.busquedaAlertas}
           setBusquedaAlertas={stockHook.setBusquedaAlertas}
           bodegaSeleccionada={stockHook.bodegaSeleccionada}
@@ -267,6 +257,9 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
           topDeudores={ventas.topDeudores}
           distribucionPago={ventas.distribucionPago}
           funnelData={ventas.funnelData}
+          vendedores={dash.vendedores}
+          filtroVendedorId={dash.filtroVendedorId}
+          onFiltroVendedorChange={dash.setFiltroVendedorId}
           modalEstadoPedido={ventas.modalEstadoPedido}
           setModalEstadoPedido={ventas.setModalEstadoPedido}
           modalVendedor={ventas.modalVendedor}
@@ -306,6 +299,13 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
         {isAdminSede && (
           <TabsContent value="auditoria" className="mt-4">
             <AuditLogViewer sedeId={userSedeId} permitirVerTodasSedes={false} />
+          </TabsContent>
+        )}
+
+        {/* TEX-43: el Administrador de Sede configura las equivalencias de empaque de su sede. */}
+        {isAdminSede && (
+          <TabsContent value="configuracion" className="mt-4">
+            <ConfiguracionEmpaqueView />
           </TabsContent>
         )}
       </Tabs>

@@ -1,6 +1,12 @@
-"""Tests para JWTServiceAuthentication. EP + BVA."""
+"""Tests para JWTServiceAuthentication. EP + BVA.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token valido / sin header / token expirado / tipo refresh.
+- Transición de estados (STT): token expirado.
+"""
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -12,7 +18,7 @@ from internal_api.authentication import JWTServiceAuthentication
 
 def _make_token(sub="scanning_service", scope=None, exp_delta=900, token_type="service_access"):
     """Helper: genera token RS256 válido para tests."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": sub,

@@ -2,8 +2,14 @@
 Tests del endpoint genérico POST /generate — reemplaza, para el tráfico real
 del backend, a los routers por-reporte (auditoría de performance 2026-08-31):
 el backend ya consulta sus propios datos en proceso y solo pide el formateo.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): rows con datos / rows vacio / formato invalido / formato csv.
+- Análisis de valores límite (BVA): rows vacio.
 """
+
 from fastapi.testclient import TestClient
+
 from src.main import app
 
 client = TestClient(app, headers={"Authorization": "Bearer test-token"})

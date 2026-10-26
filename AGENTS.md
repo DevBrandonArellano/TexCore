@@ -39,7 +39,7 @@ Rules:
   - Las equivalencias de empaquetado (ej. Hilos: $1 \text{ baño} = 15 \text{ fundas} = 225 \text{ conos}$; Telas: $1 \text{ baño} = 600 \text{ m}$) son **ejemplos configurables por sede**, no constantes globales rígidas. Cada sede puede definir sus propios estándares respetando la misma estructura matemática.
   - Telas utiliza `DECIMAL(12, 4)` en `cantidad_metros` para precisión métrica en mermas y costeo.
   - Respetar los CHECK Constraints nativos T-SQL (`database/V2__optimize_sqlserver2022_texcore.sql`).
-- **Stored Procedures & Despliegue**:
-  - Toda consulta reportable debe usar los 21 Stored Procedures optimizados de `database/V3__optimize_stored_procedures_texcore.sql` o endpoints de `internal_api`.
+- **Consultas, Reportes & Despliegue**:
+  - Toda consulta reportable se gestiona mediante endpoints de `internal_api` y Django ORM optimizado con índices nativos (`database/V2__optimize_sqlserver2022_texcore.sql`, `V4__indices_reportes_carga_concurrente.sql`, `V5__optimizacion_indices_mes.sql`). Los Stored Procedures antiguos fueron eliminados por constituir código muerto.
   - Respetar el nivel de aislamiento **Read Committed Snapshot Isolation (RCSI)**.
   - `seed_production_masters` inicializa la infraestructura global (grupos RBAC, permisos y superusuario `admin` sin sede). Las Sedes y Áreas reales son creadas dinámicamente por el **Administrador de Sistemas**.

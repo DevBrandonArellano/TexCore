@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../ui/sheet';
 import { Separator } from '../ui/separator';
 import { Progress } from '../ui/progress';
-import { Pencil, Trash2, ClipboardList, PlusCircle, Play, CheckCircle2 } from 'lucide-react';
+import { Pencil, Trash2, ClipboardList, PlusCircle, Play, CheckCircle2, Droplets } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '../../lib/axios';
 import type { OrdenProduccion, Sede, Area, Bodega, FormulaColor } from '../../lib/types';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
-import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
+import { DosificacionOrdenPanel } from './DosificacionOrdenPanel';
+import { JustificacionDialog } from '../shared/JustificacionDialog';
+import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
+import { datosDeError } from '../../lib/apiError';
 
 interface OrdenDetalleSheetProps {
   open: boolean;
@@ -22,6 +29,7 @@ interface OrdenDetalleSheetProps {
   areas: Area[];
   bodegas: Bodega[];
   formulas: FormulaColor[];
+  onDataRefresh?: () => void;
 }
 
 const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
@@ -44,7 +52,21 @@ function OrdenDetalleSheetImpl({
   areas,
   bodegas,
   formulas,
+  onDataRefresh,
 }: OrdenDetalleSheetProps) {
+  const [litrosBano, setLitrosBano] = useState('');
+  const [guardandoLitros, setGuardandoLitros] = useState(false);
+  const [pidiendoJustificacion, setPidiendoJustificacion] = useState(false);
+
+  // Otra orden (o el litraje guardado cambió): el campo se reinicia durante el render.
+  const litrosGuardados = orden?.litros_bano != null ? String(orden.litros_bano) : '';
+  const claveLitros = `${orden?.id ?? ''}|${litrosGuardados}`;
+  const [claveLitrosVista, setClaveLitrosVista] = useState<string | null>(null);
+  if (claveLitros !== claveLitrosVista) {
+    setClaveLitrosVista(claveLitros);
+    setLitrosBano(litrosGuardados);
+  }
+
   if (!orden) return null;
 
   const { isOverdue, isToday } = getOrdenVencimientoStatus(orden);
@@ -52,13 +74,45 @@ function OrdenDetalleSheetImpl({
   const pesoReq = Number(orden.peso_neto_requerido || 0);
   const porcentaje = pesoReq > 0 ? Math.min(100, Math.round((pesoProd / pesoReq) * 100)) : 0;
 
+  const guardarLitros = async (justificacion?: string): Promise<boolean> => {
+    try {
+      setGuardandoLitros(true);
+      await apiClient.patch(`/ordenes-produccion/${orden.id}/`, {
+        litros_bano: parseFloat(litrosBano),
+        ...(justificacion ? { justificacion } : {}),
+      });
+      toast.success('Litros de baño actualizados.');
+      onDataRefresh?.();
+      return true;
+    } catch (error) {
+      const detalle = datosDeError(error);
+      toast.error(detalle ? JSON.stringify(detalle) : 'Error al guardar los litros de baño.');
+      return false;
+    } finally {
+      setGuardandoLitros(false);
+    }
+  };
+
+  const handleGuardarLitros = async () => {
+    const valor = parseFloat(litrosBano);
+    if (isNaN(valor) || valor <= 0) {
+      toast.error('Ingresa un número de litros mayor a cero.');
+      return;
+    }
+    // Con químicos ya descontados el backend ajusta la descarga y exige la causa (ISO 9001).
+    if (orden.inventario_descontado) {
+      setPidiendoJustificacion(true);
+      return;
+    }
+    await guardarLitros();
+  };
+
   // Resolver nombres desde catálogos (la API solo devuelve IDs para estos campos)
-  const ordenAny = orden as any;
-  const productoNombre = ordenAny.producto_entrada_detail?.descripcion || orden.producto_nombre;
+  const productoNombre = orden.producto_entrada_detail?.descripcion || orden.producto_nombre;
   const formulaNombre = formulas.find(f => f.id === orden.formula_color)?.nombre_color;
   const sedeNombre = sedes.find(s => s.id === orden.sede)?.nombre;
   const areaNombre = areas.find(a => a.id === orden.area)?.nombre;
-  const bodegaEntradaNombre = bodegas.find(b => b.id === ordenAny.bodega_entrada)?.nombre;
+  const bodegaEntradaNombre = bodegas.find(b => b.id === orden.bodega_entrada)?.nombre;
   const bodegaQuimicosNombre = bodegas.find(b => b.id === orden.bodega_quimicos)?.nombre;
 
   return (
@@ -89,6 +143,24 @@ function OrdenDetalleSheetImpl({
 
           <Separator />
 
+          {orden.pedido_venta && (
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wide">
+                  Fabricación Bajo Pedido (MTO)
+                </span>
+                <Badge className="bg-purple-200 text-purple-900 border-purple-300 text-xs">
+                  Pedido #{orden.pedido_venta}
+                </Badge>
+              </div>
+              <p className="text-xs text-purple-800 dark:text-purple-400">
+                Esta orden está vinculada directamente al pedido comercial #{orden.pedido_venta}
+                {orden.detalle_pedido ? ` (ítem #${orden.detalle_pedido})` : ''}.
+                Los lotes producidos quedarán reservados exclusivamente para este cliente.
+              </p>
+            </div>
+          )}
+
           {/* Progreso */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progreso de Producción</h3>
@@ -105,6 +177,41 @@ function OrdenDetalleSheetImpl({
           </div>
 
           <Separator />
+
+          {/* Baño de tintura (spec 2026-09-24 D3): litros es el dato canónico, la
+              relación de baño (litros / peso) se deriva y se muestra de solo lectura. */}
+          {orden.formula_color && (
+            <>
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <Droplets className="w-3.5 h-3.5" /> Baño de Tintura
+                </h3>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="litros-bano" className="text-xs text-muted-foreground">Litros de Baño</Label>
+                    <Input
+                      id="litros-bano"
+                      type="number"
+                      step="0.01"
+                      className="h-9"
+                      value={litrosBano}
+                      onChange={(e) => setLitrosBano(e.target.value)}
+                      placeholder="Ej: 860"
+                    />
+                  </div>
+                  <Button size="sm" onClick={handleGuardarLitros} disabled={guardandoLitros}>
+                    {guardandoLitros ? 'Guardando...' : 'Guardar'}
+                  </Button>
+                </div>
+                <DetailRow
+                  label="Relación de Baño"
+                  value={orden.relacion_bano ? `1:${Number(orden.relacion_bano).toFixed(2)}` : 'Aún no calculada'}
+                />
+                <DosificacionOrdenPanel ordenId={orden.id} maquinaId={orden.maquina_asignada} litros={litrosBano} />
+              </div>
+              <Separator />
+            </>
+          )}
 
           {/* Fechas */}
           <div className="space-y-3">
@@ -132,20 +239,12 @@ function OrdenDetalleSheetImpl({
             </div>
           </div>
 
-          {(orden.observaciones || orden.justificacion) && (
+          {orden.observaciones && (
             <>
               <Separator />
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notas</h3>
-                {orden.observaciones && (
-                  <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.observaciones}</div>
-                )}
-                {orden.justificacion && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">Justificación</span>
-                    <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.justificacion}</div>
-                  </div>
-                )}
+                <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.observaciones}</div>
               </div>
             </>
           )}
@@ -218,6 +317,14 @@ function OrdenDetalleSheetImpl({
           </div>
         </SheetFooter>
       </SheetContent>
+      <JustificacionDialog
+        open={pidiendoJustificacion}
+        titulo="Ajustar litros de baño"
+        descripcion="Esta orden ya tiene químicos descontados: la descarga se ajustará a los nuevos litros."
+        textoConfirmar="Ajustar litros"
+        onConfirmar={guardarLitros}
+        onClose={() => setPidiendoJustificacion(false)}
+      />
     </Sheet>
   );
 }

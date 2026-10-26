@@ -1,8 +1,9 @@
 # Servicio Satélite de Impresión (`printing_service`)
 
-Servicio satélite FastAPI dedicado a la generación de documentos PDF (notas de venta, etiquetas universales) y etiquetas ZPL para impresoras Zebra. Desacopla las dependencias pesadas de WeasyPrint del núcleo Django.
+Servicio satélite FastAPI dedicado a la generación de documentos PDF (notas de venta, guías de remisión, reportes de producción y despachos, hojas de dosificación, etiquetas universales) y etiquetas ZPL para impresoras Zebra. Desacopla las dependencias pesadas de WeasyPrint del núcleo Django.
 
 > **Refactorizado:** 2026-04-23 — Se aplicó arquitectura de capas SOLID con Strategy Pattern y separación DTO/Servicio.
+> **Estado al 14-oct-2026:** 11 endpoints (9 PDF, 1 ZPL y `/health`), 107 pruebas con cobertura mínima del 95 %, JWT RS256 obligatorio en todo salvo `/health`.
 > **Extendido:** 2026-07-20 — F5 del módulo de Gestión de Etiquetas (ver [GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md)): endpoint `/pdf/etiqueta` (fallback universal para impresoras no-Zebra) + campos de gobernanza (`motivo`, `tipo_evento`, `version`, `usuario`) en `EtiquetaRequest` y `PrintAuditLog`.
 
 ---
@@ -17,16 +18,26 @@ printing_service/src/
                                + NotaVentaContexto (schema para el template)
   services/
     document_service.py      ← Lógica de negocio: cálculo IVA, subtotal, formateo de fecha
+    label_service.py         ← Contexto de la etiqueta (sellos de reimpresión/reetiquetado)
+    zpl_sanitizer.py         ← Escapa los datos antes de interpolarlos en ZPL
     output_strategy.py       ← Strategy Pattern: PdfOutputStrategy / ZplOutputStrategy
   routers/
-    pdf.py                   ← POST /pdf/nota-venta, POST /pdf/etiqueta
+    pdf.py                   ← POST /pdf/{nota-venta, etiqueta, reporte-avance, reporte-balance,
+                               historial-despachos, produccion-por-producto, guia-remision,
+                               formula-dosificacion, historial-mantenimiento}
     zpl.py                   ← POST /zpl/etiqueta
     health.py                ← GET /health
   templates/
     nota_venta.html
+    guia_remision.html
+    historial_despachos.html
+    produccion_por_producto.html
+    reporte_avance.html       ← A4 horizontal
+    reporte_balance.html      ← A4 vertical
+    formula_dosificacion.html ← Hoja de dosificación (marca «BORRADOR» si no es la versión oficial)
     etiqueta.zpl             ← Zebra (con sello REIMPRESION/REETIQUETADO vN)
     etiqueta_label.html       ← PDF universal 100×150mm (fallback no-Zebra)
-  main.py                    ← App factory pura (solo include_router)
+  main.py                    ← App factory + middleware JWT RS256
 ```
 
 ### Diagrama de flujo de una solicitud PDF
@@ -269,19 +280,37 @@ Genera el reporte de Balance de Masas Mensual (orientación vertical A4).
 
 ---
 
+### `POST /pdf/historial-despachos`, `/pdf/produccion-por-producto`, `/pdf/guia-remision`, `/pdf/formula-dosificacion` y `/pdf/historial-mantenimiento`
+
+Siguen el mismo patrón: un DTO Pydantic de entrada (`HistorialDespachosRequest`, `ProduccionPorProductoRequest`, `GuiaRemisionRequest`, `FormulaDosificacionRequest`, `HistorialMantenimientoRequest` en `schemas/printing.py`), una plantilla HTML y `StreamingResponse (application/pdf)`.
+
+| Endpoint | Lo pide Django desde | Documento |
+|---|---|---|
+| `/pdf/historial-despachos` | `inventory/views/despacho_views.py` | Historial de despachos filtrado |
+| `/pdf/guia-remision` | `inventory/views/despacho_views.py` | Guía de remisión de un despacho |
+| `/pdf/produccion-por-producto` | `gestion/views/kpi_views.py` | Producción por producto del panel ejecutivo |
+| `/pdf/formula-dosificacion` | `gestion/views/formula_views.py` (`POST /api/formula-colors/{id}/imprimir-dosificacion/`) | Hoja de dosificación para un peso y litros de baño: versión oficial o, sin ella, receta viva marcada «BORRADOR» |
+| `/pdf/historial-mantenimiento` | `gestion/views/production_maquina_views.py` (`POST /api/paros-maquina/imprimir-historial/`) | Historial de mantenimiento y paros del área (A4 horizontal): totales del rango, resumen por máquina y detalle paro por paro |
+
+---
+
 ## Tests
 
 ```
 tests/
+  test_auth_middleware.py        ← JWT obligatorio: sin header, sin Bearer, expirado, tipo o emisor incorrecto; /health exento
+  test_nota_venta_calculos.py    ← cálculos de la nota de venta vía DocumentService
   unit/
-    test_document_service.py     ← 13 tests de DocumentService (sin HTTP, sin WeasyPrint)
+    test_document_service.py     ← DocumentService (sin HTTP, sin WeasyPrint)
+    test_label_service.py        ← contexto y sellos de la etiqueta
+    test_zpl_sanitizer.py        ← escape de datos en ZPL
     test_audit_repository.py     ← AuditRepository / build_print_record (incl. campos F5)
-    test_printing_endpoints.py   ← /zpl/etiqueta, /pdf/nota-venta, /pdf/etiqueta (mocks de strategy/audit)
+    test_printing_endpoints.py   ← los 10 endpoints de documentos (mocks de strategy/audit)
     test_database_engine.py
-  test_nota_venta_calculos.py    ← migrado para usar DocumentService.calcular_*
+    test_concurrency.py
 ```
 
-Los tests unitarios de `DocumentService` no requieren instalar WeasyPrint (la importación es lazy, dentro del método `render`). El CI los corre con `--cov-fail-under=80`.
+107 pruebas. Las de `DocumentService` no requieren WeasyPrint (la importación es lazy, dentro de `render`). `pytest.ini` exige `--cov-fail-under=95` y el CI lo aplica.
 
 ---
 
@@ -293,9 +322,43 @@ Django envía los datos vía HTTP POST desde `gestion/utils.py` (clase `Printing
 pdf_content = PrintingService.generate_nota_venta_pdf(data_dict)   # /pdf/nota-venta
 zpl = PrintingService.generate_zpl_label(data_dict)                # /zpl/etiqueta
 pdf_bytes = PrintingService.generate_label_pdf(data_dict)           # /pdf/etiqueta (F5)
+PrintingService.generate_historial_despachos_pdf(data_dict)          # /pdf/historial-despachos
+PrintingService.generate_produccion_por_producto_pdf(data_dict)      # /pdf/produccion-por-producto
+PrintingService.generate_guia_remision_pdf(data_dict)                # /pdf/guia-remision
+PrintingService.generate_formula_dosificacion_pdf(data_dict)         # /pdf/formula-dosificacion
+PrintingService.generate_historial_mantenimiento_pdf(data_dict)      # /pdf/historial-mantenimiento
 ```
 
+Los reportes de avance y balance los pide `internal_api/views/pdf_produccion_views.py`. Todas las llamadas llevan el encabezado de `_printing_auth_headers()`; el 13-oct-2026 se corrigieron los cuatro métodos que se habían agregado sin él y recibían 401.
+
 El servicio no accede a la base de datos; recibe todos los datos en el body. Si no responde
-(timeout o caído), `generate_zpl` en `production_views.py` degrada a un ZPL de fallback generado
+(timeout o caído), `generate_zpl` en `gestion/views/production_lote_views.py` degrada a un ZPL de fallback generado
 localmente en Django (`LoteProduccionViewSet._build_zpl_fallback`), y `generate-pdf-label/`
 responde `503` para que el frontend recurra al último fallback (portapapeles).
+
+---
+
+## Seguridad — Autenticación JWT (2026-09-22)
+
+> **Hallazgo corregido:** hasta esta fecha, `printing_service` era el único de los
+> tres microservicios satélite sin ninguna autenticación — `scanning_service` y
+> `reporting_excel` ya exigían JWT RS256 desde la evolución descrita en
+> `docs/arquitectura/MICROSERVICIOS.md` §5, pero `printing_service` aceptaba
+> peticiones de cualquier actor con acceso a la red interna de Docker. Esto
+> permitía generar PDFs de notas de venta (datos de clientes, montos) y
+> etiquetas ZPL arbitrarias sin credenciales. Ver `docs/requerimientos/REGISTRO_RIESGOS.md` (RS-09).
+
+Todos los endpoints excepto `GET /health` ahora exigen `Authorization: Bearer <JWT RS256>`, verificado por el middleware `verify_jwt_service_token` en `src/main.py` (mismo esquema que `reporting_excel`: valida firma con `INTERNAL_JWT_PUBLIC_KEY`, `iss=texcore`, `type=service_access`).
+
+```
+Antes:
+  Django (o cualquiera en la red Docker) ──HTTP sin auth──► printing_service
+
+Después:
+  Django ──JWT RS256 (generate_token, TTL 60s)──► printing_service (verifica firma con clave pública)
+```
+
+- **Django firma el token** en `gestion/utils.py::_printing_auth_headers()`, reutilizando `JWTServiceAuthentication.generate_token()` (ya existente en `internal_api/authentication.py`, sin duplicar lógica).
+- **`printing_service` requiere `INTERNAL_JWT_PUBLIC_KEY`** como variable de entorno obligatoria (fail-fast si falta), igual que sus pares.
+- **Dependencias**: `PyJWT==2.15.0` y `cryptography==50.0.1` (esta última necesaria para que PyJWT soporte RS256 — sin ella la verificación falla con `Algorithm not supported`).
+- **Tests**: `printing_service/tests/test_auth_middleware.py` — 9 casos cubriendo ausencia de header, header sin `Bearer`, token expirado, tipo de token incorrecto, emisor no reconocido, y que `/health` sigue exento.

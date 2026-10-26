@@ -10,13 +10,16 @@ Técnicas ISTQB aplicadas:
   `not formula_color`.
 - Partición de equivalencia (EP): OP sin bodega de químicos / sin fórmula.
 """
-from django.test import TestCase
+
 from django.core.exceptions import ValidationError
+from django.test import TestCase
 
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.tests.factories import (
-    SedeFactory, BodegaFactory, CustomUserFactory,
+    BodegaFactory,
+    CustomUserFactory,
     OrdenProduccionFactory,
+    SedeFactory,
 )
 
 
@@ -30,7 +33,7 @@ class DescargaQuimicosValidacionesTestCase(TestCase):
         orden = OrdenProduccionFactory(sede=self.sede, bodega_quimicos=None)
         with self.assertRaises(ValidationError) as ctx:
             DescargaQuimicosService.descargar_para_op(orden, self.user)
-        self.assertIn('Bodega de químicos', str(ctx.exception))
+        self.assertIn("Bodega de químicos", str(ctx.exception))
 
     def test_descarga_dado_sin_formula_cuando_descarga_entonces_validation_error(self):
         # Caja blanca: rama `not orden.formula_color` (con bodega presente)
@@ -41,4 +44,4 @@ class DescargaQuimicosValidacionesTestCase(TestCase):
         )
         with self.assertRaises(ValidationError) as ctx:
             DescargaQuimicosService.descargar_para_op(orden, self.user)
-        self.assertIn('Fórmula de color', str(ctx.exception))
+        self.assertIn("Fórmula de color", str(ctx.exception))

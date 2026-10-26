@@ -12,25 +12,24 @@ SRP: cada view orquesta solo su caso de uso:
   3. Proxiar el stream PDF al cliente React
 ISO 27001 A.12.4: auditoría de la acción antes de llamar al servicio externo.
 """
+
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
 from django.conf import settings
 from django.db.models import F
+from django.http import StreamingHttpResponse
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
-from django.http import StreamingHttpResponse
-
-
-from gestion.models import LoteProduccion
-from rest_framework.permissions import BasePermission
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from gestion.auth_backends import CookieJWTAuthentication
+from gestion.models import LoteProduccion
+from gestion.permissions import ve_todas_las_sedes
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
 from internal_api.permissions import HasScope, IsInternalService
@@ -55,13 +54,10 @@ def _resolve_sede_scope(request, requested_sede_id):
     if isinstance(user, ServicePrincipal):
         return requested_sede_id, None
 
-    is_global = user.is_superuser or user.groups.filter(
-        name__in=['admin_sistemas', 'ejecutivo']
-    ).exists()
-    if is_global:
+    if ve_todas_las_sedes(user):
         return requested_sede_id, None
 
-    user_sede_id = getattr(user, 'sede_id', None)
+    user_sede_id = getattr(user, "sede_id", None)
     if not user_sede_id:
         return None, Response(
             {"detail": "No tienes una sede asignada para generar este reporte."},
@@ -70,12 +66,14 @@ def _resolve_sede_scope(request, requested_sede_id):
     if requested_sede_id and str(requested_sede_id) != str(user_sede_id):
         logger.warning(
             "Intento de generar reporte PDF de otra sede",
-            extra={"sd": {
-                "entity": "PdfProduccion",
-                "user": getattr(user, "username", "?"),
-                "sede_usuario": user_sede_id,
-                "sede_solicitada": requested_sede_id,
-            }},
+            extra={
+                "sd": {
+                    "entity": "PdfProduccion",
+                    "user": getattr(user, "username", "?"),
+                    "sede_usuario": user_sede_id,
+                    "sede_solicitada": requested_sede_id,
+                }
+            },
         )
         return None, Response(
             {"detail": "No tienes permiso para generar reportes de otra sede."},
@@ -91,6 +89,7 @@ class IsProductionReportRole(BasePermission):
     IsInternalService & HasScope('reports:read') (internal_api/permissions.py),
     igual patrón que reporting_views.py.
     """
+
     message = "Acceso no autorizado a reportes de producción."
 
     def has_permission(self, request, view) -> bool:
@@ -99,9 +98,12 @@ class IsProductionReportRole(BasePermission):
             # hasattr(user, "groups") descarta ServicePrincipal: comparte
             # is_authenticated=True con CustomUser pero no tiene roles Django.
             return False
-        return user.is_superuser or user.groups.filter(
-            name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]
-        ).exists()
+        return (
+            user.is_superuser
+            or user.groups.filter(
+                name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]
+            ).exists()
+        )
 
 
 _AUTH = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
@@ -121,13 +123,12 @@ def _get_printing_url() -> str:
 
 def _now_iso() -> str:
     """Retorna el instante actual en ISO 8601 UTC."""
-    return datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
 def _audit(request: Request, action: str) -> None:
-    service_identifier = (
-        getattr(request.user, "service_name", None)
-        or getattr(request.user, "username", "usuario_desconocido")
+    service_identifier = str(
+        getattr(request.user, "service_name", None) or getattr(request.user, "username", None) or "usuario_desconocido"
     )
     AuditLogger.log(
         service=service_identifier,
@@ -140,14 +141,15 @@ def _audit(request: Request, action: str) -> None:
 # Helpers de construcción de payload
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_reporte_avance_payload(
     ordenes_qs,
     empresa_nombre: str,
     sede_nombre: str,
-    fecha_desde: Optional[str],
-    fecha_hasta: Optional[str],
-    maquina_filtro: Optional[str],
-    operario_filtro: Optional[str],
+    fecha_desde: str | None,
+    fecha_hasta: str | None,
+    maquina_filtro: str | None,
+    operario_filtro: str | None,
 ) -> dict:
     """
     Traduce los registros del ORM al schema ReporteAvanceRequest del
@@ -159,16 +161,18 @@ def _build_reporte_avance_payload(
         kilos = float(lote.get("peso_neto_producido") or 0)
         porcentaje = round((kilos / peso_requerido * 100), 2) if peso_requerido > 0 else 0.0
 
-        detalles.append({
-            "orden": str(lote.get("op_codigo") or "—"),
-            "producto": str(lote.get("producto_descripcion") or "—"),
-            "lote": str(lote.get("codigo_lote") or "—"),
-            "maquina": str(lote.get("maquina_nombre") or "—"),
-            "operario": str(lote.get("operario_nombre") or "—"),
-            "kilos": kilos,
-            "porcentaje_avance": porcentaje,
-            "estado": str(lote.get("op_estado") or "—"),
-        })
+        detalles.append(
+            {
+                "orden": str(lote.get("op_codigo") or "—"),
+                "producto": str(lote.get("producto_descripcion") or "—"),
+                "lote": str(lote.get("codigo_lote") or "—"),
+                "maquina": str(lote.get("maquina_nombre") or "—"),
+                "operario": str(lote.get("operario_nombre") or "—"),
+                "kilos": kilos,
+                "porcentaje_avance": porcentaje,
+                "estado": str(lote.get("op_estado") or "—"),
+            }
+        )
 
     return {
         "empresa_nombre": empresa_nombre,
@@ -216,15 +220,17 @@ def _build_balance_masas_payload(
         egresos = egresos_por_producto.get(pid, 0.0)
         inv_inicial = round(stock_actual - (produccion - egresos), 4)
 
-        detalles.append({
-            "codigo": str(row.get("producto_codigo") or "—"),
-            "descripcion": str(row.get("producto_descripcion") or "—"),
-            "inventario_inicial": inv_inicial,
-            "produccion": round(produccion, 4),
-            "egresos": round(egresos, 4),
-            "stock_actual": round(stock_actual, 4),
-            "is_negativo": stock_actual < 0,
-        })
+        detalles.append(
+            {
+                "codigo": str(row.get("producto_codigo") or "—"),
+                "descripcion": str(row.get("producto_descripcion") or "—"),
+                "inventario_inicial": inv_inicial,
+                "produccion": round(produccion, 4),
+                "egresos": round(egresos, 4),
+                "stock_actual": round(stock_actual, 4),
+                "is_negativo": stock_actual < 0,
+            }
+        )
 
     return {
         "empresa_nombre": empresa_nombre,
@@ -235,39 +241,49 @@ def _build_balance_masas_payload(
     }
 
 
-def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse:
+def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse | Response:
     """
     Envía el payload al printing_service y proxia el stream PDF al cliente.
     DIP: _get_printing_url() proviene de settings, no hardcodeado aquí.
     """
     url = f"{_get_printing_url()}{endpoint}"
+    # printing_service exige JWT Bearer RS256 en todo endpoint salvo /health
+    # (ver docs/arquitectura/MICROSERVICIO_IMPRESION.md); mismo esquema que
+    # gestion/utils.py::PrintingService usa para el resto de llamadas al
+    # microservicio de impresión.
+    token = JWTServiceAuthentication.generate_token(service_name="backend", scopes=["printing:write"], expires_in=60)
+    headers = {"Authorization": f"Bearer {token}"}
 
     try:
         with httpx.Client(timeout=_PDF_TIMEOUT) as client:
-            upstream = client.post(url, json=payload)
+            upstream = client.post(url, json=payload, headers=headers)
             upstream.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        logger.error(
+        logger.exception(
             "printing_service retornó error HTTP",
-            extra={"sd": {
-                "rfc5424_severity": 3,
-                "endpoint": endpoint,
-                "status_code": str(exc.response.status_code),
-                "detail": exc.response.text[:200],
-            }},
+            extra={
+                "sd": {
+                    "rfc5424_severity": 3,
+                    "endpoint": endpoint,
+                    "status_code": str(exc.response.status_code),
+                    "detail": exc.response.text[:200],
+                }
+            },
         )
         return Response(
             {"detail": f"Error del servicio de impresión: {exc.response.status_code}"},
             status=502,
         )
     except httpx.RequestError as exc:
-        logger.error(
+        logger.exception(
             "No se pudo conectar al printing_service",
-            extra={"sd": {
-                "rfc5424_severity": 3,
-                "endpoint": endpoint,
-                "error": str(exc)[:200],
-            }},
+            extra={
+                "sd": {
+                    "rfc5424_severity": 3,
+                    "endpoint": endpoint,
+                    "error": str(exc)[:200],
+                }
+            },
         )
         return Response(
             {"detail": "Servicio de impresión no disponible."},
@@ -278,15 +294,14 @@ def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHtt
         streaming_content=iter([upstream.content]),
         content_type="application/pdf",
     )
-    response["Content-Disposition"] = (
-        f'attachment; filename="{filename_base}_{_now_iso()[:10]}.pdf"'
-    )
+    response["Content-Disposition"] = f'attachment; filename="{filename_base}_{_now_iso()[:10]}.pdf"'
     return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Vistas
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class ReporteAvancePdfView(APIView):
     """
@@ -305,7 +320,7 @@ class ReporteAvancePdfView(APIView):
     permission_classes = _PERMS
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
-    def post(self, request: Request) -> StreamingHttpResponse:
+    def post(self, request: Request) -> StreamingHttpResponse | Response:
         _audit(request, "pdf_reporte_avance")
 
         # ── Parámetros de filtro ──────────────────────────────────────────
@@ -357,18 +372,16 @@ class ReporteAvancePdfView(APIView):
             )
         )
 
-        sede_nombre = (
-            registros[0].get("sede_nombre_qs", "Sede")
-            if registros
-            else request.data.get("sede_nombre", "Sede")
+        sede_nombre = str(
+            registros[0].get("sede_nombre_qs", "Sede") if registros else request.data.get("sede_nombre", "Sede")
         )
 
-        maquina_label = None
-        operario_label = None
+        maquina_label: str | None = None
+        operario_label: str | None = None
         if registros and maquina_id:
-            maquina_label = registros[0].get("maquina_nombre")
+            maquina_label = str(registros[0].get("maquina_nombre"))
         if registros and operario_id:
-            operario_label = registros[0].get("operario_nombre")
+            operario_label = str(registros[0].get("operario_nombre"))
 
         payload = _build_reporte_avance_payload(
             ordenes_qs=registros,
@@ -399,7 +412,7 @@ class BalanceMasasPdfView(APIView):
     permission_classes = _PERMS
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
-    def post(self, request: Request) -> StreamingHttpResponse:
+    def post(self, request: Request) -> StreamingHttpResponse | Response:
         _audit(request, "pdf_balance_masas")
 
         sede_id = request.data.get("sede_id")
@@ -416,12 +429,12 @@ class BalanceMasasPdfView(APIView):
             return Response({"detail": "sede_id es requerido."}, status=400)
 
         from gestion.models import Bodega
+
         bodega_qs = Bodega.objects.filter(sede_id=sede_id).values_list("id", flat=True)
         bodega_ids = list(bodega_qs)
 
         stock_qs = list(
-            StockBodega.objects.filter(bodega_id__in=bodega_ids)
-            .values(
+            StockBodega.objects.filter(bodega_id__in=bodega_ids).values(
                 "cantidad",
                 "producto_id",
                 producto_codigo=F("producto__codigo"),
@@ -430,9 +443,9 @@ class BalanceMasasPdfView(APIView):
         )
 
         mov_qs = list(
-            MovimientoInventario.objects
-            .filter(bodega_origen_id__in=bodega_ids)
-            .values("tipo_movimiento", "cantidad", "producto_id")
+            MovimientoInventario.objects.filter(bodega_origen_id__in=bodega_ids).values(
+                "tipo_movimiento", "cantidad", "producto_id"
+            )
         )
 
         sede_nombre = request.data.get("sede_nombre", f"Sede {sede_id}")

@@ -1,7 +1,7 @@
 -- =============================================================================
--- TEXCORE DATABASE OPTIMIZATION SCRIPT - SQL SERVER 2022
+-- SCRIPT DE OPTIMIZACIÓN DE LA BASE DE DATOS TEXCORE - SQL SERVER 2022
 -- Sistema de Control de Producción Textil (Ecosistema Híbrido: Django + SQLAlchemy)
--- Autor: Principal Database Architect & SQL Server 2022 Expert
+-- Autor: Arquitecto principal de bases de datos y experto en SQL Server 2022
 -- =============================================================================
 
 USE [texcore_db];

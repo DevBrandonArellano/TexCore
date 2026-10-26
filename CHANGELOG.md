@@ -1,6 +1,3089 @@
 # Changelog
 
+## Octubre 2026
+
+### Para continuar — Hoja de ruta (actualizada el 20-oct-2026)
+
+Estado: todo lo del 13-oct está commiteado en `MES` (`4e3ec1d`). Lo del 14-oct está commiteado en `MES` (`6b22edf`…`bfa6513`): Ruff etapa 5 y Tailwind 4 (cierran el plan de CI/CD) y el historial de mantenimiento y paros de máquina del Jefe de Área. Reemplaza a la hoja de ruta del 13-oct. Desde el 19-oct hay trabajo **sin commitear** en `MES` (cifrado RS-19, seguridad de la API, GitLab CI e ISTQB): ver el resumen del 20-oct.
+
+#### Directrices del usuario (8-oct) — aplican a todo lo que sigue
+
+1. **La tesis manda.** Cada documento de evidencia contrasta lo que la tesis afirma con el sistema: **✅ cumple / ❌ no cumple / ⏳ pendiente / 📅 planificado**.
+2. **Solo el resultado final** en los documentos de evidencia: criterio de la tesis, elementos usados y resultado. Sin antes y después, sin corridas intermedias, sin defectos encontrados en el camino. La historia va al CHANGELOG, los ADR, `REGISTRO_RIESGOS.md` y la matriz de trazabilidad.
+3. **Redactado para el paso a producción.** Las pruebas se hacen en desarrollo. El entorno se describe como «la configuración de despliegue de producción (`docker-compose.prod.yml`) con 3 años de operación simulada»; nunca se dice que corrió en el servidor de producción real.
+4. **Staging y TEX-54 al final**, cuando todo esté probado en `MES`.
+5. **Acceso total solo en el equipo Linux de desarrollo** (stack `texcore-prod`).
+
+#### Fuente de la tesis disponible en el repositorio
+
+`docs/Anteproyecto_Capstone_Final_Version.pdf` (8-jul) contiene:
+- los RNF (Tablas 6 a 10);
+- la DoD transversal (§5.1);
+- la Tabla 14;
+- el plan de despliegue (§5.3) y la puesta en marcha (§5.4).
+
+El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, con el capítulo 7, las Tablas 46 y 47 y la Figura 49) **no está en el repositorio**: copiarlo para contrastar el capítulo 7.
+
+#### Pasos, en orden
+
+1. ✅ ~~Reescribir `CHECKLIST_EVIDENCIA_MANUAL.md` como contraste con la tesis~~ (12-oct). Las correcciones al texto quedan en `CORRECCIONES_TESIS.md`.
+2. ✅ ~~Reescribir `REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento del 8-oct~~ (12-oct).
+3. ✅ ~~Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia~~ (14-oct, tarde): evidencia por sprint regenerada, auditoría del backlog cerrada y `AUDITORIA_CALIDAD.md` con su contraste al día. **RS-19** (datos personales sin cifrar, único ❌ del contraste) quedó ✅ ~~cerrado el 19-oct~~: cifrado en reposo con Fernet e índice ciego, y el contraste de §I.5 ya no tiene ❌.
+4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct) y ✅ ~~verificar RNF-01 en el stack~~ (13-oct).
+5. ✅ ~~Correr mypy y pip-audit~~ (13-oct, en la imagen `texcore-django-test`: ambos en 0).
+6. Usabilidad, a cargo del usuario:
+   - grabar el registro de lote, el escaneo y el pesaje contando los pasos;
+   - capturas del panel ejecutivo a 375, 768 y 1366 px.
+7. Cambiar la contraseña de `admin` (sigue en `admin` para la demo).
+8. ✅ ~~CI/CD Fases 3 a 6~~ (13-oct): `release.yml`, staging efímero con pruebas de humo, runner propio, contenedores endurecidos y `gobierno.yml`.
+9. ~~Acciones del usuario en GitHub~~ **Sustituido el 20-oct** por la plataforma GitLab (pasos 18 a 21): los workflows de GitHub Actions se retiraron (ADR-014) y GitHub queda como espejo.
+10. ✅ ~~Fase 2 del CI/CD: Ruff etapa 5 y Tailwind 4~~ (14-oct). El plan de CI/CD queda cerrado en el código.
+11. ✅ ~~Verificación visual de Tailwind 4 en el navegador~~ (14-oct, el usuario: «todo se ve bien»). **El plan de CI/CD queda cerrado en el código; solo faltan las acciones en GitHub (paso 9).**
+12. Verificación con React DevTools Profiler de la división de dashboards (único punto abierto de ese plan).
+13. ✅ ~~Historial de mantenimiento y paros de máquina para el Jefe de Área~~ (14-oct, tarde): paro automático por cambio de estado, `GET /api/paros-maquina/historial/`, PDF del printing_service y `HistorialMantenimientoPanel`. Pedido del usuario, cerrado con gates en verde y probado en el stack.
+14. Pegarle el SHA a `.git-blame-ignore-revs` cuando exista el commit del reformateo de Ruff (`git log -1 --format=%H`) y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+15. ✅ ~~RS-19: cifrar los datos personales en reposo y precisar lo que la tesis afirma sobre la LOPDP~~ (19-oct). El texto para pegar está en `CORRECCIONES_TESIS.md` §3.
+16. **Al desplegar `MES`:** generar `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` de producción **antes** de `migrate` (la `0010` no arranca sin ellas), respaldo previo, y `manage.py cifrar_datos_personales` para verificar. Guardar `FIELD_ENCRYPTION_KEYS` fuera del servidor: sin ella los datos cifrados no se recuperan (`docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §5).
+17. Al final: staging, TEX-54 y el resto de la corrección del texto de la tesis (`CORRECCIONES_TESIS.md` §1, §2 y §5: flake8 y bandit por Ruff, y las cifras de las Tablas 46 y 47).
+18. ✅ ~~Seguridad de la API: RNF-02 y OWASP API1/API2~~ (20-oct), ✅ ~~GitLab CE levantado y configurado~~ (20-oct, runners en línea, variables de CI y programación), ✅ ~~Gate ISTQB, plan de pruebas formal y ADR de Ruff~~ (20-oct).
+19. ✅ ~~Primer commit y push a GitLab~~ (20-oct): `MES`, `staging` y `master` subidas, `master` por defecto, pipeline #6 en verde y MR #1 (`MES` → `staging`) con fusión automática. Falta poner el push directo de `master` y `staging` en «Nadie» (`GUIA_GITLAB.md` §4).
+20. **Variables y servicios pendientes de GitLab:** `PRODUCCION_HOST` y `TEXCORE_DIR`, espejo hacia GitHub (necesita un token), runner `texcore-produccion` en la VM, guardar fuera del equipo y borrar `infrastructure/gitlab/secretos/`, y cambiar la contraseña de `root`.
+21. ✅ ~~Primer pipeline de integración~~ (pipeline #6 en verde). **Falta el primer release en `master`:** `build:imagenes` → `scan:trivy` → `staging:efimero`; es donde se esperan los ajustes finos. Antes, **crear swap** (RS-25). Probar una restauración del respaldo de GitLab (RS-23). Detalle en «Cierre de la sesión del 20-oct».
+
+#### Estado del entorno Linux (20-oct) — reemplaza al del 14-oct
+
+- Stack `texcore-prod`: 6 contenedores `healthy` con las imágenes `texcore-local/*:mes-1019`; `gestion.0010` aplicada (RUC cifrados). Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1019 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
+- `.env` local (no versionado): además de lo del 14-oct, ahora lleva `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` (sin ellas el backend no arranca). Copia anterior en `.env.bak-pre-cifrado`.
+- Respaldos de la base en el volumen `texcore-prod_mssql_data` (`/var/opt/mssql/backup/`): además de los anteriores, `texcore_db_pre_cifrado_2026-10-20.bak`.
+- GitLab CE: `docker compose -f infrastructure/gitlab/docker-compose.gitlab.yml --env-file infrastructure/gitlab/.env up -d --wait`; guía y verificación en `docs/arquitectura/GUIA_GITLAB.md`.
+
+#### Estado del entorno Linux (14-oct)
+
+- Stack `texcore-prod` **levantado** para las pruebas del usuario:
+  - imágenes `texcore-local/*:mes-1016`, construidas con el código del 14-oct por la tarde (Tailwind 4 y el historial de mantenimiento). Las del 13-oct eran `mes-1013`, desde cero (`--no-cache --pull`);
+  - recursos del `.env` (BD 3 CPU / 3 GB, backend 3 CPU / 3 GB, 20 workers) y nginx con la redirección 80 → 443;
+  - los 6 contenedores en `healthy`, `gestion.0009` aplicada y 0 migraciones pendientes;
+  - sobrevive al reinicio del equipo: tras el corte de luz del 14-oct los 6 contenedores volvieron a `healthy` por sí solos.
+- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1017 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d --wait`.
+- `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
+- Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
+
+### 26 de Octubre de 2026 — Topes de memoria del CI más bajos (sin commitear)
+
+Ajuste de los topes de memoria de los jobs, para que la corrida de pipeline no sature el equipo:
+
+| Dónde | Antes | Después |
+|---|---|---|
+| SQL Server de `test:backend` (`MSSQL_MEMORY_LIMIT_MB`, `.gitlab-ci.yml` y `scripts/run_backend_tests.sh`) | 2048 MB | 1024 MB |
+| Heap de Node en `test:frontend` (`NODE_OPTIONS`) | 2048 MB | 1536 MB |
+| Procesos de Vitest en `test:frontend` (`--maxWorkers`) | 4 | 2 |
+
+Validación con los nuevos topes:
+
+| Suite | Resultado | Tiempo (antes) |
+|---|---|---|
+| Frontend (`tsc` + `vitest run --coverage --maxWorkers=2`) | `tsc` OK, 1981 pruebas OK | 238 s (80 s con 4 procesos) |
+| Backend (`scripts/run_backend_tests.sh`) | 1944 pruebas OK, cobertura 92.5 % | 204 s (196 s) |
+
+El frontend tarda unos 3 veces más. El backend casi no cambia.
+
+### 26 de Octubre de 2026 — Reducción de memoria de GitLab (sin commitear)
+
+Cambio en `infrastructure/gitlab/docker-compose.gitlab.yml` (`GITLAB_OMNIBUS_CONFIG`), pedido tras la auditoría de recursos:
+
+- `puma['worker_processes']` de 2 a 0 (modo single): se eliminan dos workers de Rails de ~1 GiB cada uno.
+- `sidekiq['concurrency']` de 10 a 5.
+- `gitlab_kas['enable'] = false`: se desactiva el agente de Kubernetes, que no se usa.
+
+Medición con el contenedor recreado (`up -d --wait`):
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Memoria del contenedor (reposo) | 4.0 GiB | 3.17 GiB |
+| Tiempo hasta responder `/users/sign_in` con 200 | — | ~90 s |
+
+Observación: Docker marcó el contenedor como `healthy` a los 17 s, pero la web no respondió hasta ~90 s después. El estado `healthy` no es buena señal de que GitLab esté listo para pipelines; conviene esperar al 200 de `/users/sign_in`.
+
+### 26 de Octubre de 2026 — Validación de la suite de pruebas del frontend (sin commitear)
+
+Corrida de validación pedida por el usuario, con los mismos límites que `test:frontend` del CI (`NODE_OPTIONS=--max-old-space-size=2048`, `--maxWorkers=4`). Sin cambios de código.
+
+| Comprobación | Resultado |
+|---|---|
+| `npx tsc --noEmit` | Sin errores |
+| `npx vitest run --maxWorkers=4` | 138 archivos y 1981 pruebas, todas OK (80 s) |
+
+Los errores `Error: boom` que aparecen en la salida provienen de `ErrorBoundary.test.tsx`: lanzan un error a propósito para probar el componente y no indican fallo.
+
+Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`, sin argumentos):
+
+| Comprobación | Resultado |
+|---|---|
+| `manage.py test gestion inventory internal_api` | 1944 pruebas OK, 0 fallos (196 s) |
+| Cobertura (`.coveragerc`, con ramas) | 92.5 % (umbral 90 %) |
+
+Microservicios, cada uno en un contenedor `python:3.12-bookworm` limpio, como los jobs `test:scanning`, `test:reporting` y `test:printing` del CI:
+
+| Servicio | Pruebas | Cobertura | Umbral |
+|---|---|---|---|
+| `scanning_service` | 66 OK | 94.0 % | 90 % |
+| `reporting_excel` | 76 OK | 98.3 % | 90 % |
+| `printing_service` (sin `weasyprint`, como el CI) | 114 OK | 98.6 % | 95 % |
+
+Con esto queda validada toda la batería: frontend, backend y microservicios.
+
+### 21 de Octubre de 2026 — Reorganización de archivos, comentarios en español y verificación completa (sin commitear)
+
+Cinco bloques de trabajo, en orden. Ninguno se commiteó.
+
+| # | Bloque | Resultado |
+|---|---|---|
+| 1 | **Revisión de la estructura del proyecto** | Inventario de los archivos versionados por carpeta. Se detectaron archivos fuera de lugar y duplicados (sección «Reorganización» abajo) |
+| 2 | **Reorganización en dos fases** | Fase 1 (cambios seguros) y fase 2 (vistas y artefactos de graphify). Imports, `.secrets.baseline`, `.gitignore` y referencias en la documentación actualizados |
+| 3 | **Comentarios en español** | Unos 600 comentarios y 15 docstrings traducidos en backend, frontend, microservicios, scripts, SQL, Dockerfiles, nginx y configuración. Se corrigieron marcadores duplicados introducidos durante la traducción |
+| 4 | **Verificación de rutas** | 231 combinaciones de ruta y método que llama el frontend resuelven en Django y aceptan el verbo. Las llamadas entre microservicios y la configuración de nginx apuntan a endpoints existentes |
+| 5 | **Docker y pruebas completas** | Stack de desarrollo levantado con `docker compose ... up -d --build`. Se corrió toda la batería, incluido `printing_service` (instalado en un entorno aparte) |
+
+#### 1. Reorganización
+
+**Fase 1 — cambios seguros:**
+- `gestion/tests_integrados.py` y `gestion/tests_jefe_area.py` movidos a `gestion/tests/`. Así `pytest` sin argumentos los descubre.
+- `gestion/services_formula.py` movido a `gestion/services/services_formula.py` (8 imports actualizados).
+- `frontend/test_output.txt` eliminado (ya estaba en `.gitignore`).
+- `scripts/reset_db_identities.sql` eliminado: era un duplicado idéntico del de `database/`.
+
+**Fase 2 — con confirmación:**
+- `gestion/profile_views.py` y `gestion/custom_jwt_views.py` movidos a `gestion/views/`. Imports en `gestion/urls.py`, `TexCore/urls.py` y el código que los usa.
+- Snapshots de graphify por fecha (`graphify-out/2026-*`) y temporales `.graphify_*` retirados del índice de git. Quedan en disco y se ignoran con `.gitignore`. Versionados en `graphify-out/` antes: 47 archivos; ahora: 10.
+- Se conservaron a propósito: `scripts/deploy*`, `scripts/loadtest/resultados/` (evidencia referenciada por pruebas y documentos), `.agent/` y `.agents/` (referenciados por el README y `.graphifyignore`) y el PDF de la rúbrica (sin cambios).
+
+#### 2. Comentarios en español
+
+Criterio: todo comentario y docstring con prosa en inglés pasa a español. Se mantienen sin cambio:
+- código comentado (por ejemplo, bloques `location` de nginx);
+- pragmas de herramientas (`type: ignore`, `nosemgrep`, `eslint-disable`);
+- términos técnicos aceptados (`Get-or-create`, `Make-to-Order`, `Backlog`, `set / get / clear`, `Must/Should/Could`) e identificadores;
+- los comentarios de cabecera de terceros, si los hay. `components/ui` no tiene comentarios en inglés.
+
+Los encabezados generados por Django en las migraciones iniciales (`# Generated by Django…`) también se tradujeron. Las docstrings de `reporting_views` (`GET /api/…`) se dejaron porque «GET» es un método HTTP.
+
+**Incidente durante la traducción:** en las primeras pasadas se duplicaron marcadores (`# # comentario`, `// // comentario`) y en un caso se insertó una línea de código dentro de un comentario (`AuthProvider.tsx`). Se corrigieron línea por línea y se verificó el resultado.
+
+#### 3. Verificación de rutas
+
+- Se enumeraron las rutas de Django (455) y las llamadas de `apiClient` del frontend (155 rutas distintas, 231 combinaciones con método).
+- Resultado: las 231 resuelven. Tres aparecieron como 404 en el primer chequeo; eran falsos positivos de la sustitución de variables de plantilla (`${areaId ? …}`, `download_pdf/?historial_id=`, `accion` = `oee`/`eficiencia`), revisados a mano.
+- Microservicios: `scanning_service` llama a `/api/internal/v1/auth/token/` (POST), `/api/internal/v1/lotes/{codigo}/validate/` (GET) y `/api/health/` (GET). Todas existen con ese método.
+- nginx: `/api/scanning/validate` reenvía a `scanning:8000/validate`.
+- No verificado: las llamadas dinámicas `/reporting/${ruta}` (no se enumeraron los valores) y el tráfico HTTP real a través de nginx.
+
+#### 4. Docker
+
+- Stack de desarrollo levantado con `docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d --build`. Quedaron sanos `backend`, `db`, `scanning`, `printing`, `reporting_excel` y `nginx`; `redis`, `celery_worker` y `frontend` corren sin healthcheck.
+- El `nginx` de desarrollo no publica puertos al host, así que no choca con el de producción (`texcore-prod-nginx-1`, puertos 80 y 443).
+- Los contenedores `texcore-prod-*` no se tocaron.
+
+#### 5. Pruebas
+
+**Verificación final:**
+
+| Comprobación | Resultado |
+|---|---|
+| Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`) | 1944 pruebas OK, cobertura 92,5 % |
+| Frontend (`vitest run --maxWorkers=4`) | 138 archivos, 1981 pruebas OK |
+| `tsc --noEmit` | Sin errores |
+| `ruff check` (backend y microservicios) | Sin hallazgos |
+| `reporting_excel` | 76 pruebas OK |
+| `scanning_service` | 66 pruebas OK |
+| `printing_service` (requisitos instalados como lo hace el job `test:printing`, sin `weasyprint`) | 114 pruebas OK, cobertura 98,9 % |
+
+**Hallazgos de la corrida:**
+- Con todos los workers de Vitest y la máquina bajo carga (load average de 83 con el build de Docker y la suite de SQL Server a la vez), 5 pruebas de 3 archivos hicieron timeout y el pool murió con `EPIPE`. Esos mismos archivos pasan al correrse solos (116/116) y la suite completa pasa con `--maxWorkers=4`.
+- Las corridas en segundo plano con `nohup` sin `setsid` morían sin dejar resumen; se usa `setsid` y se revisan los logs hasta el final.
+- `printing_service/requirements-ci.txt` no es un archivo del repositorio: el job `test:printing` lo genera quitando `weasyprint` de `requirements.txt`. Se reprodujo igual para la corrida local.
+
+#### Estado al cierre
+
+- Nada commiteado. Árbol de trabajo con los cambios de reorganización, comentarios y documentación de hoy.
+- `graphify update .` corrido tras los cambios de código.
+- Pendiente: decidir si se commitea y en qué orden (estructura, comentarios y CHANGELOG por separado facilita la revisión). Pendientes que siguen abiertos de días anteriores no se tocaron.
+
+### 19 de Octubre de 2026 (noche) — RS-19: logs, lotes y normalización única; migraciones consolidadas de 14 a 6 (sin commitear)
+
+Pedido del usuario, tras la revisión del commit de cifrado contra SOLID, manejo de errores y logs: «ejecuta el mejoramiento» (logs, partir `_procesar` y leer por lotes, unificar la normalización) y «consolidar las migraciones en menos».
+
+| Defecto | Hallazgo | Corrección | Prueba |
+|---|---|---|---|
+| 70 | `crypto.py`, `model_fields.py` y el comando no tenían `logger`: un dato ilegible fallaba sin traza, y una sola fila mala tumbaba el listado con un 500 sin contexto | `gestion.crypto` registra el fallo (ERROR, con la traza, **sin token ni valor**); `gestion.model_fields` registra `Modelo.campo` (Django no entrega la pk en `from_db_value`); el comando registra `Modelo.campo pk=<id>` en ERROR (ilegible), WARNING (en claro, índice desfasado) e INFO (corregida). `descifrar(registrar=False)` evita el falso error cuando el comando espera el fallo. Una fila ilegible **sigue lanzando** `ErrorDeCifrado`: no se entrega el dato crudo | 5 pruebas con `assertLogs`/`assertNoLogs` que comprueban que ni el valor ni el token aparecen en el registro |
+| 71 | `_procesar` (≈50 líneas) mezclaba leer, clasificar, escribir e informar; leía la tabla entera con `fetchall()` dentro de **una sola transacción** | `_procesar` es un orquestador; `_leer_por_lotes` (500 filas, paginado por pk con un cursor por lote, portable a SQL Server y SQLite), `_tratar_fila`, `_diagnosticar`, `_hay_que_escribir`, `_escribir`, `_informar`, y dos `dataclass` (`_Resumen`, `_Diagnostico`). Una transacción **por lote** | `LOTE` parcheado a 2 con 5 filas: las corrige todas y la verificación posterior queda limpia |
+| 72 | `str(x).strip()` repetido en el manager (×2), `Cliente.clean()` e `indice_ciego`; `clean()` llamaba a `_meta.get_field(...).calcular(self)`; `ValidationError` se importaba dentro de un método | `normalizar_identificacion()` única en `crypto.py`; `clean()` usa `indice_ciego` directo; import al módulo | 2 pruebas de la función |
+| 73 | 14 migraciones (`gestion` 10, `inventory` 3, `internal_api` 1) | `squashmigrations`: `gestion` 0003–0009 → `0003_squashed_0009_paromaquina_origen`, `inventory` 0001–0003 → `0001_squashed_0003_mrp_por_sede`. **Quedan 6.** `gestion.0001` y `0002` no se fusionan: la 0002 depende de `token_blacklist`, que depende del usuario que crea la 0001 (dependencia circular). `0010` queda aparte (cifrado, irreversible) y ahora depende del squash. `replaces` se conserva siempre. Los tres `RunPython` se copiaron dentro del squash, que pasa a ser **atómico** (la 0005 era no atómica para lotes de ~1 M de filas; el squash solo corre sobre tablas vacías, porque toda base existente ya tenía aplicadas las originales). Se omiten los dos índices que la 0004 creaba y la 0008 retiraba | Ver verificación |
+
+**Verificación (SQL Server 2022):**
+- **Equivalencia de esquema:** una base migrada con el árbol viejo y otra con el nuevo, comparadas en columnas, índices, restricciones `CHECK` y claves foráneas: **1274 elementos idénticos** (tras normalizar los sufijos aleatorios que SQL Server pone a los nombres de `PK`, `UQ` y `CK`).
+- **Base ya migrada:** una base llevada a `gestion.0009` con el árbol viejo reconoce el squash como aplicado y aplica solo la `0010`; su esquema final es idéntico. El stack de desarrollo (en `0010`) cierra el registro de los squashes con un plan vacío y `cifrar_datos_personales` verifica en verde.
+- `makemigrations --check`: sin cambios. Backend: **1871 pruebas OK** (1863 + 8 nuevas), cobertura 92,4 %. `ruff check .` en 0 y `mypy` (1.15.0, plugins de Django y DRF) en 0 sobre 307 archivos.
+- Las dos pruebas que importaban `0005` y `0006` apuntan al squash. La convención quedó en `ESTANDARES_DESARROLLO.md`; los documentos que citan las migraciones por número recibieron el nombre nuevo solo donde apuntaban a un archivo inexistente (las mediciones y ADR conservan su historia).
+
+**Lo que queda dicho, no supuesto:** borrar los originales es seguro solo si toda base existente tiene aplicadas al menos `gestion.0009` e `inventory.0003` (el usuario lo confirmó: producción y los volúmenes de desarrollo lo están); una base atrasada no podría migrar. Los respaldos `texcore_db_pre_*.bak` restauran con el árbol nuevo gracias a `replaces`. Pendiente sin tocar: `from_db_value` no puede registrar la pk (limitación de Django); el comando la localiza.
+
+### 19 de Octubre de 2026 (noche) — Stack de desarrollo desde Windows: `node_modules` en la imagen del frontend (sin commitear)
+
+Pedido del usuario: traer `MES`, levantar Docker y correr las pruebas en un equipo Windows.
+
+| Defecto | Hallazgo | Corrección |
+|---|---|---|
+| 67 | `frontend/` no tenía `.dockerignore`: el `COPY . .` de `Dockerfile.dev` metía el `node_modules` del host en la imagen Linux. En Windows trae los shims `.bin/vite` de `node.exe` y el contenedor salía con código 127 («node.exe: not found»); el volumen nombrado `frontend_node_modules` se inicializa con ese contenido y `npm install` lo daba por bueno | `frontend/.dockerignore` (`node_modules`, `coverage`, `dist`, `test_output.txt`, `.vite`) |
+| 68 | `gunicorn.ctl`, el socket de control que crea el backend de desarrollo en la raíz al montar el repo, aparecía como archivo sin seguir | Entrada en `.gitignore` (ya estaba en `.dockerignore`) |
+| 69 | En una base vacía, `backend` y `celery_worker` ejecutaban `migrate` a la vez desde el mismo entrypoint y SQL Server abortaba uno por interbloqueo (error 1205); `restart: on-failure` lo tapaba tras varios reinicios | `celery_worker` fija `MIGRAR_AL_INICIAR=0` (el mismo mecanismo de producción) y espera a que `backend` esté `healthy`, es decir, migrado |
+
+**Verificación (SQL Server 2022 en Docker, stack `texcore-mes`):** backend **1863 pruebas OK**, cobertura 92,4 % (gate 90 %); `scanning_service` 58, `reporting_excel` 76 y `printing_service` 114 pasan; frontend 1979 pasan (138 archivos) y `tsc` en 0. Los 8 contenedores del compose de desarrollo quedan sanos y `gestion.0010` aplicada.
+
+**Verificación del defecto 69:** arranque desde cero con volúmenes nuevos: 0 errores 1205, 0 reinicios de `backend` y de `celery_worker`, los 8 servicios sanos. Las claves `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` se añadieron además al `.env` local (no versionado) con los valores de desarrollo del compose, para poder correr Django fuera de Docker.
+
+### 19 de Octubre de 2026 — RS-19: cifrado de los datos personales en reposo (LOPDP) — sin commitear
+
+Pedido del usuario: resolver **RS-19**, el único ❌ del contraste con la tesis, con un enfoque mixto — cifrar de verdad los datos (opción **a** del riesgo) **y** precisar la redacción de la tesis (opción **c**), en lugar de usar la corrección del texto para rebajar la afirmación. TDE (opción **b**) se descarta como medida única: depende de la edición de SQL Server que licencie la organización (**RS-18**) y no protege frente a quien tenga credenciales de lectura; queda como complementaria.
+
+**Qué se cifra.** `Cliente.ruc_cedula` (cédula o RUC) y `CustomUser.date_of_birth`, los dos datos de identificación que la tesis nombra. El resto (razón social, dirección, correo) son datos de contacto comercial que el sistema necesita filtrar y ordenar en la base, y quedan fuera del alcance a propósito.
+
+| Pieza | Qué hace |
+|---|---|
+| `gestion/crypto.py` | Fernet (AES-128-CBC + HMAC-SHA256) con `MultiFernet` para rotar claves, e `indice_ciego()` (HMAC-SHA256 con clave). `descifrar()` **lanza** `ErrorDeCifrado` en vez de devolver el valor crudo: una fila que no descifra es una fila sin migrar, y leerla «en claro» esconde el fallo |
+| `gestion/model_fields.py` | `EncryptedCharField` y `EncryptedDateField` heredan de `CharField`/`DateField`, así que `max_length` y el formato de fecha siguen validando el valor **en claro** y la API no cambia de contrato; la columna es `nvarchar(max)` vía `get_internal_type()`. `BlindIndexField` recalcula el índice en `pre_save()`, el único punto por el que pasan todas las escrituras (`bulk_create` incluido) |
+| `gestion/migrations/0010` | Por campo: columna nueva → copia cifrada en lotes de 500 → se borra la columna en claro → se renombra. No un `AlterField` en sitio: dejaría el texto en claro dentro de la columna nueva, y la conversión de `date` a texto en SQL Server depende del estilo de `CONVERT` |
+| `manage.py cifrar_datos_personales` | Verifica (por omisión, sin escribir), `--reparar` (cifra lo que quedó en claro) y `--recalcular-indices` (tras cambiar `BLIND_INDEX_KEY`). Lee con SQL directo porque el ORM descifraría y reventaría en la primera fila en claro, que es la que hay que encontrar |
+
+**Lo que el cifrado rompía y cómo se resolvió.** Fernet usa IV aleatorio: el mismo RUC produce un texto distinto en cada escritura, así que la unicidad `(ruc_cedula, sede)` no detectaría ningún duplicado y `filter(ruc_cedula=…)` devolvería vacío **en silencio**.
+
+- La unicidad pasa a `unique_together = ("ruc_cedula_hash", "sede")` — mismo SQL, misma semántica. `Cliente.clean()` calcula el índice antes de `validate_unique()`, de modo que un duplicado sigue dando **400** y no un 500, con el mensaje «Ya existe un cliente con esa identificación en esta sede».
+- Los campos cifrados solo admiten el lookup `isnull`; cualquier otro lanza `FieldError` con el camino correcto en el mensaje. Se arreglaron los 4 sitios que lo usaban: `load_million` (contaba por `ruc_cedula__startswith`) y los `get_or_create(ruc_cedula=…)` de `seed_data`, `stress_test_data` y `stress_ventas_data`, que pasan por los nuevos `Cliente.objects.por_identificacion()` y `obtener_o_crear_por_identificacion()`.
+- `AuditLog` no está cifrado, así que `date_of_birth` se audita por su HMAC truncado (`hmac:…`): delata el cambio sin registrar la fecha.
+
+**Claves nuevas, las dos *fail-fast* como `SECRET_KEY`.** `FIELD_ENCRYPTION_KEYS` (lista; la primera cifra, todas descifran) y `BLIND_INDEX_KEY` (estable). **Ninguna se deriva de `SECRET_KEY`**, que también firma los JWT y se rota cada año: derivar de ella volvería ilegibles los datos en cada rotación. Añadidas a `.env.example`, `.env.prod.example`, `.env.test`, `settings_test_local.py`, `ci.yml`, los dos compose, `Dockerfile.prod`, `staging_efimero.sh` y los dos guiones de pruebas; marcadas con `pragma: allowlist secret` donde son de CI o de prueba.
+
+**Verificación (local, SQLite por `settings_test_local`).** 34 pruebas nuevas en `gestion/tests/test_cifrado_datos_personales.py` (columna sin el valor en claro leída con SQL directo, descifrado por el ORM, no determinismo del cifrado, índice ciego, `FieldError` en `exact` y `startswith`, unicidad por sede, normalización, `bulk_create`, rotación de claves, auditoría redactada, los tres modos del comando y el contrato de la API). Suite completa: **1860 pasan**; los 4 fallos restantes ya estaban en rojo en `HEAD` antes de este cambio (3 de `test_despliegue_produccion` y 1 de `test_paro_por_estado`, contaminado por `test_stress_test_data` — en la línea base fallan 2). Microservicios: `scanning_service` 58 (92,0 %), `printing_service` 114 (98,1 %), `reporting_excel` 75 (98,3 %). Gates: `ruff check` 0, `ruff format` 0, `mypy` 0 sobre 307 archivos, `tsc` 0 y detect-secrets sin hallazgos nuevos. La migración se probó de ida y de vuelta sobre una base con filas en claro.
+
+**Lo que queda dicho, no supuesto:** `dumpdata` sigue exportando los valores en claro (serializa lo que el ORM entrega), la marcha atrás de la `0010` descifra pero no recrea las columnas borradas —hay que restaurar el respaldo—, y TDE sigue pendiente de la edición licenciada. Todo en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md` §7.
+
+**Texto para la tesis:** `CORRECCIONES_TESIS.md` §3 (párrafo para pegar, el enunciado del RNF-01 y las fronteras del alcance que conviene declarar).
+
+### 20 de Octubre de 2026 — Resumen del día y cierre de la sesión
+
+Seis bloques de trabajo, en orden. El detalle de cada uno está en las entradas que siguen. El estado en que queda todo y los pendientes del 21-oct están al final de este resumen.
+
+| # | Bloque | Resultado |
+|---|---|---|
+| 1 | **Revisión del CHANGELOG y `git pull`** | No había trabajo sin registrar de la noche anterior. `MES` avanzó de `d97942b` a `0fd1d28` con dos commits: `88f8b53` (cifrado de datos personales, LOPDP) y `0fd1d28` (cifrado en logs y lotes, y migraciones consolidadas de 14 a 6). Los cambios locales del grafo se guardaron en el stash `graphify-out previo al pull` |
+| 2 | **Migración `gestion.0010` en el stack `texcore-prod`** | Las migraciones consolidadas se registran solas por su lista `replaces`. Antes de migrar: respaldo `texcore_db_pre_cifrado_2026-10-20.bak` (1,2 GB, con `CHECKSUM`) en el volumen `mssql_data`, y generación de `FIELD_ENCRYPTION_KEYS` y `BLIND_INDEX_KEY` en el `.env` local (copia previa en `.env.bak-pre-cifrado`, ambos fuera de git). Backend reconstruido (`mes-1018`) y `migrate` aplicó la `0010`. Verificado: 160 clientes con el RUC cifrado en la base, 0 sin índice ciego y el ORM los descifra; 0 usuarios con fecha de nacimiento (no se contaron antes de migrar, probablemente ya eran nulas). **Si se pierden las claves, los datos cifrados no se recuperan** |
+| 3 | **Seguridad de la API (RNF-02, OWASP API1/API2)** | 7 hallazgos corregidos y 6 pruebas globales nuevas (entrada «Seguridad de la API»). Imágenes `mes-1019` y stack recreado con ellas. En el front: aviso del RUC duplicado del Vendedor |
+| 4 | **GitLab CI, ISTQB y Ruff** | `.gitlab-ci.yml`, GitLab CE levantado y configurado en este equipo, GitHub Actions retirado, gate ISTQB, plan de pruebas formal y ADR de Ruff (entrada «GitLab CI como plataforma principal») |
+| 5 | **Estabilización del CI: pipelines #1 a #6** | El usuario empujó `MES` al GitLab del servidor y el pipeline se corrigió en cinco vueltas hasta quedar completo en verde (12 jobs, 12 min, cobertura media 95,8 %): marcador de `detect-secrets`, 7 errores de `mypy`, línea base de `detect-secrets` sin commitear, prueba de rendimiento del RNF-03 (mejor de 3 aperturas) y Vitest con 4 procesos. Registro abierto de GitLab cerrado |
+| 6 | **Incidente de memoria y MR #1** | El OOM killer cerró Firefox y el escritorio; se bajó el runner a 1 job y se pusieron topes de memoria (RS-25). Se subió `master`, se abrió el MR #1 de `MES` a `staging` y quedó con fusión automática al pasar su pipeline |
+
+**Tesis.** El PDF del anteproyecto no se modificó. Lo que cambió es la evidencia del repositorio: el RNF-02 y API1/API2 se **sostienen sin corrección** (`CORRECCIONES_TESIS.md` §4, con las precisiones de alcance); «GitLab CI» y «GitLab Container Registry» pasan a «se cumple»; queda **una sola corrección de redacción** del pipeline, flake8 y bandit por Ruff (§5, con el párrafo para pegar y los motivos); y siguen vigentes el cifrado (§3) y las demás filas de §1 y §2.
+
+**Archivos.** Nuevos: `.gitlab-ci.yml`, `renovate.json`, `cosign.pub`, `.gitlab/CODEOWNERS`, `infrastructure/gitlab/` (compose, `Dockerfile.ci-tools`, `.env.example` y 4 scripts), `scripts/auditar_permisos_backend.py`, `scripts/auditar_convencion_pruebas.py`, 3 archivos de prueba (`test_acceso_no_autorizado_global.py`, `test_auditoria_permisos_script.py`, `test_auditoria_convencion_script.py`) y 4 documentos (`ADR_014`, `ADR_015`, `GUIA_GITLAB.md`, `PLAN_PRUEBAS_ISTQB.md`). Eliminados: `.github/` completo (10 archivos) y `scripts/tests/test_regex.py` y `test_url.py`. Modificados 233, de ellos 183 por la cabecera de técnicas ISTQB. Documentos de evidencia actualizados: `ARQUITECTURA_SISTEMA.md` (§8.2 a §8.4 y §9.5), `GUIA_DESPLIEGUE.md`, `ESTANDARES_DESARROLLO.md`, `SECURITY.md`, `README.md`, `CHECKLIST_EVIDENCIA_MANUAL.md`, `AUDITORIA_CALIDAD.md`, `REGISTRO_RIESGOS.md` (RS-20 a RS-24), `matriz_trazabilidad_pruebas.md` (dos secciones nuevas) y `CORRECCIONES_TESIS.md`.
+
+**Verificación al cierre.**
+
+| Comprobación | Resultado |
+|---|---|
+| Backend en SQL Server 2022 | 1944 pruebas OK, cobertura 92,5 % (cifra final, con las pruebas del pipeline, del gate ISTQB y del arreglo del RNF-03; antes de ellas eran 1918) |
+| Backend en SQLite al cierre | 1944 pruebas OK |
+| `scanning_service` · `printing_service` · `reporting_excel` | 66 · 114 · 76 OK (94,3 · 98,9 · 99,2 %) |
+| Frontend | 1981 pruebas OK en 138 archivos; `tsc` y `eslint` sin errores |
+| Ruff · `ruff format` · yamllint · shellcheck | Sin hallazgos |
+| Gate ISTQB · auditor de rutas | 0 hallazgos · 0 rutas públicas fuera de la lista blanca (174 rutas) |
+
+**Estado del entorno al cierre.**
+- `texcore-prod`: 6 contenedores `healthy` con las imágenes `mes-1019` (código de seguridad). Los cambios posteriores de ISTQB y GitLab no tocan código de producción.
+- GitLab: `texcore-gitlab` en `https://192.168.1.55:8929`, registro en `:5050` y SSH en `:2224`; `gitlab` sano y los dos runners en línea. Datos en los volúmenes `gitlab_config`, `gitlab_logs` y `gitlab_data`.
+- GitLab: ramas `master` (por defecto), `staging` y `MES`, las tres protegidas; `master` y `staging` con push directo aún permitido a Maintainers. Programación semanal creada (lunes 06:00). Registro de usuarios cerrado.
+- Fuera de git: `infrastructure/gitlab/.env`, `certs/` (certificado propio de 825 días) y `secretos/` (clave privada de cosign y su contraseña, ya cargadas en GitLab).
+- En el equipo: imagen `texcore/ci-tools:1`; la CA de GitLab en `/etc/docker/certs.d/192.168.1.55:5050/ca.crt` (escrita con un contenedor, sin `sudo`); remoto git `gitlab` con la CA configurada solo en este repositorio.
+- Credenciales: los tokens temporales de `root` usados para configurar GitLab y para el MR se revocaron y los tokens de runner se borraron del directorio de trabajo. La contraseña de `root` se compartió por el chat: conviene cambiarla.
+- Memoria: 16 GB **sin swap**; el runner `texcore-ci` corre 1 job a la vez con topes de 4 GB por job y 3 GB por servicio.
+- Git: el usuario commiteó y empujó el trabajo del día a GitLab (`fd304a6`, `e6e926d`, `3110891`, `3c4cb4c`, `685c5a1` en `MES`). Quedan sin commitear solo `CHANGELOG.md` y `CHECKLIST_EVIDENCIA_MANUAL.md` (esta documentación).
+
+#### Cierre de la sesión del 20-oct: estado y pendientes para el 21-oct
+
+**Estado exacto al cerrar.**
+- **Pipeline #6** de `MES` en verde (12 jobs). Coberturas: `test:backend` 92,5 %, `test:scanning` 94,0 %, `test:printing` 98,6 %, `test:reporting` 98,3 %, `test:frontend` 95,4 %.
+- **MR #1** (`MES` → `staging`): abierto, pipeline #8 corriendo, con la **fusión automática de GitLab activada** («al pasar el pipeline», sin borrar `MES`). Si el pipeline falla no se fusiona nada y hay que revisarlo.
+- **`master`** subida y rama por defecto, pero con el contenido **antiguo** (`b0d981a`, anterior al 5-oct). Su push disparó el pipeline #7, que falló con `config_error` (0 jobs) porque ese `master` aún trae el `.gitlab-ci.yml` viejo, retirado el 5-oct, con un error en `lint:backend:script`. No es un fallo del pipeline actual: desaparece al fusionar `staging` en `master`, que lo reemplaza por el nuevo. Hasta entonces no hay pipeline de release.
+- **Sin probar todavía:** `build:imagenes`, `scan:trivy`, `staging:efimero` y `deploy:produccion`/`rollback:produccion` (este último espera la VM).
+
+**Qué ocurrirá solo al fusionarse el MR #1.** Se dispara el pipeline de la rama `staging`: los 12 jobs de integración más `build:validacion`, que construye las imágenes del backend y de nginx en el Docker del host. Esos builds **no** llevan el tope de memoria de los demás jobs, y el equipo sigue sin swap: es el punto más probable de un nuevo OOM.
+
+**Pendientes, en orden.**
+1. **Crear swap** (`sudo`, comandos en `GUIA_GITLAB.md` §1) antes del release.
+2. Revisar el resultado del MR #1 y del pipeline de `staging` (`build:validacion`).
+3. MR de `staging` a `master` y revisar el **primer release**: firma con cosign, Trivy (CVE con parche en las 6 imágenes), registro de imágenes y staging efímero con el humo de los 11 roles. Es donde se esperan los siguientes ajustes.
+4. Poner el push directo de `master` y `staging` en «Nadie».
+5. Variables `PRODUCCION_HOST` y `TEXCORE_DIR`, espejo hacia GitHub (token), runner `texcore-produccion` (cuando exista la VM).
+6. Guardar fuera del equipo y borrar `infrastructure/gitlab/secretos/`; cambiar la contraseña de `root`.
+7. Tomar las capturas de la evidencia (integración ya disponible con el pipeline #6; release después del paso 3) y, si se quiere, un script que descargue logs y artefactos a `docs/gestion-proyecto/evidencia/gitlab/`.
+8. Probar una restauración del respaldo de GitLab (RS-23) y volver a correr `scripts/run_backend_tests.sh` para tener la cifra final en SQL Server (1944 pruebas, 92,5 %, ya medida el 20-oct).
+9. Texto de la tesis: aplicar la única corrección del pipeline (flake8 y bandit por Ruff, `CORRECCIONES_TESIS.md` §5) y las cifras de las Tablas 46 y 47.
+
+**Lecciones del día** (para no repetirlas): correr en local `ruff`, `mypy` y `detect-secrets-hook` antes de empujar y commitear `.secrets.baseline` si el hook lo actualiza; no cargar el equipo con builds y pruebas a la vez; las pruebas de tiempo se miden en la mejor corrida, no en la primera; y GitLab 19 ya no deja iniciar sesión por contraseña en la API.
+
+### 20 de Octubre de 2026 (tarde) — GitLab CI como plataforma principal, gate ISTQB y Ruff documentado (sin commitear)
+
+Pedido del usuario: «si la tesis nos pide GitLab lo tenemos que usar» y cumplir el uso de ISTQB; de lo contrario, dejar documentado el cambio a Ruff con sus motivos para actualizar la tesis. Decisiones: GitLab CE autoalojado en este equipo (192.168.1.55, también servidor de staging), GitLab principal con GitHub como espejo, ISTQB completo.
+
+| Qué | Cambio | Prueba |
+|---|---|---|
+| **Plataforma** | `.gitlab-ci.yml` (lint → test → build → scan → staging → deploy → rollback) con paridad del CI de Actions: Ruff, `ruff format`, mypy, detect-secrets, Semgrep, SQL Server 2022 como service, cobertura, `pip-audit` y `npm audit` **bloqueantes** (en el GitLab retirado eran `allow_failure`), Trivy por digest, firma y atestación con cosign, staging efímero, deploy y rollback manuales (un clic). Imágenes de los jobs fijadas por digest | `test_despliegue_produccion.py` reescrita para leer el pipeline (en rojo antes del `.gitlab-ci.yml`) |
+| **Servidor** | `infrastructure/gitlab/`: GitLab CE (versión y digest fijos, 6 GB), Container Registry (5050), dos runners (`texcore-ci` sin socket y `texcore-staging` protegido), imagen de herramientas `texcore/ci-tools:1` (cosign verificado por checksum), certificado propio y registro de runners. Runbook `docs/arquitectura/GUIA_GITLAB.md` | `docker compose config`, `shellcheck`; digests comprobados en el registro |
+| **Firma** | cosign con par de claves (la firma sin clave exige un emisor OIDC público). `cosign.pub` en el repositorio; la privada y su contraseña en `infrastructure/gitlab/secretos/` (fuera de git) para cargarlas como variables protegidas | firma y verificación de prueba con el par |
+| **Retiro de GitHub Actions** | Se borran `.github/workflows/*`, `actionlint.yaml`, `zizmor.yml`, `dependabot.yml` y `DEPLOYMENT_SETUP.md` (desactualizado). `CODEOWNERS` pasa a `.gitlab/`. Dependabot → `renovate.json` y job `dependencias:renovate`. OpenSSF Scorecard queda fuera | `test_github_actions_dado_gitlab_principal_…` |
+| **DORA** | `scripts/metricas_dora.py` lee la API de GitLab (deployments de `production` y jobs `rollback:produccion`) | 6 pruebas nuevas en `test_metricas_dora.py` |
+| **ISTQB** | `scripts/auditar_convencion_pruebas.py` (gate `lint:istqb`): nombre `test_[objeto]_dado_…_cuando_…_entonces_…` en Python y «dado … cuando … entonces» en el frontend, y técnica declarada en cada archivo. Se renombraron 14 pruebas de los satélites y se declararon las técnicas en 183 archivos (derivadas de los contextos de sus propias pruebas). Se borraron `scripts/tests/test_regex.py` y `test_url.py`, que eran depuración sin pruebas. Plan formal `docs/requerimientos/PLAN_PRUEBAS_ISTQB.md` (niveles, técnicas, criterios de entrada y salida, trazabilidad); `PLAN_PRUEBAS.md` queda como registro histórico | `test_auditoria_convencion_script.py` (17 pruebas) |
+| **Ruff** | ADR-015 con la justificación (una herramienta, cobertura del 100 % del Python, defectos reales, una configuración, velocidad, sin regresión) y el texto para pegar en la tesis en `CORRECCIONES_TESIS.md` §5 | — |
+| **Tesis** | Las filas de GitLab CI y GitLab Container Registry pasan a «se cumple»; queda **una sola corrección** del pipeline: flake8 y bandit por Ruff | — |
+
+**GitLab levantado y configurado en este equipo (20-oct, tarde).** GitLab CE 19.4.2 y el registro responden en `https://192.168.1.55:8929` y `:5050` (3,7 GB de los 6 GB asignados; el stack `texcore-prod` siguió sano). El usuario cambió la contraseña de `root` y creó el grupo `interfibra` y el proyecto `interfibra/texcore`. Por API (con un token personal temporal de `root`, ya revocado) se dejó: ajustes del proyecto (MR solo con pipeline en verde e hilos resueltos, sin runners compartidos, limpieza del registro: 25 etiquetas y las de SHA, `latest` y `backup`), `master` y `staging` protegidas, los runners `texcore-ci` y `texcore-staging` en línea (el segundo con la etiqueta `staging`, protegido, con el socket y la red del host), las variables de CI (`GITLAB_CA_CRT`, `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, y los tokens de proyecto `GITLAB_TOKEN` y `RENOVATE_TOKEN`), la CA de confianza en el Docker del equipo (verificado: el login falla por credenciales, no por certificado) y la programación semanal (lunes 06:00, America/Guayaquil). Hallazgos: el registro de usuarios quedó **abierto** pese a `gitlab_signup_enabled = false` (ese ajuste de `gitlab.rb` solo rige en el primer arranque); se cerró por consola el mismo día y se verificó que no se había creado ninguna cuenta; GitLab 19 ya no admite el inicio de sesión por contraseña en la API; los códigos de `keep_n` del registro son fijos; la aprobación de Code Owners es de pago (Premium); y una programación sobre una rama inexistente exige `refs/heads/master`.
+
+**Primer pipeline (#1, rama `MES`, 20-oct, tarde).** El usuario empujó `MES` al GitLab del servidor y el pipeline corrió en el runner `texcore-ci`: `lint:pipeline`, `lint:istqb`, `lint:permisos` y `sast:semgrep` pasaron; `lint:backend` falló y el resto de las etapas se saltó. Causas, ambas mías y evitables con una corrida local previa: (1) `detect-secrets` marcó `SECRET_KEY` de pruebas en `.gitlab-ci.yml:63`, sin el marcador `pragma: allowlist secret` que sí llevaban las otras claves de prueba; (2) `mypy` daba 7 errores en 2 archivos, porque en `internal_api/views/scanning_views.py` reutilicé el nombre `stock` para el queryset y para la fila (ahora `existencias`), y en `test_despliegue_produccion.py` faltaba la anotación de `partes`. Corregido y verificado en local: `detect-secrets` sin hallazgos, línea base auditada por completo, `mypy` sin errores en 310 archivos, `ruff` y `ruff format` limpios, `yamllint` correcto, 187 pruebas de `internal_api` y del pipeline en verde, y `pip-audit` (4 servicios) y `npm audit` en 0 vulnerabilidades. El runner `texcore-ci` pasó de 1 a 2 jobs en paralelo (`concurrent = 2` en su `config.toml`; antes los 12 jobs corrían en fila). Falta un segundo commit y push del usuario para ver las etapas `test` y `audit`. **Segundo intento:** `lint:backend` volvió a fallar en `detect-secrets` con «The baseline file was updated»: al editar archivos que contienen secretos ya auditados (claves de prueba), sus números de línea cambian y el hook reescribe `.secrets.baseline`; el CI exige que esa actualización esté commiteada. Yo había restaurado el archivo tras correr el hook en local, y ese cambio era justo el necesario. Regenerado y verificado: 41 entradas con las mismas claves, ninguna con `is_secret` distinto, 14 números de línea movidos, ninguna sin auditar y una segunda pasada estable.
+
+**Tercer intento (pipeline #4): `test:backend`.** `lint:*` pasó y, por primera vez, también `test:scanning`, `test:printing`, `test:reporting`, `test:frontend`, `audit:dependencias` y `audit:npm` (0 vulnerabilidades). SQL Server 2022 como service y el driver ODBC funcionaron. `test:backend` se detuvo (`--failfast`) tras 767 pruebas en 58 s por **una** prueba de rendimiento, `PanelJefePlantaRendimientoTest` (RNF-03, TEX-17 CA-3): el panel del Jefe de Planta tardó 4,56 s y el umbral es 3 s. La prueba declara en su docstring que el tiempo es solo una referencia y que la aserción determinista es el techo de consultas (35). En el runner compartido, la primera apertura contra un SQL Server recién levantado incluye compilar planes y calentar la caché, y el ruido solo suma tiempo. **Corrección:** el tiempo se toma como la **mejor de 3 aperturas** (el umbral de 3 s y el techo de consultas no cambian; las consultas se cuentan en la primera apertura, la más exigente). El mensaje de fallo ahora muestra las 3 duraciones. Los artefactos de cobertura no se subieron porque el job falló antes de generarlos.
+
+**Incidente de memoria (20-oct, tarde).** Con el pipeline corriendo, el kernel activó el OOM killer y cerró Firefox y `plasmashell` (el escritorio). El equipo tiene 16 GB **sin swap** y compartía: GitLab (3,8 GB), el stack `texcore-prod` (~2,5 GB), un job de Node/Vitest (3,2 GB) y un SQL Server de CI sin tope. Mi aporte: había subido el runner a 2 jobs en paralelo. `texcore-prod` y GitLab no fueron tocados por el OOM. Medidas: (1) `concurrent = 1` en el runner `texcore-ci`; (2) tope de 4 GB por job y 3 GB por servicio (`memory` y `service_memory` en el `config.toml` del runner), para que un exceso falle ese job y no el escritorio; (3) `MSSQL_MEMORY_LIMIT_MB=2048` en el SQL Server del job `test:backend` y en `scripts/run_backend_tests.sh` (sin tope, SQL Server reserva hasta el 80 % de la memoria del equipo); (4) `NODE_OPTIONS=--max-old-space-size=2048` en `test:frontend`. Riesgo **RS-25**. Pendiente del usuario: crear swap o zram (requiere `sudo`, ver `GUIA_GITLAB.md` §1).
+
+**Cuarto intento (pipeline #5).** `test:backend` **pasó** (494 s) con la medición de la mejor de 3 aperturas, y también `lint:*`, `test:scanning`, `test:printing`, `test:reporting` y `audit:dependencias`. `test:frontend` falló: 21 de 1981 pruebas (14 archivos), 14 por «Test timed out in 20000ms» y el resto por la misma lentitud; en local pasan todas. Causa: Vitest lanza un proceso por núcleo (16 en este equipo), el job usó 3,2 GB y competía con el SQL Server de `test:backend` (el log marca `import 196s`). Corrección: `--maxWorkers=4` en `.gitlab-ci.yml` (en local, 1981 pruebas en 123 s y cobertura sobre los umbrales; en el runner tardaba 208 s y fallaba). Además se regeneró `.secrets.baseline` (un número de línea movido por las líneas nuevas del pipeline).
+
+**Quinto intento (pipeline #6, rama `MES`): primer pipeline completo en verde.** Los 12 jobs pasaron en 12 minutos (720 s): `lint:*` (5 jobs), `test:backend` (262 s, SQL Server 2022, cobertura 92,5 %), `test:scanning` (94,0 %), `test:printing` (98,6 %), `test:reporting` (98,3 %), `test:frontend` (174 s, 95,4 %), `audit:dependencias` y `audit:npm`. Cobertura media del pipeline: 95,8 %. Quedan por correr, y solo lo harán en `master`, `build:imagenes`, `imagenes:unir`, `scan:trivy`, `staging:efimero` y `deploy:produccion` (manual). Con el runner a 1 job, el pipeline es más lento (12 min) pero estable. Cinco correcciones salieron del camino (todas anotadas arriba): marcador de `detect-secrets`, errores de `mypy`, actualización de la línea base, medición del panel RNF-03 y topes de memoria y procesos.
+
+**Pendiente del usuario** (`GUIA_GITLAB.md` §0): el primer push de `master`, `staging` y `MES` (y luego cerrar el push directo y fijar `master` como rama por defecto), las variables `PRODUCCION_HOST` y `TEXCORE_DIR`, el espejo hacia GitHub (necesita un token de GitHub) y el runner de producción cuando exista la VM. El runner de producción se registra cuando exista la VM; hasta entonces `deploy:produccion` queda esperando.
+
+### 20 de Octubre de 2026 — Seguridad de la API: RNF-02 y OWASP API1/API2 con pruebas sobre todas las rutas (sin commitear)
+
+Pedido del usuario: «que las APIs no sean vulnerables: si alguien tipea algo en el navegador, que no se robe la información», cerrando lo que la tesis afirma (Tabla 7, RNF-02; «API1 y API2 del OWASP API Security Top 10 2023 quedan mitigados»). Antes se aplicó en el stack la migración `gestion.0010_cifrar_datos_personales` del 19-oct (respaldo `texcore_db_pre_cifrado_2026-10-20.bak`; claves de cifrado de desarrollo agregadas al `.env` local).
+
+| Hallazgo | Corrección | Prueba |
+|---|---|---|
+| **RS-20.** nginx enviaba `/api/scanning/*` directo al `scanning_service`, que no autentica usuarios: sin sesión se consultaban lotes de cualquier sede; `/api/scanning/docs` y `openapi.json` eran públicos | `auth_request` de nginx a `GET /api/auth/verificar-sesion/` (nuevo, `VerificarSesionView`), que devuelve la sede del usuario en cabeceras; nginx las reemplaza y el servicio responde 401 sin ellas; la sede viaja a la `internal_api` (`sede_id`), que acota lote y stock (`filtrar_lotes_de_sede`). Solo se publica `/api/scanning/validate` | `test_profile_views.py`, `test_validate_endpoint.py`, `test_validation_service.py`, `test_django_client.py`, `test_scanning_views.py`. En el stack: sin sesión 401, cabeceras falsificadas 401, otra sede «no encontrado», documentación 404 |
+| **RS-21.** `SedeViewSet` mostraba todas las sedes con sus conteos a cualquier rol | Acotado a la propia sede salvo para quien ve todas, como subconsulta `EXISTS` (el panel de Jefe de Planta no suma consultas) | `SedeViewSetAlcanceTestCase` |
+| **RS-21.** La validación de lote de Django distinguía un lote de otra sede de uno inexistente, daba 500 con un código repetido entre sedes y con un `pedido_id` no numérico | `filtrar_lotes_por_sede`, primer lote por id y 400 para el `pedido_id` inválido | `ValidarLoteAlcanceTestCase` |
+| **RS-21.** El panel ejecutivo (KPI, resumen, tendencia, producción por producto e impresión) no exigía rol | `IsPanelEjecutivo`: Ejecutivo, Admin de Sede (lo ve incrustado) y Admin de Sistemas. El KPI de área sigue acotado al área del usuario, como ya fijaba `test_kpi_views.py` | `IndicadoresPorRolTestCase` |
+| **RS-22.** Las escrituras con la cookie JWT no exigían token CSRF | `CookieJWTAuthentication.enforce_csrf` (con `CSRFCheck` de DRF, que da el motivo en texto); `csrftoken` en el login y el perfil; axios lo envía en `X-CSRFToken` | `CookieJWTCsrfTestCase`, `axios.test.ts`. En el stack: escritura sin token 403, con token 200, desde otro origen 403 |
+| **RS-22.** El relay público `/api/logs/` creaba un logger por cada `msgid`, aceptaba saltos de línea y no tenía límite | `msgid` `[A-Za-z0-9_-]{1,40}`, mensaje y `sd` en una línea y recortados, `FrontendLogThrottle` (120/min por IP real) | `FrontendLogEndurecimientoTestCase` |
+| Evidencia de RNF-02 manual y por módulo | `scripts/auditar_permisos_backend.py` (CSV de cada ruta con su permiso, `por_accion` y filtro de sede; falla con una ruta pública fuera de la lista blanca de 6) y `test_acceso_no_autorizado_global.py` (anónimo en todas las rutas; en cada ruta de objeto, los 9 roles acotados a una sede contra un objeto de otra) | `test_auditoria_permisos_script.py`, `test_acceso_no_autorizado_global.py` |
+
+**Front, RS-19:** el alta y la edición de clientes del Vendedor (`useClientesVendedor.ts`) mostraban `success: false` y `error: [object Object]` ante el RUC duplicado, porque no leían el sobre de error de la API; ahora usan `mensajeDeLaApi` (prueba en `VendedorDashboard.cliente.test.tsx`). **Descartado:** el `/admin/` que parecía público era la SPA de React: nginx no tiene ruta hacia el admin de Django. **Pruebas afectadas actualizadas:** las del `scanning_service` envían las cabeceras de sesión de nginx; el auditor de rutas del frontend excluye `api/auth/verificar-sesion/`, que consume nginx. **Evidencia:** `AUDITORIA_CALIDAD.md` §I.2 (A01 y API1/API2), `CHECKLIST_EVIDENCIA_MANUAL.md` (RNF-01 y RNF-02), `matriz_trazabilidad_pruebas.md` (sección RNF-02), `REGISTRO_RIESGOS.md` (RS-20 a RS-22) y `CORRECCIONES_TESIS.md` §4 (el texto de la tesis se sostiene sin cambios; solo las precisiones de alcance). **Imágenes** `texcore-local/*:mes-1019`, stack `texcore-prod` recreado con ellas (6 contenedores `healthy`).
+
+### 16 de Octubre de 2026 — Despacho: PDF en blanco, detalle angosto, impresión de la página visible y orden de carga de las pruebas (sin commitear)
+
+Pedidos del usuario, probando el rol Despacho en el stack: «al imprimir la guía se abre una pestaña blob en blanco», «el detalle del despacho está amontonado», «error al imprimir el historial de despachos», «al imprimir solo debe salir lo que se muestra en la página» y «un mensaje al final si supera la paginación, con el total de registros del día y el número de páginas».
+
+| Defecto | Hallazgo | Corrección | Prueba |
+|---|---|---|---|
+| 62 | La guía de remisión (y el historial, la nota de venta y la producción por producto) abría una pestaña **en blanco**: `new Blob([response.data])` descarta el tipo MIME del PDF, y el navegador no lo renderiza. El backend devolvía un PDF válido (`%PDF-1.7`, 200) | Helper `lib/abrirPdf.ts` (`abrirPdfEnPestana`): reconstruye el blob como `application/pdf`, abre la pestaña y libera la URL a los 60 s. Usado en los 4 sitios que abrían PDF en pestaña (`usePedidosVendedor` descarga con nombre y no se toca) | `abrirPdf.test.ts` (4) y una de regresión en `GuiaRemisionModal.test.tsx`, que falla con el código anterior (`expected '' to be 'application/pdf'`) |
+| 63 | El detalle del despacho (y 9 diálogos más) se veía angosto: el diálogo base trae `sm:max-w-lg` y `max-w-3xl` **sin prefijo `sm:`** pierde contra él desde 640 px | `sm:max-w-*` en los diálogos de 2xl a 5xl (10 archivos); el detalle del despacho pasa a `sm:max-w-4xl` y el nombre del producto ya no se corta a 200 px | `HistorialDespachos.test.tsx` comprueba la clase `sm:max-w-4xl` |
+| 64 | Imprimir el historial daba **503**: sin filtro se mandaban los 5 889 despachos al servicio de impresión (≈4 ms por fila: 24,6 s) y `gestion/utils.py` espera 10 s; además bloqueaba un worker | `GET /inventory/historial-despachos/imprimir/` usa la **misma paginación del listado** (`page`, 50 por página): imprime exactamente lo que muestra la página, con sus filtros de fecha, y el frontend envía `page`. Los parámetros SQL quedan acotados por la página | 8 pruebas nuevas en `test_despacho_documentos.py` (mismas filas que el listado en la página 1 y 2, con fechas, 404 fuera de rango, parámetros ≤ 60); también sobre SQL Server 2022 |
+| 65 | El PDF no decía que había más páginas | El servicio de impresión recibe `total_registros`, `pagina` y `total_paginas` y, si hay más de una página, añade un aviso al pie: «página P de T: N de M despachos del día X / del rango filtrado. Para ver el resto, imprime las demás páginas» | 7 pruebas en `printing_service/tests/unit/test_historial_despachos_paginacion.py` y 3 en el backend |
+| 66 | 4 pruebas de `assertLogs` fallaban en la suite completa (también en `HEAD`) y pasaban solas | `test_auditoria_rutas_script.py` importa `scripts/auditar_rutas_frontend.py`, que llamaba a `django.setup()` por segunda vez: reaplica el `LOGGING` de pruebas (`disable_existing_loggers=True`) y silencia los loggers ya creados, según el orden de carga. Ahora solo llama a `setup()` si `apps.ready` es falso | Regresión en `CargaDelScriptTest` (en rojo antes) |
+
+**Otros cambios:** el manejador de impresión del historial usa `logger` (RFC 5424) en lugar de `console.error`; el stack de desarrollo tenía los volúmenes de auditoría de `printing` y `reporting_excel` creados por root (antes del `chown` de los Dockerfile) y los servicios no arrancaban: se les asignó uid 10001 sin borrar los `logs.db`.
+
+**Pendiente, sin tocar:** los diálogos `max-w-md` y `max-w-lg` sin `sm:` se ven en `lg` (más anchos de lo previsto) y se dejaron como están para no estrecharlos; quedan 89 llamadas a `console.*` en el frontend frente a 5 archivos que usan `logger`. **Imágenes reconstruidas** como `texcore-local/*:mes-1017` y stack `texcore-prod` recreado con ellas (6 contenedores `healthy`, 5 889 despachos intactos, 0 migraciones nuevas). Probado en el stack: el historial completo, que daba 503, se imprime en 0,3 a 0,7 s por página. El build fallaba con «no permission to read from `gunicorn.ctl`»: el backend de desarrollo (que monta el repo) crea ese socket como root en la raíz y entra en el contexto; ahora está en `.dockerignore`.
+
+### 14 de Octubre de 2026 — Cierre del plan de CI/CD: formateador de Ruff y Tailwind CSS 4
+
+Pedido del usuario: hacer los dos puntos que quedaban abiertos de la Fase 2 del plan de CI/CD.
+
+#### 1. Ruff etapa 5 — el formateador manda sobre el formato
+
+- `ruff format` sobre todo el repositorio: **389 archivos reformateados**, 158 ya conformes. Ningún cambio de comportamiento.
+- Gates nuevos: `ruff format --check --diff` en el job `backend-lint` del CI y hook `ruff-format` en el pre-commit.
+- `[tool.ruff.format]` declara `quote-style`, `indent-style` y `line-ending`, para no depender del valor por omisión de cada versión de Ruff.
+- Las **38 reglas de espaciado** de pycodestyle (E1, E2 y E3 en preview, más `E502` y `W391`), que la Etapa 1 había listado para igualar a flake8, salen del `select`: las garantiza el formateador y Ruff documenta que chocan con él. Verificado que no se perdió nada más: **415 reglas activas antes, 376 después**, con esas 38 como única diferencia y `RUF059` (preview) intacta.
+- **Markdown excluido del formateador.** Ruff 0.16 también formatea los bloques ```` ```python ```` de los documentos, y ahí los fragmentos son sueltos: una línea de `INSTALLED_APPS` se convirtió en una tupla y 19 documentos quedaron alterados. Se revirtieron y `exclude = ["**/*.md"]` evita que vuelva a pasar.
+- `.git-blame-ignore-revs` nuevo, para que `git blame` ignore el commit del reformateo. **Falta pegarle el SHA** cuando el commit exista (`git log -1 --format=%H`), y activarlo con `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+- La condición original («después del merge de `MES` a `staging`») ya no aplicaba: `MES` está al día y no hay otra rama con trabajo en curso, así que el reformateo no choca con nada. El PR `MES → staging` lo llevará como un commit propio.
+
+**De paso, los gates de Python quedaron de verdad en 0.** Los archivos nuevos del 13-oct nunca habían pasado por ellos:
+
+| Defecto | Hallazgo | Corrección |
+|---|---|---|
+| 56 | `ruff check` daba **9 hallazgos** en `smoke_test.py`, `metricas_dora.py`, `test_metricas_dora.py` y `test_despliegue_produccion.py` (S310, S603, S607, UP017 y 2 líneas largas) | S310: `smoke_test.py` **valida el esquema** de las URL que recibe (solo `http`/`https`; un `file://` leería un archivo del runner) y en `metricas_dora.py` la URL sale siempre de la constante `API`, con su `# noqa` y motivo. S603/S607: `/bin/sh` por ruta absoluta y argumentos fijos del repositorio. El resto, autofix y formato | `gestion/tests/test_smoke_test_script.py` (3 pruebas y 3 subcasos, en rojo antes del cambio) |
+| 57 | `mypy` daba **7 errores** en los mismos archivos: el `ModuleSpec` de `importlib` puede ser `None` y a un `set()` le faltaba anotación | `assert` del spec y de su loader al cargar un script por ruta, y `usados: set[str]` | Las mismas suites |
+
+#### 2. Tailwind CSS 4 — configuración CSS-first y 0 vulnerabilidades
+
+Motivo del plan: las 7 vulnerabilidades de `npm audit` del frontend venían **todas** de la cadena de Tailwind 3 (5 altas en `braces`, `micromatch` y `chokidar`; 2 moderadas en `postcss-selector-parser` y `postcss-nested`).
+
+- Migración con el codemod oficial (`@tailwindcss/upgrade`): 79 archivos de componentes y la configuración.
+- **`tailwind.config.js` y `postcss.config.js` eliminados.** El tema vive en `@theme inline` de `src/styles/globals.css` y Tailwind se integra como **plugin de Vite** (`@tailwindcss/vite`), sin PostCSS ni autoprefixer.
+- `tailwindcss-animate` (archivado) → **`tw-animate-css`**.
+- El codemod renombró `outline` → `outline-solid` también dentro de la prop `variant` de 12 componentes shadcn, que no es una clase CSS: se revirtieron (el `tsc` lo detectó).
+- `globals.css` consolidado: un solo bloque de tema (había dos, uno heredado de la plantilla), `:root` y `.dark` fuera de `@layer utilities`, y los comentarios de la plantilla retirados.
+- **Lo que puede verse distinto** (decisiones del usuario, para su verificación en el navegador):
+  - el bloque de tipografía base (`h1`–`h4`, `p`, `label`, `button`, `input`) **nunca se aplicaba** en Tailwind 3, porque usaba `var(--text-2xl)` y esas variables no existían; en la versión 4 sí existen. Se deja activo: afecta solo a los elementos sin clase `text-*` (5 encabezados del proyecto y los nativos), y cualquier clase de Tailwind lo sobrescribe porque el selector tiene especificidad 0;
+  - `bg-input-background` (checkbox, textarea, input-otp) y `bg-switch-background` (switch) **tampoco existían como clase**: las variables estaban en `:root` pero nunca se mapearon al tema. Ahora sí, así que esos controles recuperan su fondo gris;
+  - `--card-foreground` no estaba definida en modo claro (solo en `.dark`), así que `text-card-foreground` no tenía valor. Definida.
+- **Modo oscuro:** el bloque `.dark` tenía 12 de las 40 variables. Se completó para que sea coherente con `:root`. Hoy nada activa la clase `.dark` (no hay selector de tema), así que no cambia lo que se ve.
+- **Código muerto retirado:** las utilidades `sidebar-expanded`, `sidebar-collapsed`, `main-content-expanded`, `main-content-collapsed`, `scroll-area-thumb` y `scroll-area-viewport` no las usa ningún componente (en `scroll-area.tsx` son valores de `data-slot`, no clases), y con ellas se van `--spacing-4`, `--sidebar-width` y `--sidebar-width-icon` de `globals.css`; el sidebar de shadcn define sus propios anchos en línea.
+
+#### 3. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1771 aprobadas** (eran 1738 el 13-oct), 0 fallidas; cobertura 92,4 % (gate 90 %) |
+| `scanning_service` / `reporting_excel` / `printing_service` | 58 / 76 / 99 aprobadas; cobertura 94,4 / 99,2 / 98,8 % |
+| Frontend (Vitest) | 1955 aprobadas; cobertura 95,48 / 90,19 / 93,92 / 96,55 % (umbrales 94 / 89 / 91 / 95) |
+| `ruff check` · `ruff format --check` | 0 · 414 archivos conformes |
+| mypy (296 archivos) · Semgrep ERROR (94 reglas, 896 archivos) | 0 · 0 |
+| detect-secrets (hook y auditoría) | 0 y 0 — la línea base se realineó sola con las líneas nuevas: 41 hallazgos, todos auditados |
+| `pip-audit` (4 servicios) | 0 |
+| **`npm audit`** de producción y de desarrollo | **0 y 0** (eran 0 y 7) |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+| `npm run build` · imagen `nginx` de producción | build en 12 s; imagen construida y sirviendo la hoja de estilos de 151 kB |
+| actionlint (5 workflows) | 0 |
+
+**En el stack `texcore-prod`, con los 3 años de datos** (imágenes `mes-1014` con el código del 14-oct; los 6 contenedores `healthy`, 0 migraciones pendientes):
+
+- hoja de estilos servida por nginx: `/assets/index-PQ7-TOtS.css`, 151 kB, con `@layer theme` y las variables `--tw-*` de Tailwind 4, y con las clases que antes no existían (`bg-input-background`, `bg-switch-background`, `text-card-foreground`); las 6 utilidades retiradas ya no se emiten;
+- **pruebas de humo del release por HTTPS (`scripts/smoke_test.py`): 13 de 13 en verde** — redirección 301 del puerto 80, salud del backend y de scanning, y login más una consulta propia de cada uno de los 11 roles. Es además la primera corrida de esas pruebas contra un stack real, que es lo que hará el staging efímero del release;
+- **verificación visual del usuario: conforme.** Recorrido de los paneles por rol en el navegador, con atención a los tres cambios posibles del punto 2 (tipografía base de los 5 encabezados sin clase `text-*`, fondo gris de checkbox, switch, textarea e input-otp, y `text-card-foreground` en las tarjetas). Sin diferencias que corregir.
+
+#### 4. Documentos
+
+- Planes: `2026-10-05-migracion-ruff.md` **completo**; `2026-10-05-modernizacion-ci-cd.md` con las 7 fases hechas en el código y los puntos 6 y 8 de la Fase 2 cerrados.
+- `ESTANDARES_DESARROLLO.md`: el gate de formato y el pre-commit. `README.md`: Tailwind 4 y las cifras de pruebas al día. `ARQUITECTURA_SISTEMA.md`: versión de Tailwind.
+- Con la verificación visual conforme, **el plan de CI/CD queda cerrado en el código**: las 7 fases hechas. Lo único que queda son las acciones en GitHub de las Fases 1 y 4 (rama por defecto, rulesets, environment `production` y registro del runner `texcore-prod`), que no se pueden hacer desde el repositorio.
+
+### 14 de Octubre de 2026 (noche) — Repaso de los documentos que la tesis cita como evidencia
+
+Paso 3 de la hoja de ruta: revisar con el criterio «la tesis manda» todo documento que respalde lo que la tesis afirma. Se revisó qué cita el anteproyecto (`docs/Anteproyecto_Capstone_Final_Version.pdf`): ISO/IEC 25010:2023 y la Tabla 11, COBIT 2019 e ITIL v4, NIST SP 800-207, OWASP Top 10 y API Security, ISO/IEC 27001 y la LOPDP. **ANSI/ISA-95, ISA-88 y VDI 5600 no los cita**, así que `docs/analisis_y_reportes/auditoria_cumplimiento_ANSI_ISA_VDI.md` queda fuera del alcance de la evidencia (se deja como análisis propio).
+
+#### 1. Evidencia por sprint, regenerada
+
+`scripts/evidencia/evidencia_sprints.py` sobre SQL Server 2022 (imagen desechable) y los 3 microservicios en entornos nuevos: **2348 pruebas citadas por el backlog, 0 fallidas** (antes: 8-oct, commit `dec016c`). Las diferencias por sprint vienen de que el commit `4e3ec1d` precisó las líneas de «Verificación» del backlog y reorganizó el MRP:
+
+- TEX-27 pasa a citar `test_mrp.py`, `test_mrp_views.py` y `test_run_mrp_command.py` (1 → **61** pruebas) y TEX-28, su archivo propio `test_requisitos_materiales_orden.py` (80 → 7, sin las 80 de `test_production_views.py` que contaba de más);
+- TEX-41 y TEX-43 bajan 3 y 4 pruebas: las 3 de `MRPEngineConfiguracionEmpaqueTestCase` se borraron en `4e3ec1d` porque probaban `inventory/services/mrp_engine.py`, reemplazado por el paquete `inventory/services/mrp/` (**ADR-012**). Verificado que no quedó hueco: la propiedad `conos_por_bano` sigue cubierta y el MRP ya no la usa (los pedidos se miden en kg);
+- el frontend suma el panel nuevo del historial de mantenimiento y el diálogo de requisitos de materiales.
+
+#### 2. `AUDITORIA_CALIDAD.md` — dos partes
+
+El documento era de marzo-abril de 2026 y afirmaba cosas que hoy son falsas. Queda dividido:
+
+- **Parte I — Contraste con la tesis (14-oct)**, nueva: las 9 características de ISO/IEC 25010:2023 una por una, OWASP Top 10 y API1/API2, COBIT/ITIL, Zero Trust y 27001/LOPDP, cada afirmación con su evidencia y su veredicto ✅/❌/⏳/📅. No vuelve a puntuar sobre 5: las notas de abril se quedan como historial.
+- **Parte II — Historial (marzo-abril)**: el documento original intacto, con notas `[Al 14-oct-2026: …]` donde su texto hoy engañaría — los 3 stored procedures (eliminados en `database/V6__drop_obsolete_stored_procedures.sql`; hoy ORM e `internal_api`), el pipeline con flake8/bandit (hoy Ruff, `ruff format`, mypy, detect-secrets y Semgrep) y el umbral de cobertura del 75 % «parcial (~62 %)» (hoy 90 % bloqueante, 92,2 % real).
+
+#### 3. El hallazgo: **RS-19**, datos personales sin cifrar
+
+El contraste destapó el único ❌: la tesis afirma «privacidad desde el diseño […] respetando a cabalidad la LOPDP» (p. 78) y los principios de la ISO/IEC 27001, pero `Cliente.ruc_cedula` y la fecha de nacimiento del usuario están **en claro** en la base. Era el defecto `SEC-08` de abril, diferido y nunca retomado. Lo que sí existe: RBAC de 11 roles, auditoría inmutable con justificación, cifrado en tránsito (HTTPS con HSTS y `Encrypt=yes` hacia la base) y respaldos.
+
+Queda abierto como **RS-19** en `REGISTRO_RIESGOS.md` (exposición 8 🟡) con las tres salidas posibles — cifrado por campo, TDE de la base (depende de la edición licenciada, ver RS-18) o corregir el texto de la tesis — y como fila nueva en `CORRECCIONES_TESIS.md`. **Pendiente de decisión del usuario.**
+
+#### 4. Otras correcciones
+
+| Documento | Corrección |
+|---|---|
+| `AUDITORIA_BACKLOG_VS_CODIGO.md` | **M-3 cerrado**: figuraba ⏳ pendiente, pero el 13-oct cada imagen quedó con su `HEALTHCHECK` (5 Dockerfiles + el de `db` en el compose); la referencia a un plan en una ruta de Windows fuera del repositorio se cambió por la entrada del `CHANGELOG`; el «Resultado» ya no deja hallazgos abiertos |
+| `CHECKLIST_EVIDENCIA_MANUAL.md` | Versión evaluada al día (`gestion/0009`), aclarando que la evidencia de infraestructura del Sprint 0 se capturó el 13-oct sobre `gestion/0008` |
+| `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` | Línea de vigencia (medido sobre `gestion/0008`, revisado contra `gestion/0009`) y el tiempo de la migración `0009` (**1,3 s**) junto a los de `0004`-`0008` |
+| `REQUISITOS_INFRAESTRUCTURA.md` | Misma línea de vigencia; el dimensionamiento no cambia |
+| `REGISTRO_RIESGOS.md` | RS-19 nuevo, resumen de exposición al día, dos referencias a un «§8» que no existe corregidas a «§5» y la próxima revisión atada al PR `MES → staging` en vez de una fecha de abril |
+| `CORRECCIONES_TESIS.md` | Fila nueva de la LOPDP y la cobertura al 92,2 % |
+
+#### 5. Repaso de `docs/superpowers/` a pedido del usuario
+
+23 planes y 9 especificaciones, revisados **uno por uno contra el código**, no por lo que declaraban:
+
+- **19 planes completos**, 1 histórico (microservicios independientes: se adoptó «monolito con servicios satélite», aunque de ahí salió `internal_api`), 1 supersedido (la v1 de la división de archivos dios), 1 ejecutado (el de hoy, commiteado en `8848f7e`) y **1 con un punto abierto**: la verificación con React DevTools Profiler de la división de dashboards.
+- **El problema no era que sobraran planes, era que 3 no declaraban su estado** y sus checkboxes seguían sin marcar aunque el trabajo estaba hecho. Ahora lo declaran, con la evidencia que lo respalda: producción flexible (transformación, mezcla y merma vendible, con sus pruebas), correcciones de la auditoría de la tesis (C-1, C-2 y M-4 cerrados el 30-sep) y la fase 1 de higiene, cuya nota pedía commitear `graphify-out/` — ya está versionado.
+- **`docs/superpowers/README.md` nuevo**: índice con el estado verificado de cada plan y spec, y la advertencia de que los checkboxes no son el estado. No se archivan ni se mueven: el `CHANGELOG` los referencia 28 veces por su ruta y son el registro del diseño.
+
+#### 6. Depuración: se eliminaron los 22 planes terminados
+
+Decisión del usuario tras el repaso: si están hechos, se borran. Quedó **un solo plan** en
+`docs/superpowers/plans/`, el de la división de dashboards, que tiene abierta la verificación con React
+DevTools Profiler. Las **9 especificaciones se conservan**: son el diseño y el «por qué» de cada cambio,
+que los ADR no cubren por completo.
+
+- `docs/superpowers/README.md` pasa a ser el **registro de lo eliminado**: una fila por plan con su tema
+  y dónde leer hoy su detalle (`CHANGELOG`, ADR, matriz de trazabilidad o la spec que sobrevive).
+- Las **9 referencias vivas** a planes borrados se reapuntaron al `CHANGELOG`, al ADR o a la spec
+  correspondiente: `ESTANDARES_DESARROLLO.md`, `ARQUITECTURA_SISTEMA.md`, `ADR_008`, `ADR_013`,
+  `PLAN_MEJORA.md`, la matriz de trazabilidad (2) y dos specs. Verificado con un barrido: **0 referencias
+  rotas** fuera del `CHANGELOG`.
+- Las entradas antiguas del `CHANGELOG` siguen citando las rutas de los planes: son referencias
+  históricas a archivos que ya no existen y el `CHANGELOG` no se reescribe.
+
+#### 7. Ramas viejas borradas
+
+`feature` y `refactorizacion`, que arrastraban el trabajo de septiembre, se eliminaron (las dos locales y
+`feature` también en el remoto; `refactorizacion` nunca se había subido). Verificado antes de borrar:
+
+- `MES..feature` → **0 commits**: está contenida por completo en `MES`;
+- `MES..refactorizacion` → 2 commits cuyo contenido **ya vive en `MES`** (middleware JWT de `printing_service`
+  con sus pruebas, Django 5.2.17, sqlparse 0.6.0 y cryptography 50.0.1). Lo único exclusivo eran cambios a
+  `.gitlab-ci.yml`, el pipeline retirado a propósito en `a65ff02`.
+
+Quedan `MES` (en curso), `staging`, `main` y `master` en el remoto — las dos últimas siguen pendientes del
+paso 9 de la hoja de ruta (rama por defecto `master` y borrar `main`).
+
+#### 8. Defecto que destapó el repaso (defecto 61)
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 61 | `scripts/auditar_rutas_frontend.py` devolvía **5 rutas sin consumidor** (las 3 del MRP por sede del 13-oct y las 2 del historial de mantenimiento de hoy) y la matriz de trazabilidad afirmaba que devuelve 0. Era un **falso positivo**: el frontend arma esas URL sobre un prefijo (`const BASE = '/paros-maquina/'` y después `${BASE}historial/`) y el script solo resolvía `${...}` como parámetro de ruta, no como constante | `expandir_constantes()` sustituye cada `${NOMBRE}` por el valor de la constante de cadena que lo define en el mismo archivo, antes de buscar. La auditoría vuelve a **0 rutas** y a código de salida 0 | `gestion/tests/test_auditoria_rutas_script.py`: 7 pruebas y 2 subcasos (constante de cadena, comillas dobles y backtick, constante que no es cadena, texto sin constantes, consumo por constante, consumo directo y ruta que nadie llama), en rojo antes del cambio |
+
+De paso, dos referencias a planes en rutas de Windows fuera del repositorio (`C:\Users\arebr\...`), una en la matriz de trazabilidad y otra en la auditoría del backlog, se cambiaron por las entradas del `CHANGELOG` que cuentan lo mismo.
+
+Sin cambios de código de producción: un guion de auditoría, su prueba nueva y documentos. `ruff check`, `ruff format --check`, `mypy` (303 archivos), `tsc` y `typecheck:tests`, todos en 0.
+
+### 14 de Octubre de 2026 (tarde) — Historial de mantenimiento y paros de máquina para el Jefe de Área
+
+Pedido del usuario: «en el jefe de área es necesario poder ver el historial de mantenimiento de las máquinas, qué días se detuvieron, tener una tabla con esta información y poder imprimir». Plan: `docs/superpowers/plans/2026-10-14-historial-mantenimiento-maquinas.md`.
+
+#### 1. Situación de partida
+
+`ParoMaquina` ya guardaba cada paro con su categoría (Seis Grandes Pérdidas), inicio, fin y si era planificado, y `GET /api/paros-maquina/` los listaba por área. Pero **no se mostraba en ninguna pantalla** (el Jefe de Área solo tenía el modal para registrarlos), no se podía filtrar por fecha ni agregar nada, y el **cambio de estado de la máquina** (`operativa` / `mantenimiento` / `inactiva`) solo guardaba el valor nuevo: un mantenimiento hecho así no dejaba fechas y era justo lo que el usuario quería ver.
+
+#### 2. Decisiones del usuario
+
+1. **El cambio de estado abre y cierra el paro**: a `mantenimiento`, uno `MANTENIMIENTO_PLANIFICADO` planificado; a `inactiva`, uno `OTRO` no planificado (una máquina parada sin mantenimiento programado sí penaliza la Disponibilidad del OEE); de vuelta a `operativa`, se cierra.
+2. **Resumen por máquina y detalle paro por paro** en la misma pantalla.
+3. **Todas las categorías**, con filtro y los atajos «Solo mantenimiento» y «Solo averías».
+
+#### 3. Backend
+
+- **`ParoMaquina.origen`** (`manual` / `estado`, migración `gestion/0009_paromaquina_origen`): solo los automáticos se cierran solos. Un paro **registrado a mano no se toca nunca** — sigue siendo histórico inmutable y alimenta el OEE.
+- **`ParoPorEstadoService`** (`gestion/services/paro_por_estado.py`): cierra el automático abierto con `select_for_update()` y abre el del estado nuevo, dentro de una transacción; idempotente si el estado no cambió o si ya hay uno abierto del mismo tipo. Lo llama `MaquinaViewSet.perform_update`, que lee el estado anterior antes de guardar.
+- **`HistorialParosService`** (`gestion/services/historial_paros.py`), fuente única de la pantalla y del PDF:
+  - el rango filtra por **solape**, no por la fecha de inicio: un paro que empezó antes y sigue abierto son días detenidos dentro del rango;
+  - las horas se **acotan al rango**, así que dos rangos contiguos suman el total sin contar nada dos veces; un paro en curso cuenta hasta ahora;
+  - rango por omisión de 30 días y **máximo de 366 días** (el resumen necesita todas las filas del rango: se acota la consulta en vez de traer años, RNF-03);
+  - el resumen se agrega en Python sobre **una sola consulta `values()`** porque el tramo de cada paro dentro del rango no se puede sumar en SQL de forma portable entre SQL Server y SQLite; la prueba de rendimiento fija el número de consultas.
+- **`GET /api/paros-maquina/historial/`**: `fecha_desde`, `fecha_hasta`, `maquina`, `categoria` y `planificado`; devuelve rango, resumen por máquina (paros, horas, horas planificadas, paros en curso y último mantenimiento), totales y el detalle paginado con `PaginacionAcotada`. Mismo aislamiento por área y sede que el resto del módulo de máquinas.
+- **`POST /api/paros-maquina/imprimir-historial/`**: el mismo historial en PDF con el rango completo (sin paginar) y los filtros en el pie; 503 si printing_service no responde.
+
+#### 4. printing_service
+
+`POST /pdf/historial-mantenimiento` con `HistorialMantenimientoRequest`, plantilla `historial_mantenimiento.html` (**A4 horizontal**: totales, resumen por máquina y detalle, con los paros en curso y los automáticos marcados), alta en `REQUIRED_TEMPLATES` (el health check exige que exista) y auditoría de cada impresión. El servicio pasa de 10 a **11 endpoints**.
+
+#### 5. Frontend
+
+`HistorialMantenimientoPanel` en el panel del Jefe de Área, debajo de las máquinas: filtros de fecha, máquina y categoría, los tres atajos, tarjetas de totales, tabla de resumen (ordenada de más a menos horas detenidas) y tabla de detalle paginada, con el botón **Imprimir** que abre el PDF en una pestaña nueva. La carga usa `useCargaRemota`, que descarta las respuestas de un filtro anterior. API tipada en `lib/api/mantenimientoApi.ts`.
+
+#### 6. Defecto de arquitectura que destapó la suite (defecto 58)
+
+El serializer del historial importaba el servicio, y el servicio tomaba el parseo de parámetros de `gestion/views/_common.py`. Eso arrastra `gestion/views/__init__.py`, así que el círculo quedaba cerrado: **serializers → services → views → serializers**. Con SQLite el orden de importación lo ocultaba; sobre SQL Server la suite falló al cargar `gestion.serializers`.
+
+- Las tres funciones de parseo pasan a **`gestion/params.py`**, un módulo neutral sin dependencias de capas; `views/_common.py` las reexporta, así que ningún otro módulo cambia.
+- Prueba nueva `gestion/tests/test_capas_sin_ciclos.py`: ningún módulo de `gestion/services/` ni de `gestion/serializers/` importa de `gestion.views`, `gestion/params.py` no depende de ninguna capa, y el reexport sigue funcionando.
+
+#### 7. Dos defectos que solo aparecieron al probarlo en el stack
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 59 | El PDF respondía **503 con el servicio de impresión sano**: el resumen llevaba `ultimo_mantenimiento` como `datetime` y `requests.post(json=…)` usa el json de la biblioteca estándar, que no serializa fechas. `PrintingService` capturaba la excepción y devolvía `None` | El resumen devuelve la fecha en texto ISO, igual para la API y para el PDF | `json.dumps` sobre el payload que recibe `PrintingService`: falla si queda un `datetime`, un `Decimal` o un objeto del ORM |
+| 60 | El PDF imprimía las fechas en ISO con microsegundos (`2026-10-14T14:54:04.058488+00:00`) | La vista formatea a **dd/mm/aaaa HH:MM en hora local** antes de enviarlas (un paro en curso va con el fin vacío), y el rango del encabezado y del pie también; el nombre del archivo conserva las fechas ISO, que ordenan bien | Expresión regular sobre cada fila del payload y sobre el último mantenimiento |
+
+#### 8. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1814 aprobadas** (eran 1771), 0 fallidas; cobertura 92,2 % (gate 90 %) |
+| `printing_service` | 107 aprobadas (eran 99); cobertura 98,89 % (gate 95 %) |
+| `scanning_service` / `reporting_excel` | 58 / 76 aprobadas |
+| Frontend (Vitest) | 1972 aprobadas (eran 1955); cobertura 95,35 / 90,17 / 93,66 / 96,46 % |
+| `ruff check` · `ruff format --check` · mypy | 0 · 420 archivos conformes · 0 (302 archivos) |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+| Migración en el stack | `gestion.0009` aplicada en 1,3 s, con respaldo previo `texcore_db_pre_gestion0009_2026-10-14.bak` (150 610 páginas en 4,0 s) |
+| Pruebas nuevas | 43 de backend (8 del servicio de paros por estado, 31 del historial y la impresión, 4 de capas sin ciclos), 8 de `printing_service` y 17 de frontend |
+
+**En el stack `texcore-prod`** (imágenes con el código del día; respaldo previo de la base y migración aplicada), con `e1_jefe_area`:
+
+- las 4 máquinas del área y el historial inicial del rango de 30 días;
+- `PATCH` a `mantenimiento` → aparece un paro nuevo **en curso**, `origen=estado`, Mantenimiento Planificado y planificado; `PATCH` de vuelta a `operativa` → el mismo paro queda cerrado con su fin y el resumen suma sus horas;
+- categoría inválida, máquina no numérica y rango mayor a un año → **400**; filtro por categoría → solo mantenimiento;
+- **PDF de 14,2 kB**, `application/pdf`, con el nombre del rango; revisado en texto sobre las imágenes `mes-1016`: encabezado «Del 14/09/2026 al 14/10/2026», totales, resumen por máquina con el último mantenimiento, detalle con fecha y hora local, los paros automáticos marcados y el pie «Filtros: categoría Todas · Todos · del 14/09/2026 al 14/10/2026 — Impreso por e1_jefe_area»;
+- aislamiento: el jefe de planta consulta su sede (200) y el vendedor recibe **403**.
+
+#### 9. Documentos
+
+- **ADR-013** (`ADR_013_PARO_AUTOMATICO_POR_ESTADO.md`): por qué el estado de la máquina genera el paro, la tabla de transiciones, las alternativas descartadas y las consecuencias (incluido que `inactiva` penaliza la Disponibilidad y `mantenimiento` no). Indexado en `ARQUITECTURA_SISTEMA` §ADR-009 a ADR-013.
+- **Reglas de negocio** `PLAN_PRUEBAS.md`: **RN-24b** (el cambio de estado abre y cierra el paro; solo los de `origen='estado'`) y **RN-24c** (el rango filtra por solape y las horas se acotan al rango; 30 días por omisión, 366 de máximo).
+- Manual del Jefe de Área: sección 5 (el cambio de estado registra el paro) y **5.1** nueva con los filtros, las tablas, cómo se cuentan las horas y la impresión.
+- `MICROSERVICIO_IMPRESION.md` (11 endpoints, 107 pruebas), `ARQUITECTURA_SISTEMA` (endpoints nuevos, `ParoMaquina.origen` en los modelos de planta y los conteos de pruebas al día), `README` (conteos), matriz de trazabilidad (9 filas nuevas, defectos 58 a 60) y el plan del día.
+
+#### 10. Barrido de cierre: «sin deuda técnica»
+
+Repaso de todo lo que el cambio pudo dejar tocado, además de los gates:
+
+| Qué se revisó | Resultado |
+|---|---|
+| Comandos de datos tras el cambio de modelo (deriva conocida) | `seed_production_masters`, `seed_data`, `stress_test_data`, `stress_ventas_data`, `run_mrp` y `simular_operacion --dias 14 --sedes 1` corren sin errores sobre una SQLite temporal (el último exige base virgen por diseño) |
+| `flush_test_data` con el modelo nuevo | No necesita borrar `ParoMaquina`: los paros de la máquina de stress caen por `CASCADE` y las máquinas de `seed_data` no se borran, así que no quedan huérfanos |
+| Semgrep ERROR · detect-secrets · pip-audit (4 servicios) · `npm audit` prod y dev | 0 · 0 (41 hallazgos auditados, línea base **sin cambios**) · 0 · 0 y 0 |
+| Enlaces relativos de los 7 documentos tocados | 0 rotos |
+| Re-render del panel nuevo | La lista de máquinas que recibe el historial se memoiza con `useMemo`: antes se recreaba en cada render del panel del Jefe de Área y lo re-renderizaba sin necesidad (es lo que vigila el plan de división de dashboards) |
+| `SerializerMethodField` nuevos | Anotados (`str | None`, `bool`, `float | None`): mypy y el esquema los resuelven sin avisos |
+| Archivos temporales | `TexCore/settings_datos_tmp.py` (el settings de SQLite para probar los comandos) eliminado; el working tree solo tiene los archivos de la funcionalidad |
+| Avisos de `manage.py spectacular` | 124, **ninguno nuevo**: los que aparecen son del autenticador propio y de serializers preexistentes. Registrado como **RC-09** en `REGISTRO_RIESGOS.md`, con su plan — no se tapa |
+| Límite del diseño | **RC-10**: un cambio de estado hecho fuera de la API (admin de Django, SQL directo) no genera paro. Aceptado y documentado en el ADR-013, con la salida escrita (mover la sincronización a una señal `post_save`) si el admin pasa a usarse para eso |
+
+### 13 de Octubre de 2026 — Verificación total en el stack, MRP por sede, despliegue al día y cierre del CI/CD (commit `4e3ec1d`)
+
+Pedido del usuario: pull, verificación total, borrar las imágenes de Docker, levantar el stack y dejarlo arriba para probarlo.
+
+#### 1. Entorno
+
+- Pull de `73f099a`. Los `graphify-out/` locales quedaron en un stash, que ya no sirve.
+- Se borraron todas las imágenes de TexCore (`fase9`, `stress-test`, `mes-test`, `local`, las del compose de desarrollo y `texcore-django-test`). Los volúmenes, con los 3 años de datos, se conservaron.
+- Imágenes reconstruidas con `--no-cache --pull` (6 min). Los 6 contenedores en `healthy` a los 15 s del `up`. Migraciones pendientes: 0.
+- `.env` local con los orígenes `https://` y la IP LAN (ver «Estado del entorno»). Sin ellos, el admin de Django fallaba en CSRF tras la redirección.
+
+#### 2. RNF-01 verificado en el stack
+
+- `http://` → 301 hacia `https://` (con la ruta y la consulta); `https://` → 200 con HSTS.
+- TLS 1.0 y 1.1 rechazados; 1.2 y 1.3 aceptados.
+- Cookies JWT con `HttpOnly`, `SameSite=Lax` y `Secure`.
+- Evidencia: `sprint-0/2026-10-13_nginx-https.txt` y `sprint-0/2026-10-13_docker-compose-ps.txt`, que reemplazan a los archivos del 8-oct.
+
+#### 3. Prueba de humo por HTTPS (11 roles de la empresa 1, a través de nginx)
+
+Login, cookies, perfil, catálogos, logout y 401 tras el logout para cada rol. Además, los tres microservicios: escaneo, export a Excel y los 6 PDF. Resultado final: **87 comprobaciones, 0 fallos**.
+
+- El rate limiting de `/api/token/` (5 por minuto por IP) cubre también el logout: la prueba espera 13 s entre llamadas.
+
+#### 4. Defectos encontrados y corregidos con TDD
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 40 | 4 de los 6 PDF (etiqueta, historial de despachos, producción por producto, guía de remisión) llamaban a `printing_service` sin JWT: 401 en printing y 503 para el usuario | `headers=_printing_auth_headers()` en los 6 métodos de `gestion/utils.py` | `PrintingServiceAutenticacionTestCase` (los 6 métodos) |
+| 41 | El PDF del historial de despachos sin filtro de fechas daba 500 en SQL Server: el `IN` de `prefetch_related` superaba los 2100 parámetros | `imprimir` lee el listado con `values()` y los pedidos con una subconsulta. Sin filtro: 5,9 s; un mes: 1,5 s | Los parámetros por consulta no crecen con los despachos |
+| 42 | Cookies de sesión y CSRF (admin) sin `Secure` (`check --deploy`, W012/W016) | `SESSION_COOKIE_SECURE` y `CSRF_COOKIE_SECURE` = `not DEBUG` | `test_cookies_seguras_produccion.py` |
+| 43 | La línea base de detect-secrets se generó en Windows (cp1252): en Linux, 18 líneas con tildes o eñes cambiaban de hash y el gate del CI fallaba | Regenerada en Linux; las 47 coincidencias revisadas y auditadas como falsos positivos (credenciales de CI y de pruebas, datos demo, PEM truncado en la documentación). Nota en `.pre-commit-config.yaml`: en Windows, `PYTHONUTF8=1` | Hook en 0 con un índice temporal (como en el CI); con una clave AWS de prueba falla |
+
+`check --deploy` restante: 172 avisos de `drf_spectacular` (documentación OpenAPI) y W004/W008 (HSTS y redirección), que cubre nginx.
+
+#### 5. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1726 aprobadas**, 0 fallidas; cobertura 91,7 % (gate 90 %) |
+| `scanning_service` / `reporting_excel` / `printing_service` | 58 / 76 / 99 aprobadas; cobertura 94,8 / 99,2 / 99,0 % |
+| Frontend (Vitest) | 1955 aprobadas; 95,5 / 90,1 / 93,9 / 96,5 % |
+| Ruff · mypy · Semgrep (ERROR) | 0 · 0 (284 archivos) · 0 |
+| detect-secrets (hook y auditoría) | 0 y 0 |
+| pip-audit (4 servicios) · `npm audit` de producción | 0 · 0 |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+
+#### 6. Alertas de stock del bodeguero: filtro por bodega y búsqueda (TEX-26)
+
+Pedido del usuario, al probar el stack: verificar si un producto está bajo aunque no esté en alerta, y que al elegir la bodega se actualice la tabla (antes el selector solo servía para exportar).
+
+- **Backend (`AlertasStockAPIView`):**
+  - acepta `bodega_id` y `search` (código o descripción del producto), validados con `parse_int_param`;
+  - sin búsqueda, sigue devolviendo solo las alertas;
+  - con búsqueda, devuelve todos los productos que coinciden, con `estado` (`bajo`, `ok` o `sin_minimo`);
+  - cada fila agrega `bodega_id` y `estado`; `faltante` nunca es negativo.
+- **Frontend (`BodegueroDashboard`):**
+  - el selector de bodega filtra la tabla; «Todas las bodegas» quita el filtro y la exportación pide elegir una;
+  - buscador con espera de 300 ms, consulta en el servidor y estado por fila: «Stock Bajo», «Stock OK» o «Sin mínimo»;
+  - la carga usa `useCargaRemota`, que descarta las respuestas de un filtro anterior.
+- TDD: `inventory/tests/test_alertas_stock_filtros.py` (5 pruebas) y 4 pruebas en `BodegueroDashboard.test.tsx`, todas en rojo antes del cambio.
+- **En el stack, con `e1_bodeguero`:** 85 alertas sin filtro; 12 en «Materia Prima E1»; «hilo» devuelve 117 productos (84 bajos, 27 OK, 6 sin mínimo); `bodega_id=abc` → 400. Todas las respuestas en menos de 0,1 s.
+
+#### 7. Plan MTS desde alertas: el jefe de planta ya no elige la sede
+
+Pedido del usuario, al probar el stack: en «Plan Maestro (MTS)», cuando hay alertas de stock, el diálogo «Crear Plan desde Déficits» obligaba al jefe de planta a elegir una sede de la lista completa. Hay un solo jefe de planta por empresa y solo opera su sede; si elegía otra, el backend respondía 403.
+
+- **Backend (`crear_desde_alertas`):** `sede_id` pasa a ser opcional.
+  - Para quien opera una sola sede, el plan toma la del usuario: sin sede asignada → 403; con una sede ajena → 403, como antes.
+  - Los roles que ven todas las sedes (admin_sistemas, ejecutivo) deben indicarla (400).
+- **Frontend:** el diálogo muestra la sede del usuario en solo lectura y no envía `sede_id`. `PlanProduccionMTS` recibe `sedeNombre` en lugar de la lista de sedes. Ninguna otra pestaña del jefe de planta permite elegir sede.
+- TDD: 3 pruebas nuevas en `test_control_acceso_sede.py`, 1 en `JefePlantaDashboard.test.tsx` y 3 actualizadas en `PlanProduccionMTS.test.tsx`, todas en rojo antes del cambio.
+- **En el stack, con `e1_jefe_planta`:** 14 déficits; sin `sede_id` el backend ya no la exige; con una sede ajena responde 403. No se creó ningún plan.
+
+#### 8. Pruebas complementarias (pedido del usuario)
+
+Además de las pruebas escritas antes de cada cambio, se cubrieron los casos restantes de lo modificado hoy:
+
+| Cambio | Pruebas agregadas |
+|---|---|
+| Plan MTS desde alertas | Creación real del plan del jefe de planta sin `sede_id` (201, plan en su sede, aprobado, con el déficit); con su propia `sede_id` (201); admin_sistemas con una sede distinta de la suya; error inesperado → 500 sin detalle interno. `crear_desde_alertas` queda cubierta por completo |
+| PDF del historial de despachos | Nombre completo del usuario, solo el username, despacho sin usuario (`None`) y pedido sin cliente (`N/A`) |
+| Alertas de stock | `bodega_id` no numérico → 400; búsqueda solo con espacios = sin búsqueda; varios lotes del mismo producto suman en una fila |
+| Frontend | Bodega y búsqueda combinadas; espacios en el buscador no filtran; diálogo del plan sin nombre de sede; mensaje de error al rechazar la creación del plan |
+
+`stock_views.py` y `gestion/utils.py` quedan al 100 %.
+
+#### 9. Tintorería: hoja de dosificación imprimible (TEX-39)
+
+Pedido del usuario: el tintorero debe poder imprimir la fórmula desde la tabla principal de Fórmulas (donde están Editar y Ver detalle), para entregarla a quien pesa y prepara, usando el servicio de impresión. Decisiones del usuario:
+- la hoja trae las cantidades a pesar: se piden el peso de la tela y los litros de baño;
+- se imprime la **versión oficial**; sin ella, la receta viva marcada como borrador.
+
+- **printing_service:**
+  - `POST /pdf/formula-dosificacion` con `FormulaDosificacionRequest` (peso y litros mayores a cero);
+  - plantilla `formula_dosificacion.html` (A4 vertical): datos de la fórmula y del baño y, por fase, proceso, ciclo, temperatura y tiempo, con cada insumo, su dosis (g/L o %) y la cantidad en g y kg;
+  - aviso «BORRADOR — NO OFICIAL» si no hay versión oficial;
+  - la plantilla se agregó a `REQUIRED_TEMPLATES` (el health check exige que exista) y cada impresión queda auditada.
+- **Backend:**
+  - `POST /api/formula-colors/{id}/imprimir-dosificacion/` toma el snapshot de la versión oficial (o construye el de la receta viva) y calcula con `calcular_dosificacion_desde_snapshot`, el mismo cálculo que descarga los químicos de una orden;
+  - reparte los insumos por fase;
+  - llama a `PrintingService.generate_formula_dosificacion_pdf` con el JWT interno;
+  - responde 503 si el servicio no está disponible y 404 si la fórmula es de otra sede.
+- **Frontend:** botón 🖨 **Imprimir** en cada fila de Fórmulas → `ImprimirDosificacionDialog`, que pide peso y litros, avisa si se imprimirá como borrador y abre el PDF en una pestaña nueva.
+- **Manual del tintorero:** sección 3.5.
+- **TDD** (todas en rojo antes del cambio):
+  - 10 pruebas de backend y 1 de autenticación;
+  - 5 en printing_service;
+  - 1 de la API del frontend y 4 del diálogo.
+- **En el stack, con `e1_tintorero`:** `F-E1-AZM` v1 con 100 kg y 800 L → PDF de 4 fases. Cantidades verificadas: 1 g/L × 800 L = 800 g; 4,5 % de 100 kg = 4,5 kg. Peso en cero → 400.
+
+#### 10. MRP por sede: sugerencias de compra y necesidad de producción (TEX-27, TEX-28, ADR-012)
+
+Pedido del usuario: el MRP se ejecutaba y no traía nada; hacerlo bien y completo, sin deuda técnica. Decisiones del usuario: lo que falta de un pedido es **necesidad de producción** (alimenta el Plan MTS); las sugerencias de compra son **informativas**; el stock mínimo de lo comprado es **stock de seguridad**; ejecución **por sede**.
+
+- **Causa del «no trae nada»:**
+  - las 16 órdenes activas son corridas continuas sin peso, y `Decimal(str(None))` abortaba todas las sedes;
+  - el error ocurría en un hilo suelto, así que la pantalla nunca se enteraba.
+- **Lo que tampoco servía** (defectos 44 a 50):
+  - todos los pedidos convertidos en químicos de una sola fórmula de otra sede;
+  - g/L × kg sin litros e insumos en % en cero (también en TEX-28);
+  - receta viva en lugar de la versión congelada;
+  - químicos ya descargados pedidos otra vez;
+  - el MTS proponía producir químicos;
+  - TEX-28 CA-2 sin mostrar en pantalla;
+  - KPI «OCS Aprobadas/Rechazadas» siempre en 0;
+  - cada recálculo dejaba un registro de auditoría por fila borrada.
+- **Backend:**
+  - paquete `inventory/services/mrp/` (reglas, requerimientos de una orden, necesidad de producción y motor) con una fuente única para el MRP, TEX-28 y el MTS;
+  - `calcular_dosificacion_de_orden` extraída de la descarga de químicos, con su comportamiento intacto (35 pruebas);
+  - `MRPEjecucion` con estado, conteos y advertencias; se audita la ejecución, no cada fila;
+  - API: `ejecutar-mrp` síncrono por sede o todas, `ultima-ejecucion`, `necesidades-produccion` y listas con `PaginacionAcotada`;
+  - comando `run_mrp [--sede]`; `seed_data` y `flush_test_data` actualizados; `mrp_engine.py` eliminado;
+  - migración `inventory/0003_mrp_por_sede`, que borra los resultados viejos (son recalculables).
+- **Frontend:**
+  - `MRPDashboard`: última ejecución con advertencias y pestañas de sugerencias de compra, requerimientos por orden y necesidad de producción;
+  - el ejecutivo lo usa con su filtro de sede;
+  - Plan MTS: pestaña **Necesidad de producción** con el desglose;
+  - requisitos de una orden: disponible, faltante y lo ya descontado;
+  - `KpisMRP` en el resumen y en la pestaña MRP.
+- **Equivalencias de empaque:** el MRP deja de usarlas (los pedidos se miden en kg). El CA-3 de TEX-43 sigue cubierto en el registro de lotes; se retiraron las pruebas del MRP viejo y se anotó en el ADR-011.
+- **TDD:** 36 pruebas del motor, 21 de la API, 7 de TEX-28, 4 del comando, 3 de KPI y 15 del panel, más las actualizadas del MTS, el ejecutivo y los requisitos; todas en rojo antes del cambio.
+- **En el stack** (respaldo previo `texcore_db_pre_inventory0003_2026-10-13.bak`; contenedores `healthy` en 14 s):
+  - `e1_bodeguero`: su sede en 0,24 s; otra sede → 403;
+  - ejecutivo con todas: 4 sedes en 0,60 s;
+  - 0 sugerencias de compra, verificado a mano: ninguna orden abierta tiene peso y ningún comprado está bajo su mínimo (el más justo está a 1,3 veces);
+  - 55 productos a producir, solo hilos;
+  - con una orden temporal de 50 000 kg (borrada después) las cuentas cuadran a mano: materia prima 50 000 + 2 000 − 28 200,84 = 23 799,16; QA-DET en dos fases 1,8 g/L × 400 000 L = 720 kg; QC-AZM 4,5 % de 50 000 = 2 250 kg;
+  - TEX-28 en vivo correcto;
+  - `seed_data` y `run_mrp` corridos de punta a punta sobre una SQLite temporal.
+
+#### 11. Documentos
+
+- ADR-012 (MRP por sede) y revisión del ADR-011; manuales del bodeguero, ejecutivo, admin de sede y jefe de planta; verificación de TEX-27 y TEX-28 en el backlog.
+- `CHECKLIST_EVIDENCIA_MANUAL.md`: RNF-01 pasa a ✅ con la evidencia del stack; se retira el pendiente de §8.
+- `matriz_trazabilidad_pruebas.md`: defectos 40 a 43 y la fila de cookies seguras. `REGISTRO_RIESGOS.md`: RS-16 mitigado y verificado.
+- `EVIDENCIA_POR_SPRINT.md` no se regeneró: las 4 pruebas nuevas no cambian los veredictos.
+
+#### 12. Despliegue y documentación de arquitectura al día (defectos 51 a 55)
+
+Pedido del usuario: revisar y actualizar `docs/arquitectura/`. Decisiones del usuario: una sola guía de despliegue, eliminar los documentos que no reflejan el sistema, corregir los scripts con prueba y consolidar las vías de despliegue.
+
+- **Prueba nueva** `gestion/tests/test_despliegue_produccion.py` (12 casos, en rojo antes de cada cambio). Verifica:
+  - que scripts y workflows solo nombran servicios del compose de producción y esperan con `up --wait`;
+  - que el CD y el rollback no reescriben `.env.prod` y que el CD respalda las 5 imágenes;
+  - que `.env.prod.example` define exactamente las variables del compose;
+  - que solo `deploy_production.*` despliega producción y que todo compose referenciado existe.
+- **`scripts/deploy_production.sh` y `.ps1`:** construir, `up -d --wait --wait-timeout 900` y `seed_production_masters` en `backend`, con el proyecto `texcore-prod` (defecto 51).
+- **`.env.prod.example`** con exactamente las variables del compose y cómo generar cada secreto (defecto 52).
+- **`cd.yml`** (el workflow se eliminó más tarde ese mismo día, punto 13; las dos correcciones siguen vivas en `release.yml`):
+  - usa el `.env.prod` del servidor; los secretos de la aplicación ya no pasan por GitHub (defecto 53);
+  - respalda como `:backup` la imagen en ejecución de cada servicio (defecto 54).
+- **`rollback.yml`:** igual que el CD, sin `sed` sobre `.env`.
+- **Archivos eliminados:**
+  - `scripts/deploy/deploy_prod.*`;
+  - la variante de contenedores Windows: `docker/docker-compose.windows.yml`, `docker/dockerfile.windows`, `database/Dockerfile.windows` e `infrastructure/docker/entrypoint.ps1` (defecto 55).
+- **Scripts de desarrollo:** `scripts/deploy/deploy.*` y `ver-cambios-frontend.ps1` usan solo el compose de desarrollo.
+- **Documentación:**
+  - `GUIA_DESPLIEGUE.md` reescrita como guía única (servidor, `.env.prod`, certificados, despliegue, operación, respaldos, rollback, problemas frecuentes);
+  - se eliminan `GUIA_SERVIDOR_UBUNTU`, `PLAN_DESPLIEGUE_PRODUCCION_TEXCORE`, `COMANDOS_OPERACION`, `PLAN_EVOLUCION_INDUSTRIAL` y `AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022`; lo vigente de esta última pasa a `ARQUITECTURA_SISTEMA` §3.6;
+  - `ARQUITECTURA_SISTEMA` v1.2: versiones, redes, BD (V2/V4/V5/V6, restricciones), Redis/Celery solo en desarrollo, dashboards, ERD (MRP, estados reales), endpoints (MRP, MTS, MES, fórmulas), CI/CD real, conteos de pruebas, ADR-009 a 012 y variables;
+  - `MICROSERVICIOS` §5 con la dirección real de cada satélite;
+  - `MICROSERVICIO_IMPRESION` con los 10 endpoints, las plantillas y las 99 pruebas (gate del 95 %);
+  - `GRAFO_CONOCIMIENTO` (el grafo sí se versiona);
+  - `DOCKER_SETUP`, los README de `docker/`, `scripts/` y `database/`;
+  - comandos con `-p texcore-prod --env-file .env.prod` en los README de los servicios y de despacho.
+- **Verificado en el stack de este equipo** (con un `.env.prod` temporal copiado del `.env`, borrado después):
+  - `bash scripts/deploy_production.sh`: exit 0 en 541 s, incluida la descarga de la imagen base nueva de SQL Server (CU 16.0.4305.5). Los 6 servicios quedaron `healthy` y la siembra fue idempotente (11 roles; el `admin` existente no se tocó). Datos intactos (314 806 movimientos), RCSI activo, sin migraciones pendientes, `/api/health/` en `ok` y el 80 respondiendo 301;
+  - respaldo de la guía (§4.3): 150 482 páginas en 8,6 s, 188 MB comprimido, copiado al host;
+  - restauración de la guía: **fallaba** porque `docker cp` deja el `.bak` ilegible para el usuario `mssql` del contenedor (error 5 del sistema operativo). Se agregó el `chown` y la restauración completa toma 29 s, con el stack de nuevo `healthy`;
+  - actionlint, zizmor y shellcheck sin hallazgos en `cd.yml`, `rollback.yml`, en los scripts SSH que ejecutan y en `deploy_production.sh`. Ruff en 0. detect-secrets: línea base regenerada en Linux, 45 hallazgos, todos auditados.
+- **Suite del backend sobre SQL Server:** 1738 pruebas OK, cobertura 92,4 %.
+- **Enlaces rotos (pedido del usuario):** 0 enlaces y 0 anclas rotos en la documentación del proyecto (eran 53 enlaces y 8 anclas). Detalle:
+  - `PLAN_PRUEBAS.md`: los enlaces apuntan al módulo donde vive hoy cada regla, tras la división en paquetes. Se corrigieron reglas desactualizadas: RN-04 (11 roles, faltaba `empaquetado`), RN-06/07 (el bloqueo de crédito aplica solo a pedidos a crédito), RN-12 (equivalencias configurables por sede, ADR-011) y RN-23 (MRP por sede, ADR-012). Se quitó la referencia al walkthrough de QA, que ya no existe;
+  - `arquitectura-bd/PERFORMANCE.md` y `OPTIMIZACIONES_QUERIES.md`: módulos actuales, conservando la línea original del análisis como referencia;
+  - `GESTION_ETIQUETAS.md`: el enlace a `printing.ts` era una ruta `file:///d:/…` de Windows;
+  - `REVERSION_PAGOS.md`: el índice no funcionaba por los emojis de los encabezados; además citaba `gestion/views.py`;
+  - CHANGELOG: los enlaces a archivos eliminados pasan a texto con su reemplazo.
+- **Rutas de antes de la división en paquetes (pedido del usuario):** `CONTEXTO.md` (12 menciones), 8 documentos de `docs/modulos/` y 2 de `arquitectura-bd/` citan el módulo actual. Las auditorías fechadas conservan el nombre original y agregan «hoy en …». Contenido corregido:
+  - `DESCARGA_QUIMICOS.md` decía que la descarga aún usaba la receta viva y que la versión congelada estaba pendiente: ya calcula con `calcular_dosificacion_de_orden`, desde el snapshot de la versión;
+  - `CONTEXTO.md` describe las alertas de stock con su estado y los filtros de TEX-26;
+  - `ANALISIS_SISTEMA_DESPACHO.md` citaba `reporting_excel/src/infrastructure/django_client.py`, eliminado el 31-ago.
+- **Revisión de los planes (pedido del usuario):** contrastados con el código los 22 de `docs/superpowers/plans/` y los 2 de `~/.claude/plans/`.
+  - Encabezados corregidos: la división de dashboards (decía «no ejecutado») y la Fase 5 de higiene (`Batch` ya eliminado en `481ce7f`).
+  - Abiertos al hacer la revisión: el plan de CI/CD (Ruff etapa 5, Tailwind 4 y Fases 3 a 6) y la verificación con React DevTools Profiler de la división de dashboards. Las **Fases 3 a 6 se cerraron ese mismo día** (punto 13); quedan Ruff etapa 5, Tailwind 4 y el Profiler.
+  - Verificación que exigía el plan del MRP: `simular_operacion`, `stress_test_data`, `stress_ventas_data`, `seed_data` y `run_mrp` corren sin errores sobre una SQLite temporal.
+
+#### 13. CI/CD Fases 3 a 6: release en `master`, despliegue y rollback seguros, contenedores endurecidos y gobierno
+
+Cierre del plan `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, que estaba en la Fase 2. Resuelve los hallazgos C-1 (el CD nunca se disparó), A-2 (lo probado no era lo desplegado), A-3 (los satélites llegaban sin escanear), A-6 (nadie verificaba las firmas), A-7 (migraciones dentro del entrypoint), A-9 (llave SSH en GitHub), M-4, M-5 y M-10.
+
+- **Fase 3 — `release.yml`, un solo artefacto desde `master`:**
+  - se dispara en `push` a `master` (el merge del PR `staging → master`) y corre el **CI completo** vía `workflow_call`;
+  - construye las **6 imágenes** (db, backend, nginx y los 3 satélites) **sin caché y con las bases actualizadas** sobre el commit exacto, y las publica en GHCR. Desde ahí todo usa el **digest**: la misma imagen se escanea, se prueba en staging, se firma y se despliega;
+  - `actions/attest-build-provenance` (procedencia SLSA) y **firma keyless con cosign** (OIDC, sin llaves que custodiar);
+  - **Trivy sobre las 6 imágenes** en matriz, con el SARIF a Security;
+  - el deploy encadena con `needs:` dentro del mismo workflow: **`cd.yml` se eliminó** y con él el disparador `workflow_run` que nunca funcionó;
+  - `db` pasa a publicarse como imagen propia (`image: ${CI_REGISTRY_IMAGE}/db:${TAG}` en el compose de producción), para desplegarla por digest como las otras cinco.
+- **Fase 4 — despliegue y rollback seguros:**
+  - **staging efímero** (`scripts/staging_efimero.sh`): levanta las 6 imágenes del release con el compose de producción y un SQL Server desechable, prepara la base **desde cero**, siembra los usuarios demo y corre `scripts/smoke_test.py` (301 del puerto 80, salud del backend y de scanning, y login + una consulta propia por cada uno de los 11 roles). Al terminar borra contenedores, volúmenes y secretos. Si falla, no se pide aprobación ni se despliega;
+  - **migraciones fuera del arranque:** `entrypoint.sh` delega en `infrastructure/docker/preparar_bd.sh` y solo lo ejecuta si `MIGRAR_AL_INICIAR` ≠ 0. Producción fija `MIGRAR_AL_INICIAR=0`: el despliegue respalda, migra y después levanta, así que un rollback de imagen no arranca sobre un esquema a medias. Desarrollo sigue migrando al arrancar;
+  - **`scripts/desplegar_release.sh`** (6 pasos en el servidor): respaldo `:backup` de las 6 imágenes en ejecución → `pull` por digest → **respaldo de la base** (`scripts/respaldar_bd.sh`, extraído y reutilizado por el cron de la guía) → dueño de los volúmenes de auditoría → `preparar_bd.sh` con la versión nueva → `up -d --wait`. Toma del servidor solo `.env.prod`, los certificados y el directorio de respaldos: sin SSH y sin `git checkout`;
+  - **verificación de la firma antes de desplegar:** `cosign verify` de las 6 imágenes contra la identidad del propio workflow;
+  - **runner propio** en lugar de la llave SSH: el job `deploy` corre en `[self-hosted, texcore-prod]`, en el environment `production` con aprobación, y verifica la salud por HTTPS con 15 intentos;
+  - **`rollback.yml`** pasa al mismo runner propio (adiós `appleboy/ssh-action` y los secretos SSH), no reescribe `.env` y espera a que los servicios estén sanos;
+  - `notify` publica el resultado del release por webhook opcional, armando el JSON con `jq` (nada se interpola en el script).
+- **Fase 5 — contenedores endurecidos:** los 5 Dockerfiles de producción y el de la base fijan su **imagen base por digest**, los 4 servicios Python corren como `appuser` (no root) sobre Python 3.12 y todos declaran `HEALTHCHECK`; los satélites no instalan ODBC; el SQL Server del CI y de `database/Dockerfile` queda en la **misma CU fija** (`2022-CU27-GDR1`, por digest) y Dependabot cubre cada Dockerfile.
+- **Fase 6 — gobierno:** `gobierno.yml` semanal con **OpenSSF Scorecard** (SARIF a Security) y **métricas DORA** (`scripts/metricas_dora.py`: frecuencia de despliegue, lead time, tasa de fallos y MTTR, a partir de los despliegues del environment y de los rollbacks) publicadas en el resumen del run; **`SECURITY.md`** con el canal privado de reporte, los plazos por severidad (CVSS), los controles automáticos, la rotación de secretos y la revisión trimestral. `.github/zizmor.yml` cambia su única excepción, que ya tiene criterio de salida.
+- **Verificación:**
+  - `gestion/tests/test_despliegue_produccion.py` crece de 12 a **35 casos con 62 subtests**, todos en verde, con las clases nuevas `ReleaseTest`, `ContenedoresEndurecidosTest`, `MigracionesFueraDelArranqueTest` y `GobiernoTest` (incluye que `cd.yml` ya no exista y que el compose de desarrollo siga migrando al arrancar);
+  - **actionlint 0 · zizmor 0 · shellcheck 0** sobre los 5 workflows y los scripts de despliegue, respaldo, staging y entrypoint (`.github/actionlint.yaml` declara la etiqueta del runner propio);
+  - las Fases 3 y 4 solo se ejercitan de punta a punta en el primer merge a `master`: requieren las acciones del usuario en GitHub (rama por defecto, rulesets, environment `production` y registro del runner).
+
+### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (commiteado en `73f099a`)
+
+Pedido del usuario: hacer pull, volver a correr graphify y reescribir la evidencia manual y los requisitos de infraestructura. Decisiones del usuario:
+- cerrar antes los dos hallazgos que afectaban veredictos (RNF-01 y detect-secrets);
+- separar las correcciones a la tesis del checklist;
+- dejar en el documento de infraestructura solo lo medido el 8-oct.
+
+#### 1. RNF-01: el puerto 80 redirige a HTTPS en producción (defecto 38, RS-16)
+
+- `nginx/nginx.conf` pasa a ser una plantilla de envsubst. El Dockerfile la copia a `/etc/nginx/templates/` con `NGINX_ENVSUBST_FILTER=^NGINX_`, así que `$host`, `$request_uri` y el resto no se tocan.
+- El `server` del 80 responde `301 https://$host$request_uri` cuando `NGINX_REDIRIGIR_HTTP=1`.
+  - Solo `docker-compose.prod.yml` declara esa variable.
+  - En desarrollo, el valor por defecto `0` sigue sirviendo por HTTP.
+- El `HEALTHCHECK` de nginx sondea por HTTPS (`--no-check-certificate`, sonda local). Por HTTP recibiría el 301.
+- `locustfile.py`: los usuarios virtuales ahora usan `LOADTEST_CA_BUNDLE`, que antes solo usaba el login previo. Sin eso, una carga por `https://` con certificado propio fallaba entera.
+- TDD: `gestion/tests/test_nginx_redireccion_https.py`, 6 pruebas. Cinco fallaron antes del cambio; la del compose de desarrollo pasa desde el inicio, como se espera.
+- **Sin verificar en el stack:** este equipo no tiene Docker. Queda pendiente en la hoja de ruta, paso 4.
+
+#### 2. detect-secrets bloquea de verdad (defecto 39, RS-17)
+
+- **Línea base regenerada solo sobre los archivos versionados.**
+  - Exclusiones en los filtros de la propia línea base: JUnit, resultados de Locust, `graphify-out/`, `frontend/dist/` y lockfiles. Antes, `graphify-out` aportaba ~5 250 coincidencias.
+  - La expresión usa `.` como separador para funcionar con las rutas de Windows y de Linux.
+  - Las rutas de la línea base se guardaron con `/`, para que el CI en Linux las reconozca.
+- **30 hallazgos auditados uno por uno**, todos falsos positivos (`is_secret: false`):
+  - contraseñas de pruebas y de datos demo;
+  - claves PEM de ejemplo truncadas;
+  - el par RSA solo para pruebas de `.env.test`.
+- **CI (`backend-lint`), dos gates:**
+  - `git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline`;
+  - verificación de que cada hallazgo de la línea base esté auditado. detect-secrets 1.5.0 no trae `--fail-on-unaudited`, que es del fork de IBM.
+- **Verificado en local:** los dos en 0. Con un archivo que tenía una clave AWS de prueba, el hook falló con código 123. Si un hallazgo auditado cambia de línea, el hook también falla hasta actualizar la línea base.
+- `.pre-commit-config.yaml` ya no repite exclusiones: documenta cómo regenerar la línea base.
+
+#### 3. Producción: edición de SQL Server y recursos (RS-18)
+
+- `docker-compose.prod.yml` tenía fijo `MSSQL_PID=Developer`, una edición que no está licenciada para producción. Pasa a `${MSSQL_PID:-Developer}`, así que el equipo Linux no cambia.
+- `.env.prod.example` agrega:
+  - `MSSQL_PID=Standard`;
+  - los recursos medidos para 100 usuarios: BD 3/3072, backend 3/3072 y 20 workers.
+
+  Antes, un despliegue nuevo tomaba los valores por defecto del compose: 2 CPU y 3 workers.
+- El comentario del compose sobre `2 × CPU + 1` remite ahora a los valores medidos.
+
+#### 4. Documentos
+
+- **`docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md` reescrito** como «Contraste de la tesis con el sistema», solo con criterio, evidencia y veredicto:
+  - Sprint 0 y los Sprints 1 a 8 (Tabla 14);
+  - DoD del §5.1;
+  - RNF-01 a RNF-05;
+  - §5.3, §5.4 y las ceremonias de Scrum;
+  - al final, una tabla corta «Cómo completar lo pendiente».
+
+  RNF-01 queda en «✅ en configuración · ⏳ verificación en el stack». Se aclara que el cifrado en reposo (TDE) no forma parte de la configuración evaluada.
+- **`CORRECCIONES_TESIS.md` (nuevo).** Afirmaciones del anteproyecto (con su página) y del documento del 6-oct que no coinciden con el sistema:
+  - 9 contenedores frente a 6;
+  - GitLab;
+  - flake8 y bandit;
+  - el umbral del 75 %;
+  - el alcance de «datos sensibles encriptados»;
+  - TEX-54;
+  - las Tablas 46 y 47 y la Figura 49.
+- **`docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` reescrito** solo con lo medido el 8-oct:
+  - variables por contenedor para 100 y 250 usuarios;
+  - picos por contenedor;
+  - consumo simultáneo: 5,1 núcleos y 4,8 GB con 100 usuarios; 6,9 núcleos y 5,3 GB con 250;
+  - tamaño de la VM: 8 vCPU / 10 GB hasta 100 usuarios; 12–14 vCPU / 14–16 GB hasta 250;
+  - migraciones sobre la base con datos y las condiciones de operación vigentes.
+
+  Se retira la advertencia del timeout de 30 s de agosto: ese salto ya no existe, porque Django consulta y `reporting_excel` solo formatea.
+- **Otros documentos:**
+  - índice de `docs/README.md` con los documentos de evidencia;
+  - `DOCKER_SETUP.md`;
+  - `ESTANDARES_DESARROLLO.md`: quedaba un ítem de Bandit y se describe el gate de detect-secrets;
+  - `REGISTRO_RIESGOS.md` (RS-16 a RS-18) y `matriz_trazabilidad_pruebas.md` (defectos 38 y 39).
+
+#### Verificación
+
+| Gate | Resultado |
+|---|---|
+| Suite del backend (`gestion/`, `inventory/`, `internal_api/`, SQLite local) | **1638 aprobadas**, 0 fallidas (incluye las 6 nuevas) |
+| Ruff | 0 |
+| Semgrep (gate ERROR) | 0 |
+| detect-secrets (hook y auditoría) | 0, y la comprobación negativa falla como se espera |
+| YAML de `ci.yml`, `.pre-commit-config.yaml` y el compose de producción | válidos |
+| `actionlint` / `zizmor` | no disponibles en este equipo: los corre el job `workflow-lint` |
+
+### 8 de Octubre de 2026 — Fase 7 en el equipo con SQL Server: migraciones medidas, índice de auditoría, Locust con 3 años de datos y evidencia del Sprint 0 (commiteado en `cf5256a`)
+
+Pedido del usuario: hacer pull, ubicarse con el CHANGELOG y terminar los planes pendientes en el equipo con el entorno completo y 3 años de datos ficticios.
+
+Pautas que fijó el usuario:
+- **la tesis manda**;
+- staging y TEX-54 van **al final**, cuando todo esté probado en `MES`;
+- el acceso total vale **solo en este equipo**, que es de desarrollo aunque simule producción.
+
+Entregable: **`docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`**.
+
+#### 1. Punto de partida
+
+- Pull de `origin/MES` (`dec016c`, que commitea todo el trabajo del 7-oct). Los `graphify-out/` locales se guardaron en un stash.
+- Las imágenes `stress-test` eran anteriores al código del 7-oct.
+- La base estaba en `gestion/0003` e `inventory/0002`.
+
+#### 2. `HEALTHCHECK` en las 5 imágenes (M-3, TEX-01 CA-1)
+
+| Imagen | Sonda | `start-period` |
+|---|---|---|
+| backend (`Dockerfile.prod`) | `infrastructure/docker/healthcheck.py`: `GET /api/health/` con el Host del primer valor de `ALLOWED_HOSTS` | 600 s |
+| nginx | `wget http://127.0.0.1/` (no pasa por `/api/`) | 10 s |
+| printing_service | `GET /health` (503 si faltan plantillas) | 20 s |
+| reporting_excel | `GET /health` | 20 s |
+| scanning_service | `GET /health` (503 si la Internal API no contesta) | 600 s |
+
+- **¿Por qué el Host sale de `ALLOWED_HOSTS`?** En producción es el dominio real, y una sonda con Host `127.0.0.1` recibiría 400 (`DisallowedHost`) con Django sano.
+- **¿Por qué 600 s en backend y scanning?** Cubre las migraciones del entrypoint. `--start-interval=5s` hace que pasen a `healthy` apenas responden.
+- Pruebas: `gestion/tests/test_healthcheck_contenedor.py` (5 pruebas).
+- **Verificado:** los 6 contenedores en `healthy` a los 11 s del `up`.
+
+#### 3. Migraciones medidas sobre la base cargada
+
+- Respaldo previo: `COPY_ONLY`, 170 MB en 5,2 s, en `/var/opt/mssql/backup/` del volumen de la BD.
+- Duraciones:
+  - `0004`: 3,8 s;
+  - **`0005` (relleno de ~1 M de auditorías): 36,9 s**;
+  - `0006`: 1,1 s;
+  - `0007`: 1,9 s;
+  - `0008`: 7,9 s.
+- Relleno verificado: 0 descuadres.
+
+#### 4. Defecto: SQL Server no usaba los índices de la `0004` → índice cubriente `gestion/0008`
+
+- **Hallazgo:** con 250 usuarios, el Query Store mostró que el `COUNT` del listado de auditoría seguía siendo el **40,7 % de la CPU** de la base (2 956 ejecuciones × 388 ms). Con un índice por cada rama de `usuario_sede_id OR object_sede_id`, el optimizador recorre los dos completos y los cruza.
+- **Corrección:** un solo índice `(-fecha_hora) INCLUDE (usuario_sede_id, object_sede_id)`. El listado siempre acota por fecha. Reemplaza a los dos compuestos y al simple de `fecha_hora`.
+- **Efecto:**
+  - `COUNT`: 10 356 → **299** lecturas;
+  - primera página: 10 356 → **14**;
+  - en reposo: de 25–217 ms a 4–9 ms.
+- La `0008` crea el índice nuevo antes de borrar los viejos.
+- TDD: `IndiceListadoAuditoriaTestCase` falló antes del cambio.
+- ADR-010 actualizado con la revisión; defecto 36 en `matriz_trazabilidad_pruebas.md`.
+
+#### 5. Prueba de carga (Locust, empresa 1, 11 roles)
+
+| Corrida | Fallos | p50 / p95 / p99 | Umbrales RNF-03 |
+|---|---|---|---|
+| 6-oct, 100 usuarios | 3,07 % | 98 ms / 1,3 s / 3,5 s | — |
+| **8-oct, 100 usuarios, BD 3 CPU** | **0,09 %** (solo de negocio) | **32 / 270 / 800 ms** | ✅ los tres, con margen de 4 a 5 veces |
+| 8-oct, 250 usuarios, BD 3 CPU | 0,27 % + umbrales excedidos | 2,2 / 3,5 / 4,3 s | ❌ BD saturada (316 %) |
+| **8-oct, 250 usuarios, BD 6 CPU** | **0,31 %** (solo de negocio) | **50 / 410 / 980 ms** | ✅ los tres |
+
+**Detalle de las corridas:**
+- Workers muertos: 0 en todas las corridas (el 6-oct fueron 5 y 16).
+- Integridad tras 1 765 movimientos de la carga: stock = kárdex en 51 994 filas y 0 saldos negativos.
+- **Artefacto de medición:** con el sistema rápido, Locust (una sola IP) supera el límite de nginx de 100 req/s por IP (19,7 % de respuestas 429). La corrida de 250 con 6 CPU subió ese límite solo dentro del contenedor, y se restauró al terminar.
+- **Recomendación (RD-06):**
+  - hasta 100 usuarios: BD con 3 CPU / 3 GB;
+  - hasta 250: BD con 6 CPU / 6 GB y el backend con 4 a 6 CPU (llegó al 303 %).
+
+#### 6. `locustfile.py` corregido (defecto 37)
+
+La primera corrida (4,2 % de fallos) medía rechazos correctos del sistema como fallos:
+- **Despacho:** tomaba lotes de la primera página del stock, que traía mermas ya vendidas; fallaba el 97 %. Ahora escanea lotes del producto del pedido.
+- **Vendedor:** elegía clientes con deuda vencida; fallaba el 74 %. Ahora solo usa clientes sin cartera vencida y con cupo.
+- **Bodegueros y despachadores:** todos trabajaban sobre la misma página 1. Reproducido con 9 hilos: 51 % de fallos, contra 0 % repartidos. Ahora cada usuario toma una página al azar (`_pagina_al_azar`).
+- **Reporte:** los 400 ahora registran el motivo que da la API (`_post_con_motivo`).
+
+#### 7. Evidencia del Sprint 0 (`docs/gestion-proyecto/evidencia/sprint-0/`)
+
+- `docker compose ps` con todo en `healthy`.
+- 0 reinicios y 0 errores en el arranque.
+- Persistencia tras `down` + `up`.
+- Red interna: `internal_net` sin salida a internet, y nginx no alcanza a `db`.
+- Puerto 1433 no publicado.
+- `curl` a `/api/health/` y a `/`.
+- `CHECKLIST_EVIDENCIA_MANUAL.md` actualizado.
+- **Nota para la tesis:** TEX-01 dice «9 contenedores» (compose de desarrollo). El de producción tiene 6.
+
+#### Verificación
+
+- **Backend en SQL Server 2022** (`scripts/run_backend_tests.sh`): **1632 pruebas, cobertura 92,1 %**.
+- **Una prueba fallaba, y no por los cambios de hoy:** `test_audit_logs_dado_filtro_de_sede_cuando_cuenta_entonces_no_une_con_el_usuario` (del 7-oct).
+  - Buscaba el texto `COUNT(`, pero SQL Server emite `COUNT_BIG(*)`. Solo se había corrido en SQLite.
+  - Corregida para aceptar las dos formas. Con eso, 33/33 en SQL Server en los tres archivos de auditoría y healthcheck.
+  - No hay otras pruebas con ese patrón.
+- Ruff en 0 y `makemigrations --check` sin cambios. mypy no se ejecutó en este equipo.
+
+#### Estado del entorno al cerrar
+
+- Stack `texcore-prod` con imágenes `:fase9`, base en `gestion/0008`, recursos del `.env` (3 CPU / 3 GB) y nginx original. Los 6 contenedores en `healthy`.
+- La base tiene los movimientos de las corridas de carga (`… stress test …`) y de los diagnósticos (`diag …`), todos consistentes con el kárdex.
+
+#### Pendiente
+
+1. **Usabilidad (manual):**
+   - grabar el registro de lote (TEX-12) y el pesaje (TEX-41) contando los clics;
+   - capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46).
+2. `evidencia_sprints.py --settings TexCore.settings_test` sobre SQL Server.
+3. Contraseña de `admin` (sigue en `admin` para la demo).
+4. Captura de TEX-02 CA-2 desde otro equipo de la LAN.
+5. Al final: CI/CD Fases 3–6, staging y TEX-54.
+
+### 7 de Octubre de 2026 (noche) — Evidencia por sprint para la tesis (commiteado en `dec016c`)
+
+Pedido del usuario: demostrar, sprint por sprint, lo que declara la tesis (Tabla 14, DoD del §5.1 y capítulo 7).
+
+- **`scripts/evidencia/evidencia_sprints.py`:**
+  - lee las 54 historias del `PRODUCT_BACKLOG.md` con su sprint y su línea «Verificación»;
+  - ejecuta una sola vez cada prueba citada: backend Django, los 3 microservicios y el frontend;
+  - escribe `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md`, con fecha, commit y una tabla por sprint e historia, y los JUnit crudos en `evidencia/junit/`.
+  - En el equipo con SQL Server se ejecuta con `--settings TexCore.settings_test`.
+- **Primera corrida (`settings_test_local`):** 2236 pruebas, 0 fallidas y 1 omitida. La omitida es la de permisos POSIX de `reporting_excel`, que solo se omite en Windows.
+- **Sin prueba automatizada:** el Sprint 0 (TEX-01 a TEX-05) y TEX-54. Para esos casos, `docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md` indica qué captura o medición generar, en qué equipo y su estado.
+- **El mismo checklist cubre además:**
+  - la DoD transversal;
+  - los requisitos medibles (Locust y ≤ 3 pasos);
+  - las ceremonias de Scrum;
+  - las afirmaciones del documento del 6-oct que hay que corregir: GitLab CI, `flake8`/`bandit`, TEX-54 «Completada», auditoría de dependencias como advertencia y las cifras desactualizadas.
+- Las cifras de Locust de la tesis (Tabla 47) coinciden con `scripts/loadtest/resultados/carga_100_2026-09-29_stats.csv`.
+- `pyproject.toml`: `per-file-ignores` de `scripts/evidencia/**` (S314, S603, S607), con su justificación.
+
+### 7 de Octubre de 2026 (noche, cierre) — Fase 8 completa: ESLint en 0 y bloqueante en el CI (commiteado en `dec016c`)
+
+Pedido del usuario: «continuar con lo que falta». Se retomó la Fase 8 desde la entrada siguiente. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
+
+#### Verificación
+
+| Indicador | Antes | Ahora |
+|---|---|---|
+| `npx eslint .` | 57 | **0** (código de salida 0) |
+| `npx tsc --noEmit` (producción) | 0 | 0 |
+| `npm run typecheck:tests` | 0 (`tsconfig.tmp-tests.json`) | 0 (`tsconfig.tests.json`) |
+| `npx vitest run` | 1923 | **1927/1927** (133 archivos) |
+| `npx vitest run --coverage` (umbrales 94/89/91/95) | — | 95.46 / 90.03 / 93.85 / 96.55 (código de salida 0) |
+
+- El último lote de la sesión anterior (7 archivos migrados a `useCargaRemota`) se verificó primero: 587/587.
+- Ningún `eslint-disable` nuevo (se quitaron 4). Solo queda el `exhaustive-deps` previo de `usePagination`.
+
+#### Hallazgo que guió el patrón
+
+El React Compiler (`react-hooks/set-state-in-effect`) marca **cualquier** función del componente que haga `setState` en su cuerpo y se llame desde un efecto, aunque sea `async` y el `setState` venga después de un `await`. Solo acepta:
+- el `setState` dentro de un callback (`.then`, `.finally`, un listener);
+- o la carga definida **dentro** del efecto.
+
+Por eso no bastaba con mover el `setLoading(true)`. Se aplicaron tres patrones, según la pantalla:
+
+1. **Solo lectura:** `useCargaRemota` + `recargar`. El toast de error se conserva con `.catch(e => { toast…; throw e; })`. Archivos:
+   - `OperarioDashboard`, `EmpaquetadoDashboard` (carga inicial), `HistorialEtiquetasModal`;
+   - `DespachoDashboard`, `HistorialDespachos`, `PanelGenealogia`, `TrazabilidadProducto`;
+   - `PlanProduccionMTS`, `AuditLogViewer`;
+   - `DescargasQuimicosTintoreria`, `StockQuimicosDashboard` y `HistorialOrdenesTintoreria`. En este último, la página elegida vale para los filtros con que se eligió: si cambian, vuelve sola a la primera.
+2. **Estado propio que mutan los handlers:** la carga va dentro del efecto, con guarda `vigente`, contador `recarga` y `loading` derivado de la clave (`cargadoPara !== clave`). Archivos: `useSedeSpecificData`, `useSedesYGrupos`, `BodegueroDashboard`, `useJefeAreaData`, `JefePlantaDashboard`, `EtapasProduccion`, `FlujoProduccion`, `TransferenciasInterarea` y `useDashboardEjecutivoData` (`loading` y `refreshing` derivados de la solicitud).
+3. **Recargas que se esperan con `await`:** `cargarDatos` (promesa con `setState` en callbacks) para el efecto y `fetchData` (`setLoading(true)` + `cargarDatos()`) para los eventos. Archivos: `MRPDashboard` (vuelve a la página 1 con `resetKey`, ya no llama al `setCurrentPage` inestable), `VendedorDashboard`, `TintoreroDashboard` y `VersionesFormulaPanel`.
+
+Estado derivado sin efecto:
+- los `requirements` de `DespachoDashboard` pasan a `useMemo`;
+- las áreas de `ManageOrdenesProduccion` se fijan al abrir el diálogo (ajuste durante el render);
+- en `CorridaContinuaDashboard`, las operaciones quedan asociadas a su corrida, y la máquina y el material heredado se ajustan durante el render.
+
+#### Defectos corregidos al migrar
+
+- **Dependencias inestables que provocaban recargas en bucle o borraban datos:**
+  - `setSearchParams` de react-router cambia de identidad con la URL: en `useSedesYGrupos`, cambiar de pestaña volvía a pedir las sedes y borraba una recién creada;
+  - `setAreas` y los setters del dashboard ejecutivo pasan por ref.
+- **`AuditLogViewer` hacía dos peticiones al buscar:** una con la página anterior (closure) y otra con la página 1. Ahora hay un estado de «filtros aplicados» y una sola clave.
+- **Respuestas de una clave anterior:** ya se descartan en todas las pantallas migradas. Antes, por ejemplo, la genealogía o el historial podían mostrar el resultado de un filtro previo.
+- **`carousel`:** nunca se desuscribía de `reInit`. Pasa a `useSyncExternalStore`, igual que `use-mobile`.
+- **`EmpaquetadoDashboard`:** al quitar `form.watch` (ahora `useWatch`), el compilador destapó `Date.now()` durante el render. Se movió a `horarioPorDefecto()`.
+
+#### `react-refresh`, `incompatible-library` y memoización
+
+- **shadcn:** variantes en `badge-variants.ts`, `button-variants.ts`, `toggle-variants.ts` y `navigation-menu-variants.ts`; hooks y contextos en `use-form-field.ts` y `use-sidebar.ts`.
+- **`lib/auth.tsx`** se separa en:
+  - `lib/auth.ts`: contexto y `useAuth`, así los `vi.mock('…/lib/auth')` siguen funcionando;
+  - `lib/AuthProvider.tsx`.
+- **Funciones movidas a módulos propios:**
+  - `pestanasFichaLote.tsx` (registro de pestañas; `PanelGenealogiaDeLote` vive en su panel);
+  - `tintura/calcularCantidad.ts`.
+- **`useWatch`** en `FormulaQuimica` y `EmpaquetadoDashboard`. **`operarioId`** extraído en `OperarioDashboard`.
+
+#### CI
+
+- `frontend-test` agrega dos pasos bloqueantes: `npm run typecheck:tests` y `npm run lint`.
+- `package.json`:
+  - `lint` pasa a `eslint .`;
+  - nuevo `typecheck:tests`.
+- `tsconfig.tmp-tests.json` se reemplazó por el permanente `tsconfig.tests.json`, para que no vuelvan los `any` en las pruebas.
+- Plan `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md` actualizado: punto 5 de la Fase 2 ✅.
+
+#### Decisiones tomadas en la sesión (revisables)
+
+- **En las pantallas con `useCargaRemota`, al cambiar de clave** (página, filtro) la lista se vacía mientras llega la nueva, en lugar de mostrar la anterior. En `HistorialDespachos`, los controles de paginación se ocultan un instante. *Si molesta:* conservar `datos` previos en el hook.
+- **`StockQuimicosDashboard` sin sede:** ya no queda en «cargando» para siempre; muestra la lista vacía.
+- **`VersionesFormulaPanel`:** arranca con `cargando = true`; antes mostraba un instante «sin versiones».
+
+#### Pendiente
+
+1. **Fase 7**, en el equipo con SQL Server: migraciones `0004`–`0007` medidas, Locust y evidencia de usabilidad.
+2. **Fase 9:** TEX-54, CI/CD Fases 3 a 6 (incluye M-3 `HEALTHCHECK`), ajustes de GitHub, contraseña de `admin` y congelamiento.
+3. Commit del trabajo: lo hace el usuario.
+
+### 7 de Octubre de 2026 (noche) — Fase 8: ESLint del frontend de 1146 a 57 hallazgos (EN CURSO, commiteado en `dec016c`)
+
+Pedido del usuario: «continúa con la fase 8 de ESLint» (plan `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`). La sesión se detuvo a pedido del usuario a mitad de la fase. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
+
+#### Estado al detenerse
+
+| Indicador | Valor |
+|---|---|
+| `npx eslint .` | **57** hallazgos (empezó en 1146). Pruebas: **0**. Producción: 57 |
+| `npx tsc --noEmit` (producción) | 0 |
+| Typecheck de las pruebas (`npx tsc --noEmit -p tsconfig.tmp-tests.json`) | 0 |
+| `npx vitest run` completo | 1923/1923 en la última corrida completa, **antes** del último lote (ver «Primer paso») |
+
+#### Hecho
+
+**`any` eliminados: los 986, en producción y en pruebas, tipados y no silenciados.**
+- Helpers nuevos en `lib/apiError.ts`:
+  - `datosDeError`, `estadoHttp` y `mensajeDeLaApi`;
+  - `extraerDetalleValidacion` serializa los objetos anidados (antes mostraba `[object Object]`).
+- Todos los `catch (x: any)` migrados.
+- Payloads tipados por catálogo en `lib/types.ts` (`PayloadArea`, `PayloadBodega`, …).
+- `toArray<T>` reemplaza los `(x.data as any).results`.
+- `OrdenPayload` derivado de `buildOrdenPayload`.
+- Pruebas:
+  - `src/testing/parcial.ts`: `parcial<T>()`, para fixtures parciales explícitas;
+  - `vi.mock` tipados con `ComponentProps<typeof …>`;
+  - mocks tipados con `Mock<…>`;
+  - fixtures anotadas con su entidad.
+
+**Errores reales que destapó el tipado:**
+- `PedidoVenta.total` no lo envía el serializer: ahora es opcional.
+- `DetalleFormula.concentracion_gr_l` y `porcentaje` llegan como texto decimal de DRF. `FormulaQuimica` los convierte a número al editar.
+- En `useClientesVendedor`, los `@ts-ignore` + `delete` se reemplazaron por desestructuración. La justificación se envía solo al editar.
+- Fixtures inválidas corregidas, por ejemplo el estado `'aprobado'`, que no existe en `PedidoVenta`, y `kg_total` como texto.
+
+**Reglas varias, corregidas:** `no-useless-escape`, `no-case-declarations` (`SharedKPIChart`), `ban-ts-comment`, `purity` (inicializadores perezosos en `PlanProduccionMTS` y `sidebar`) y `no-constant-binary-expression`.
+
+**`react-hooks`, con el patrón de React** (estado solo en callbacks asíncronos y `cargando` derivado de la clave):
+- **`hooks/useCargaRemota.ts`** reescrito:
+  - ya no hace `setState` síncrono en el efecto;
+  - la ref se actualiza en `useLayoutEffect`;
+  - opciones nuevas `habilitado` y `mensajeDeError`;
+  - no muestra datos de una clave anterior;
+  - +4 pruebas ISTQB; 3 de ellas fallan contra `HEAD`.
+- **`hooks/usePaginacionIncremental.ts`** reescrito:
+  - caché con generación en el estado;
+  - el reinicio por `resetKey` se ajusta durante el render;
+  - el `recargar` es propio.
+  - Con eso, `MateriaPrimaView` y `TablaLotesPaginada` ya no necesitan la ref de filtros.
+- **Diálogos que reinician su formulario al cambiar la prop:** el estado se ajusta durante el render. Archivos: `EditarMovimientoDialog`, `ReetiquetarModal`, `MaquinaDialog`, `ProcesosMaquinaDialog`, `RegistrarLoteDialog`, `AnularPedidoModal`, `EditarPedidoModal`, `OrdenDetalleSheet`, los 3 de `DialogosFormula`, y la sede automática de `ManageAreas`, `ManageBodegas` y `ManageUsers`.
+- **Migrados a `useCargaRemota`:** `DosificacionOrdenPanel`, `RecetaVersionDialog`, `FormulaDetalle` (órdenes de la fórmula), `DerivadasFormula`, `TrazabilidadPorCodigoPage`, `AuditoriaDialog` y `useProduccionPorProducto`.
+
+#### Para continuar en la siguiente sesión
+
+1. **Primer paso: verificar el último lote.** La migración a `useCargaRemota` de los 7 archivos de arriba pasó ESLint y `tsc`, pero **sus pruebas no llegaron a correr**:
+   ```
+   cd frontend && npx vitest run src/components/jefe-planta src/components/tintura src/components/produccion src/components/bodeguero src/components/ejecutivos
+   ```
+   Si algo falla, lo más probable es que la prueba espere el estado de carga o de error anterior.
+2. **Los 57 hallazgos que quedan, todos en producción:**
+   - **`set-state-in-effect` (26), `immutability` (9) y `exhaustive-deps` (9).** Son las cargas al montar de los dashboards y hooks:
+     - `useSedeSpecificData`, `useSedesYGrupos`, `BodegueroDashboard`, `DespachoDashboard`, `HistorialDespachos`, `useDashboardEjecutivoData`, `HistorialEtiquetasModal`, `useJefeAreaData`;
+     - `JefePlantaDashboard` (`searchParams`), `ManageOrdenesProduccion` (`areasProp`), `PlanProduccionMTS`, `PanelGenealogia`, `OperarioDashboard`;
+     - `CorridaContinuaDashboard`, `EtapasProduccion`, `FlujoProduccion`, `TransferenciasInterarea`, `TrazabilidadProducto`;
+     - `AuditLogViewer`, `MRPDashboard`, `DescargasQuimicosTintoreria`, `HistorialOrdenesTintoreria`, `StockQuimicosDashboard`, `TintoreroDashboard`, `VersionesFormulaPanel`, `VendedorDashboard`;
+     - `ui/carousel` y `ui/use-mobile` (este último, con `useSyncExternalStore`).
+
+     Patrón:
+     - si el dato es de solo lectura, `useCargaRemota` + `recargar` tras las mutaciones;
+     - si es «estado que depende de una prop», ajuste durante el render;
+     - **`immutability`** se debe a funciones usadas antes de declararse: hay que moverlas o envolverlas.
+   - **`react-refresh/only-export-components` (10):**
+     - `ui/badge`, `button`, `form`, `navigation-menu`, `sidebar` y `toggle` (shadcn): mover las variantes y los hooks a archivos `*-variants.ts` o `use-*.ts`;
+     - `lib/auth.tsx` (`useAuth`), `FichaLoteDialog` (`PESTANAS_FICHA_LOTE` y `pestanasParaRol`) y `FormulaQuimica` (`calcularCantidad`): mover a módulos propios.
+   - **`incompatible-library` (2):** `form.watch(...)` → `useWatch({ control, name })` en `EmpaquetadoDashboard` y `FormulaQuimica`.
+   - **`preserve-manual-memoization` (1):** en `OperarioDashboard`, extraer `const operarioId = profile?.user?.id` y usarlo en el `useCallback`.
+3. **Cerrar la fase:**
+   - `npx eslint .` en 0, `tsc` y `vitest` completos;
+   - agregar **ESLint como paso bloqueante** en `.github/workflows/ci.yml` y actualizar `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`;
+   - **`frontend/tsconfig.tmp-tests.json`**, creado en esta sesión para tipar las pruebas (el `tsconfig` las excluye): borrarlo, o convertirlo en un typecheck permanente de pruebas en el CI (recomendado: así no vuelven los `any`);
+   - `graphify update .` y actualizar la memoria «punto de retorno».
+4. **Fases del plan que siguen después:**
+   - **Fase 7**, en el equipo con SQL Server: migraciones 0004–0007 medidas, Locust y evidencia de usabilidad;
+   - **Fase 9:** TEX-54, CI/CD Fases 3 a 6, ajustes de GitHub, contraseña de `admin` y congelamiento.
+
+### 7 de Octubre de 2026 (tarde) — Casos de uso pendientes del backlog: TEX-43, TEX-52, TEX-18, TEX-09, TEX-36 y TEX-03 (sin commitear)
+
+Pedido del usuario: completar los casos de uso según la documentación y los sprints.
+
+- Plan: `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`, Fases 0 a 9. Aquí quedan hechas las Fases 1 a 6.
+- La revisión de `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md` contra el código dejó:
+  - **1 historia incompleta:** TEX-43;
+  - **4 criterios funcionales abiertos:** TEX-52 CA-1, TEX-18 CA-4, TEX-09 CA-2 y TEX-36 CA-1;
+  - **hallazgos menores:** M-7 y M-8.
+- Se trabajó sobre los cambios de la mañana, todavía sin commitear, por decisión del usuario.
+
+#### 1. TEX-43 — Equivalencias de empaque por sede (historia completada)
+
+Decisión del usuario: las configura el **Administrador de Sede**, la suya; el Administrador de Sistemas, cualquier sede. ADR: `docs/arquitectura/ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md`.
+
+- **Modelo `ConfiguracionEmpaqueSede`:**
+  - pasa a ser auditable, con justificación obligatoria para modificarla (TEX-10);
+  - sin `default`, con mínimo 1;
+  - `para_sede()` y `mensaje_sin_configuracion()`.
+- **CA-3, sin constante del sistema:**
+  - `LoteProduccion.clean()` rechaza un lote por baño o funda sin unidades cuando la sede no tiene equivalencias (antes usaba 225/15 en silencio);
+  - `MRPEngine` omite los pedidos de esa sede y `ejecutar-mrp` devuelve `sedes_sin_configuracion_empaque`. `MRPDashboard` lo muestra como aviso.
+- **API `GET`/`PUT /api/configuracion-empaque/`** (`gestion/views/configuracion_empaque_views.py`):
+  - permiso `IsAdminSistemasOrSede`;
+  - una sede ajena responde 404;
+  - el Admin de Sistemas indica `sede_id`;
+  - `select_for_update` en el upsert.
+- **Migración `gestion/0006_configuracion_empaque_explicita`:** crea la configuración 15/15 de cada sede existente, así el despliegue no cambia el comportamiento. Las sedes nuevas la registra su administrador.
+- Registrado en el admin de Django. Los comandos `seed_data`, `simular_operacion`, `stress_test_data`, `stress_ventas_data` y `load_million` crean la configuración de sus sedes.
+- **Frontend:** componente `ConfiguracionEmpaqueView` (repositorio `configuracionEmpaqueApi`) en:
+  - la pestaña nueva **Configuración** del Admin de Sede;
+  - **Gestión → Sedes** del Admin de Sistemas.
+
+#### 2. TEX-52 CA-1 — Auditoría filtrable por fecha y tipo de operación
+
+- **Backend:** filtros `fecha_desde`, `fecha_hasta` y `accion` en `/api/inventory/audit-logs/`.
+  - Una fecha inválida, un rango invertido o una acción desconocida responden 400.
+  - La ventana de 30 días se aplica solo sin `fecha_desde`, así que ya se pueden consultar registros de cualquier antigüedad (M-6).
+  - Los rangos van sobre `fecha_hora`, no `__date`, para usar los índices de `gestion/0004`.
+- **Helpers nuevos** `parse_date_param` y `parse_rango_fechas` en `gestion/views/_common.py`.
+  - Reemplazan el `_parse_fecha` privado de los lotes.
+  - También cubren fechas inexistentes como 2026-02-30, que antes daban 500.
+- **`AuditLogViewer`:** campos Desde/Hasta y selector de Operación, con validación del rango.
+
+#### 3. TEX-18 CA-4 — Metros de tela con 4 decimales
+
+- `LoteProduccion.cantidad_metros` pasa de `DECIMAL(10, 2)` a `DECIMAL(12, 4)` (migración `gestion/0007`, ampliación sin pérdida). Lo mismo en el serializer de registro del lote.
+- Antes, la operación MES redondeaba a 4 decimales y el lote que generaba guardaba 2.
+- Empaquetado acepta 4 decimales.
+- La API devuelve los metros con 4 decimales (`'55.5000'`).
+- Los kilogramos siguen con 3 decimales; el criterio se aclaró en el backlog.
+
+#### 4. TEX-09 CA-2 — Auditoría inmutable en el modelo
+
+- `AuditLog.save()` sobre un registro existente, `AuditLog.delete()` y `update()`/`delete()` masivos (`AuditLogQuerySet`) lanzan `RegistroAuditoriaInmutable`.
+- Las acciones referenciales de Django siguen funcionando: borrar un usuario deja `usuario=NULL`.
+- La migración 0005 y las pruebas que necesitan fechar registros usan `_base_manager`.
+
+#### 5. Ajustes menores
+
+- **TEX-03 CA-3 (M-8):** `FrontendLogView` registra la IP del cliente con `_extract_client_ip`. Ignora `X-Forwarded-For` si no viene de un proxy de confianza.
+- **TEX-36 CA-1:** la ficha del cliente muestra el **Cupo Disponible** (límite − saldo pendiente) o *Sin cupo*.
+- **TEX-01 (M-7):** se corrigió el criterio con la ruta real del compose, `infrastructure/docker/`.
+
+#### 6. Documentación
+
+- **`PRODUCT_BACKLOG.md`:**
+  - TEX-04: Ruff, ramas por diseño y cobertura del 90 %;
+  - TEX-01, TEX-09, TEX-18, TEX-36, TEX-43 y TEX-52: criterios y verificación.
+  - Regenerados `texcore_jira_import.csv` y `TexCore_Backlog_y_Planificacion_Sprints.docx`.
+- **`AUDITORIA_BACKLOG_VS_CODIGO.md`:** sección «Estado al 7 de octubre» con cada hallazgo. Quedan 54/54 historias implementadas. Sigue pendiente M-3 (healthchecks) y la evidencia de rendimiento y usabilidad.
+- **Manuales:**
+  - Admin de Sede: pestaña Configuración y filtros de auditoría;
+  - Admin de Sistemas: equivalencias en Sedes y filtros;
+  - Empaquetado: equivalencias y metros;
+  - Vendedor: cupo disponible;
+  - Bodeguero y Ejecutivo: aviso del MRP.
+- **`ROLES_Y_PERMISOS.md`:** alcance de las equivalencias, filtros e inmutabilidad de la auditoría.
+- **Matriz de trazabilidad:** sección nueva y defectos 31–35. ADR-011.
+
+#### Verificación
+
+- Backend **1625/1625** (antes 1580).
+- mypy 0 en 281 archivos.
+- Ruff 0.
+- Semgrep ERROR 0.
+- `makemigrations --check` sin cambios.
+- `auditar_rutas_frontend.py` en 0.
+- Frontend **1917/1917** (antes 1900) y `tsc` limpio. ESLint no suma hallazgos en los archivos tocados.
+
+#### Pendiente (Fases 7 a 9 del plan)
+
+1. **Fase 7, en el equipo con SQL Server:**
+   - aplicar `gestion/0004`–`0007` sobre la base cargada y medir su duración (RD-06);
+   - repetir RD-05;
+   - Locust con 100 y 250 usuarios para TEX-17, TEX-22 y TEX-44;
+   - recorrido de usabilidad de TEX-12, TEX-41 y TEX-46.
+
+   Entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
+2. **Fase 8:** ESLint a 0 (1146 hallazgos) y como gate.
+3. **Fase 9 (TEX-54):** Fases 3–6 del plan de CI/CD, incluida M-3 (`HEALTHCHECK` en cada Dockerfile). Más los ajustes de GitHub, la contraseña de `admin` y el congelamiento del código.
+4. Después del despliegue, cada sede nueva debe registrar sus equivalencias de empaque.
+
+### 7 de Octubre de 2026 — Stock paginado, auditoría filtrable por índice, lotes con varios productos y manuales por rol (sin commitear)
+
+Pull de `origin/MES` (`fc403f0`, trabajo del otro equipo, entrada siguiente). Desde este equipo, sin Docker, se cerraron los pendientes que no requieren SQL Server con datos. Plan: `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`. Los `graphify-out/` locales quedaron en un stash antes del pull.
+
+#### 1. `/api/inventory/stock/` paginado y resumen por bodega
+
+Antes, el administrador recibía 28 799 filas (8 MB) por petición y los workers morían por memoria. ADR: `docs/arquitectura/ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`.
+
+- **Backend:**
+  - `StockBodegaViewSet` usa `PaginacionAcotada` (50 por defecto, tope 500), como kárdex y materia prima.
+  - Filtros en el servidor: `sede_id`, `bodega_id`, `producto_id`, `lote_id` y `search`. Un id no numérico responde 400. El orden es estable.
+  - Base común `stock_con_existencias` para el listado y el resumen.
+  - Endpoint nuevo `GET /api/inventory/stock/resumen/`: totales por bodega calculados en la base, con consultas constantes.
+- **Frontend:**
+  - `StockView` pagina con `usePaginacionIncremental` y busca en el servidor, con 300 ms de espera tras la última tecla.
+  - Transferencia y transformación piden solo los lotes del producto en la bodega elegidos (hook `useStockDeProductoEnBodega`).
+  - El dashboard ejecutivo usa el resumen. El detalle por bodega pide sus filas paginadas al abrirse.
+  - `InventoryDashboard` ya no descarga el stock completo.
+- **Contrato:** la respuesta pasa de lista plana a `{count, next, previous, results}`. Se adaptaron los tres consumidores y sus pruebas.
+
+#### 2. Auditoría: el `COUNT` ya no une con el usuario
+
+Antes, este `COUNT` era el 75 % de la CPU de SQL Server.
+
+- Campo nuevo `AuditLog.usuario_sede_id`: la sede del usuario **al momento del cambio**. Lo llena `AuditLog.save()`, así que cubre el mixin, las señales y los comandos.
+- Índices `(object_sede_id, -fecha_hora)` y `(usuario_sede_id, -fecha_hora)`. Se retira el índice simple de `object_sede_id`.
+- **Migraciones:**
+  - `gestion/0004_auditlog_usuario_sede`;
+  - `gestion/0005_rellenar_auditlog_usuario_sede`: bloques de 10 000, `atomic = False`, se puede repetir.
+- **Vista:** filtra `usuario_sede_id OR object_sede_id` y lee los grupos del usuario una sola vez. Un `sede_id` no numérico responde 400.
+- **Hueco encontrado:** `AuditLogViewer` enviaba `?search=` sin codificar y el backend lo ignoraba. Ahora se codifica y busca por usuario, tabla o id del registro.
+
+#### 3. Lotes con varios productos: el despacho vende lo agregado a mano
+
+Decisión del usuario: el movimiento manual sigue aceptando otro producto en un lote, y el despacho debe venderlo. ADR: `docs/arquitectura/ADR/ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md`.
+
+- **Merma:** `stock_vendible_del_lote` toma todas las filas del lote salvo la merma. La merma se reconoce por su movimiento `MERMA-<lote>`, no por la configuración actual de la máquina, y vale aunque se haya trasladado. Esto también elimina el `OR` por lote del despacho.
+- **Despacho:**
+  - Al escanear, sale la fila del producto del lote y las de otros productos que pidan los pedidos. Lo que nadie pidió queda en stock.
+  - Cada fila se vende con su propio producto: Kardex, detalle del despacho y pedido. La reversión devuelve cada fila a su origen.
+  - El cálculo de faltantes suma por el producto de cada fila.
+  - Los productos de las filas bloqueadas se cargan con `in_bulk`, sin `select_related` dentro del `select_for_update`.
+- **Escáner:** la vista directa, la API interna y `scanning_service` agregan `peso_total` y `productos`, sin cambiar los campos de siempre. `DespachoDashboard` suma cada producto del lote a su requerimiento, con la misma regla.
+- **Defecto encontrado:** `internal_api.ValidateLoteView` todavía tomaba la primera fila de stock del lote y podía informar la merma. `fc403f0` había corregido el mismo defecto solo en la vista directa. El escáner de producción llega por esa vista, vía `scanning_service`.
+- La reserva MTO sigue comprometiendo solo la fila del producto del lote.
+
+#### 4. Manuales de usuario y referencia de roles
+
+Se actualizaron con los cambios de esta entrada y de `fc403f0`:
+
+- **Bodeguero:** Stock solo con existencias, búsqueda en el servidor (sección nueva 4.3), lotes cargados por producto y bodega en Transfer y Transform, y lotes con varios productos.
+- **Despacho:** qué sale al escanear un lote (`+ Producto (peso)`, nunca la merma), historial acotado a su sede, reversión por bodega de origen y dos preguntas frecuentes nuevas.
+- **Administrador de Sistemas y de Sede:** auditoría de los últimos 30 días, qué busca el buscador y a qué sede pertenece cada registro.
+- **Ejecutivo:** indicadores y detalle por bodega calculados en el servidor.
+- **Jefe de Área:** la merma vendible no sale al despachar el lote.
+- **`README.md`:** regla general de listas paginadas.
+- **`ROLES_Y_PERMISOS.md`:** contrato del stock y del resumen, regla de lotes con varios productos, historial de despachos por sede y alcance de la auditoría.
+
+Operario, Empaquetado, Vendedor, Jefe de Planta y Tintorero se revisaron y no requieren cambios: sus pantallas no usan lo que cambió.
+
+#### 5. Documentación técnica
+
+- **ADR nuevos:**
+  - `ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md`: qué filas salen al escanear un lote y cómo se reconoce la merma.
+  - `ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`: stock paginado y auditoría filtrable por índice.
+- **`docs/matriz_trazabilidad_pruebas.md`:** sección «Rendimiento de stock y auditoría, y lotes con varios productos (7-oct-2026)» y defectos 27–30:
+  - rendimiento;
+  - búsqueda de auditoría ignorada;
+  - escáner de producción que informaba la merma;
+  - stock agregado a mano sin vender.
+- **`docs/requerimientos/REGISTRO_RIESGOS.md`:** riesgo nuevo **RD-06**, la degradación con años de operación. Queda ⚠️ parcial: está corregido en código y falta medir en SQL Server.
+
+#### 6. Pruebas nuevas o reescritas
+
+Cada prueba nueva falló contra `HEAD` antes del cambio.
+
+- **Backend:**
+  - `inventory/tests/test_stock_paginado.py` (12);
+  - `gestion/tests/test_auditlog_usuario_sede.py` (7);
+  - `inventory/tests/test_audit_logs_sede.py` (9);
+  - `inventory/tests/test_despacho_producto_manual.py` (10);
+  - clase `TestValidateLoteFilasVendibles` en `internal_api/tests/test_scanning_views.py` (4);
+  - una prueba más en `test_despacho_merma_mismo_lote.py`.
+  - `test_despacho_asignacion.py` caracteriza ahora `_lote_y_filas`.
+  - `test_stock_sin_existencias.py` y `test_views_endpoints.py` se adaptaron a la respuesta paginada.
+- **`scanning_service`:** 4 pruebas en `test_django_client.py` y `test_validation_service.py`.
+- **Frontend:**
+  - nuevas: `useStockDeProductoEnBodega.test.ts` y `useStockEjecutivo.test.ts`;
+  - `StockView.test.tsx` reescrita;
+  - adaptadas a la API paginada y al resumen: `InventoryDashboard.test.tsx`, `TransformationView.test.tsx`, `DrillDownModals.test.tsx` y las tres `EjecutivosDashboard*.test.tsx`;
+  - casos nuevos en `AuditLogViewer.test.tsx` y `DespachoDashboard.test.tsx`.
+
+#### Verificación
+
+En este equipo: backend con SQLite (`settings_test_local`), frontend y `scanning_service`.
+
+- Backend **1580/1580** (antes 1535).
+- mypy 0.
+- Ruff 0.
+- Semgrep ERROR 0.
+- `makemigrations --check` sin cambios.
+- `auditar_rutas_frontend.py`: 0 rutas sin consumidor.
+- Frontend **1900/1900** (antes 1888) y `tsc` limpio. ESLint no suma hallazgos en los archivos tocados.
+- `scanning_service` 58/58 (cobertura 94 %).
+
+#### Pendiente
+
+1. **En el equipo con SQL Server** (RD-06): aplicar `gestion/0004`–`0005` sobre la base cargada y medir su duración y el plan del `COUNT` de auditoría. Después, repetir Locust con 100 y 250 usuarios y fijar los recursos de producción.
+2. Los pendientes 2, 4 y 5 de la entrada siguiente: RD-05 en producción, la contraseña de `admin` y los datos de prueba.
+3. Fase 5 del plan: ESLint a 0 y como gate (1146 hallazgos: 986 `any`; 802 están en pruebas).
+
+#### Commits sugeridos
+
+Son 65 archivos sin contar `graphify-out/`:
+
+1. `feat(inventory)`: stock paginado y `/stock/resumen/`, backend y frontend.
+2. `perf(auditoria)`: `usuario_sede_id`, migraciones `0004`–`0005`, vista y buscador.
+3. `feat(despacho)`: lotes con varios productos, arreglo de la merma en la API interna, `scanning_service` y `DespachoDashboard`.
+4. `docs`: ADR-009, ADR-010, matriz, riesgos, manuales, `ROLES_Y_PERMISOS.md` y este CHANGELOG.
+5. `chore(graphify)`: actualizar el grafo de conocimiento.
+
+### 6 y 7 de Octubre de 2026 — Simulación de 3 años de operación, prueba de carga «como producción», dos huecos de inventario y seguridad, y usuarios demo (commiteado en `fc403f0`)
+
+Pedido del usuario: el personal reporta unas **1000 t de producción al año por empresa, en 4 empresas**. Se simularon 3 años para probar el aplicativo con un inventario de ese tamaño, en el servidor de desarrollo tratado como producción, y se midió si el sistema sigue fluido o necesita más recursos. También: cobertura de los microservicios sobre el 90 %, scripts de llenado alineados con las migraciones DJ001 y usuarios demo para mostrar el avance.
+
+#### 1. Punto de partida
+
+- Pull de `origin/MES`: 28 commits (CI/CD Fases 0–2, Ruff Etapas 1–3) y luego 4 más (Ruff Etapa 4 con las migraciones DJ001 `gestion/0003` e `inventory/0002`).
+- Los `graphify-out/` locales se guardaron en un stash antes del pull.
+- Verificación antes de tocar nada:
+  - backend en SQL Server, frontend (`tsc` + 1888 pruebas) y los 3 microservicios;
+  - Ruff, mypy, Semgrep, pip-audit y `makemigrations --check`;
+  - construcción de las 5 imágenes.
+
+  Todo en verde, salvo la prueba siguiente.
+- **Prueba que no corría:** `test_sede_auditoria_fallback.py` (Etapa 4) importaba pytest. El CI corre `manage.py test` sin pytest y se caía al importarla; con pytest, unittest no ejecuta sus `parametrize`. Reescrita con `SimpleTestCase` + `subTest`. Por eso la suite contaba 1515 pruebas y no las 1530 del 5-oct, que contaban cada caso de pytest.
+
+#### 2. `reporting_excel`: cobertura 89,7 % → 99,2 % y umbral 85 → 90 %
+
+- **CWE-209:** el 500 de `/generate` devolvía `str(exc)` y `reporting_proxy` lo reenviaba al navegador. Ahora responde «Error interno al generar el reporte.» y el detalle queda en el log y la auditoría, con el mismo criterio que `printing_service`.
+- Pruebas nuevas (55 → 76): middleware JWT (sin Bearer, expirado, inválido, refresh, emisor ajeno), `/health`, `lifespan`, ramas de respaldo del formateador Excel y la factory.
+- `printing_service` (98,9 %) y `scanning_service` (94,6 %) ya superaban el 90 %. Los «55 y 54» que se mencionaron eran cantidades de pruebas, no cobertura.
+
+#### 3. Scripts de llenado y migraciones DJ001
+
+- Todos los comandos de llenado se ejecutaron sobre una base SQL Server nueva y desechable. `load_million` estaba roto:
+  - usaba los campos `producto` y `bodega` de la OP, que ya no existen;
+  - usaba la unidad `litros`, que no es válida;
+  - escribía `None` en `pais` y `calidad`, columnas ya `NOT NULL`.
+
+  Corregido. `seed_production_masters`, `seed_data`, `stress_test_data`, `stress_ventas_data` y `run_mrp` corren sin cambios.
+- **RD-05 verificado con datos:** las migraciones DJ001 se aplicaron sobre una copia (`BACKUP … COPY_ONLY`) de la base de desarrollo, que tenía 61 671 auditorías y 311 productos con `NULL`.
+  - Tardaron ~8 s.
+  - Las 32 columnas quedan `NOT NULL`, con las mismas filas, 373 índices y 51 CHECK.
+  - Falta repetirlo sobre el respaldo de producción (`REGISTRO_RIESGOS.md`: RD-05 parcial).
+- La base de desarrollo tenía el historial de migraciones anterior a la unificación del 1-oct, y le faltaba `inventory_movimientoinventario.materia_prima_lote_id`. Se rehízo desde cero.
+
+#### 4. Comando nuevo `simular_operacion`
+
+`gestion/management/commands/simular_operacion.py`.
+
+- **Valores por defecto:** 4 sedes («Empresa Textil 1…4»), 1000 t/año cada una, 3 años hasta ayer.
+- **Parámetros:** `--sedes`, `--anios`, `--dias`, `--toneladas-anuales`, `--kg-por-bano`, `--pct-venta` (objetivo de venta acumulado), `--hasta`, `--semilla` (reproducible) y `--sin-costeo`.
+- **Recorre el calendario de lunes a sábado con los servicios reales**, igual que las vistas:
+  - recepción semanal de hilo crudo (F0-001);
+  - compra mensual de químicos;
+  - compras urgentes de hilo y químicos cuando un hilo o color poco usado consume más que el promedio;
+  - abastecimiento de la línea en 3 fases;
+  - OP de un baño de máquina (~550 kg) que se lanza y fija la versión oficial de la fórmula;
+  - descarga de químicos según la receta (colorante en %, auxiliares en g/L, relación de baño 1:8);
+  - registro del lote con merma vendible y MES;
+  - trazabilidad FIFO con los lotes de MP;
+  - costeo;
+  - pedidos sobre los lotes en stock, sin precios por debajo del precio base;
+  - **despacho por el endpoint real** (`ProcessDespachoAPIView`);
+  - cobranza según el plazo de cada cliente, con pagos atrasados.
+- **Reloj simulado:** adelanta `timezone.now` al día simulado, en hora de Ecuador. Kardex, auditoría, pedidos, pagos y MES quedan con las fechas de la operación, y ninguna venta queda antes de la producción de su lote.
+- **Logs:** silencia INFO mientras corre (serían millones de líneas de auditoría).
+- **Por sede crea:**
+  - 4 hilos crudos, 32 hilos teñidos y 8 fórmulas aprobadas;
+  - 4 autoclaves y 40 clientes;
+  - los 11 roles RBAC como `e<N>_<rol>` (6 operarios);
+  - al cierre, una OP continua por máquina con 20 t de hilo en la línea, para que el operario y la prueba de carga registren lotes.
+- **Rendimiento:** 1 sede × 1 año = 12,3 min, lineal.
+- **Prueba de humo:** `gestion/tests/test_simular_operacion.py`, 8 pruebas.
+  - Stock = Kardex.
+  - Sin saldos negativos.
+  - Fechas en el período.
+  - Una OP lanzada por lote.
+  - Pedidos completos.
+  - OPs continuas.
+  - 11 roles.
+  - No se ejecuta dos veces.
+
+#### 5. Defectos encontrados y corregidos (TDD: cada prueba nueva falla contra `HEAD`)
+
+- **El despacho entregaba la merma.**
+  - Un lote con merma vendible tiene dos filas de stock con el mismo lote: el hilo en PT y la merma, que `MermaStockService` crea primero.
+  - El despacho buscaba el stock solo por lote y tomaba la merma. El hilo quedaba en stock, el Kardex registraba una VENTA del hilo desde la bodega de merma y el pedido quedaba en `despachado_parcial`.
+  - El mismo patrón estaba en el escáner (`ValidateLoteAPIView`), en el cálculo de faltantes (409 «escaneado 12,5 de 480») y en la reserva y liberación MTO.
+  - Helper único `inventory.utils.stock_del_lote` (lote + `LoteProduccion.producto_del_stock_id`) en los cuatro lugares. Pruebas: `inventory/tests/test_despacho_merma_mismo_lote.py`.
+  - Tres pruebas MTO guardaban el stock de un lote con un producto distinto al de su OP, algo que el sistema real no produce. Se ajustaron.
+- **OWASP A01 en el historial de despachos.**
+  - `HistorialDespachoViewSet` no acotaba por sede. En la prueba de carga, el despachador de la empresa 1 revirtió un despacho de la empresa 3; también podía listarlos y **borrarlos**.
+  - Ahora `filtrar_por_sede(..., campo='pedidos__sede')`.
+  - Pruebas: `inventory/tests/test_historial_despacho_por_sede.py`. Tres fixtures existentes ahora usan pedidos con sede.
+  - Auditoría del patrón en todos los ViewSets: no quedan querysets sin acotar (`ProcessStep` es un catálogo global).
+- **`/api/inventory/stock/` listaba filas vacías.** Cada lote vendido deja su fila en cero; el endpoint no pagina y devolvía decenas de miles de filas. Ahora excluye las filas sin existencias (`inventory/tests/test_stock_sin_existencias.py`).
+- **`locustfile.py` desactualizado:**
+  - creaba pedidos sin `piezas`, obligatorio desde `bd78c11`, y con precios por debajo del precio base, así que el 100 % fallaba;
+  - ahora acepta `LOADTEST_PREFIJO_USUARIOS` (por ejemplo, `e1_`) para entrar como una empresa simulada.
+
+#### 6. Carga en la base de desarrollo y prueba de carga «como producción»
+
+- **Carga:** stack reconstruido sin caché, base nueva y `simular_operacion` completo.
+  - 2 h 26 min.
+  - **24 809 lotes (12 645 t), 5 817 pedidos, 289 531 movimientos y 977 931 registros de auditoría.**
+  - Base de 1,7 GB.
+  - 0 descuadres entre stock y Kardex en 49 714 filas, y 0 saldos negativos.
+  - Por empresa quedan ~280–326 t de producto terminado, 81 t de merma, 38 t de MP y 80 t en línea.
+- **Locust como la empresa 1** (`LOADTEST_PREFIJO_USUARIOS=e1_`), con los mismos recursos que el 31-ago (backend y BD con 3 CPU / 3 GB cada uno, 20 workers):
+
+  | | 31-ago (pocos datos) | 100 usuarios | 250 usuarios |
+  |---|---|---|---|
+  | Fallos | 0 % | 3,07 % | 10,59 % |
+  | req/s | — | 33 | 30 |
+  | p50 / p95 / p99 | 65 ms / <1 s | 98 ms / 1,3 s / 3,5 s | 4,4 s / 7,5 s / 11 s |
+  | CPU backend / BD | con margen | 307 % / 310 % (saturados) | 314 % / 301 % |
+  | Workers muertos por memoria | 0 | 5 | 16 |
+
+  Con 100 usuarios el escaneo de despacho responde en ~40 ms y los paneles en menos de 300 ms. La degradación se concentra en pocos endpoints.
+- **Cuellos de botella medidos (sin corregir; decisión pendiente):**
+  1. `COUNT` de la paginación de `/api/inventory/audit-logs/`: el 75 % de la CPU de SQL Server durante la prueba (895 ejecuciones × 603 ms). El filtro `usuario.sede OR object_sede_id` impide usar los índices sobre ~1 M de filas.
+  2. `/api/inventory/stock/` sin paginar: 28 799 filas (8 MB) por petición del administrador, 2 s en reposo. Son sobre todo filas de merma vendible por lote. Probable causa de los workers muertos por memoria.
+  3. Reversión de despacho: p50 2,6 s y máximo 20 s con 100 usuarios.
+  4. Exports de producción (lotes y órdenes): p50 3–3,5 s.
+- **Conclusión:** el límite es de código, no de hardware. Hay que corregir el 1 y el 2 y volver a medir antes de dimensionar producción.
+- **Memoria del host:** con el servidor sin memoria libre (contenedores de simulación ocupando 3,8 GB), la prueba de rendimiento del kárdex pasó de 4 s a 25–40 s. En producción, SQL Server debe tener su memoria reservada.
+
+#### 7. Usuarios demo para mostrar el avance
+
+- Los 12 botones del login (`Login.tsx`) funcionan contra la base cargada. Los 11 usuarios `user_<rol>` (contraseña `password123`) se crearon en la **Empresa Textil 1** con la sede, el área, las bodegas y el grupo de su rol.
+- `user_operario` tiene las 4 OPs en proceso, para registrar lotes en vivo. Ejecutivo y Admin Sistemas ven las 4 empresas.
+- **La contraseña de `admin` quedó en `admin`** para el botón «Super Admin»: solo para la demostración, hay que cambiarla antes de cualquier otro uso.
+- Los 12 logins se verificaron contra nginx (200).
+
+#### Verificación
+
+- Backend **1535/1535** en SQL Server, cobertura 91,9 %.
+- Frontend 1888/1888 y `tsc` limpio.
+- `reporting_excel` 76 pruebas (99,2 %), `printing_service` 94 y `scanning_service` 54.
+- Ruff 0, mypy 0 en 271 archivos, Semgrep ERROR 0 y pip-audit 0.
+- Documentación actualizada: `matriz_trazabilidad_pruebas.md` (defectos 20–26), `REGISTRO_RIESGOS.md` (RD-05 parcial) y `ESTANDARES_DESARROLLO.md` (umbral de `reporting_excel`).
+
+#### Pendiente
+
+1. Corregir el `COUNT` de auditoría y paginar o agregar `/api/inventory/stock/` (contrato con `InventoryDashboard` y el dashboard ejecutivo). Luego repetir la prueba de 100 y 250 usuarios y fijar los recursos de producción. **7-oct: corregido en código (entrada del 7-oct); falta repetir la medición.**
+2. Repetir RD-05 sobre el respaldo de producción.
+3. Decisión de producto: el movimiento manual acepta un producto distinto al del lote, y ese stock no lo ve el despacho. **7-oct: resuelto, se permite y el despacho lo vende (ADR-009).**
+4. Cambiar la contraseña de `admin` después de la demostración.
+5. El contenedor desechable `texcore-seedtest` quedó detenido (se puede borrar). Los 18 pedidos `GR-PRB-*` de la empresa 1 son de prueba.
+
+### 5 de Octubre de 2026 — Ruff, Etapa 4: Django, simplificaciones y complejidad
+
+Ruff queda en **0** con `DJ`, `SIM`, `RET`, `C4`, `PERF`, `PTH`, `PIE` y `C901` (`max-complexity = 15`), activadas en `pyproject.toml` (`[tool.ruff.lint.mccabe]`). Detalle en `docs/superpowers/plans/2026-10-05-migracion-ruff.md` (Resultado de la Etapa 4).
+
+- **SIM, RET, C4, PERF, PTH y PIE** (29 archivos con `--fix` seguro, más correcciones a mano revisadas una por una):
+  - `if` anidados fusionados con el mismo cortocircuito; `try/except/pass` → `contextlib.suppress`; `set(...)` → comprensiones; `return` directo en lugar de variable intermedia; bucles `append` → comprensiones o `extend`.
+  - `pathlib` en lugar de `os.path`: `TexCore/settings.py` (`STATICFILES_DIRS`, `STATIC_ROOT`, carpeta y archivo de logs), `printing_service/src/routers/health.py` y los scripts de `docs/gestion-proyecto` (`read_text` en lugar de `open().read()`, que dejaba el archivo abierto).
+  - `inventory/views/despacho_views.py`: `raise` explícito al final del bucle de reintentos por *deadlock* (RET503). Era inalcanzable, pero documenta que la función nunca devuelve `None`.
+  - Pruebas ajustadas al nuevo código, sin cambiar lo que verifican:
+    - el *health* de `printing_service` ya no parchea `os.path.exists`: usa las plantillas reales y un directorio vacío;
+    - `os.stat` → `Path.stat` en las pruebas de los 3 *engines*;
+    - la prueba de permisos `0600` de `reporting_excel` intercepta `Path.chmod`;
+    - `with` anidados combinados en `scanning_service`.
+
+- **DJ001 — migración propia** (decisión del usuario). Los 32 `CharField`/`TextField` con `null=True` pasan a `blank=True, default=''`, con `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null`: primero `NULL → ''` y después `ALTER COLUMN`.
+  - Se corrigieron los escritores de `None`: la auditoría (`AuditLog.justificacion`), `registro_lote`, `transferencia_views`, `load_million` y el frontend (`|| ''`).
+  - **Falta probarla sobre una base con datos en SQL Server** antes del despliegue. El CI la ejecuta sobre SQL Server 2022, pero con la base vacía.
+- **DJ012:** miembros de los modelos reordenados según la guía de Django (sin cambios de esquema).
+- **C901 — 10 funciones refactorizadas** con pruebas de caracterización verificadas contra `HEAD`: `registrar_operacion`, `registrar_lote`, `stress_test_data`, `transform_view`, `reporting_proxy`, `resolve_report`, `despacho._procesar`, `get_queryset` de lotes, `_get_object_sede_id` y `generar_docx.convertir`.
+- **Defectos destapados y corregidos:**
+  - `registrar_lote`: la sincronización MES *best-effort* corría sin *savepoint*, así que un error de BD dejaba la transacción del lote inservible. Ahora tiene su propio *savepoint*; la prueba nueva falla contra `HEAD`.
+  - Transformación de stock: una `cantidad` no numérica respondía **500**; ahora responde 400.
+  - `generar_docx`: bucle infinito con una línea `| x` sin separador de tabla.
+  - Código muerto: la rama `total_salidas == 0` del DAG (el modelo exige salidas > 0), la rama `DEVOLUCION` del simulador y un `except ValidationError: raise` en despacho.
+- **Pruebas nuevas o ampliadas:**
+  - `gestion/tests/test_sede_auditoria_fallback.py`;
+  - `gestion/tests/test_stress_test_data.py` (humo con invariantes);
+  - `inventory/tests/test_despacho_asignacion.py`;
+  - `EjecucionProduccionValidacionesTestCase` en `test_ejecucion_produccion_service.py`, cuyo `setUp` se movió a una base `_EscenarioMES` para no repetir las pruebas heredadas;
+  - el *savepoint* MES en `test_registro_lote_sincronizacion_mes.py`;
+  - la cantidad no numérica en `test_transform_view.py`;
+  - en el frontend, los payloads esperan `''` en lugar de `null` (`BodegueroDashboard` y `AdminSistemasDashboard`).
+- **Resultados:** backend 1530/1530 (+40 pruebas), cobertura 91,8 % con el mismo comando que el CI. Frontend 1888/1888. Microservicios 54 (+1 omitida) / 94 / 54. mypy 0 en 268 archivos. Semgrep ERROR 0 en los archivos tocados.
+- **Documentación:**
+  - **ADR-008** nuevo (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`, con su resumen en `ARQUITECTURA_SISTEMA.md` §10): los 32 campos, el impacto en API, SQL Server y microservicios, y la verificación pendiente sobre datos. Revisados los índices nativos V2/V4/V5, incluido el columnstore de movimientos: ninguno usa las columnas alteradas.
+  - `ESTANDARES_DESARROLLO.md`: §4 con texto vacío sin `NULL`, orden de los modelos, pasos *best-effort* con savepoint y migraciones que endurecen columnas; §5 con la cobertura del 90 % y las pruebas de caracterización; §7 con los gates reales del CI, que todavía listaban flake8 y bandit.
+  - `REGISTRO_RIESGOS.md`: RD-05 nuevo y pendiente (la migración sobre datos reales); RC-06 a RC-08 nuevos y mitigados; RC-03 y RC-05 (mypy) actualizados; RG-02 y RG-03, que nombraban herramientas y rutas viejas. Resumen recalculado: 30 mitigados, 1 parcial y 2 pendientes.
+  - `matriz_trazabilidad_pruebas.md`: sección de la Etapa 4, defectos 16 a 19 y el nuevo hito de cobertura.
+  - `GUIA_DESPLIEGUE.md` (Paso 8) y `PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md`: probar las migraciones sobre un respaldo antes de migrar una base con datos, con las consultas de verificación.
+  - `MODELO_DATOS.md` (convenciones), `PLAN_MEJORA.md` (estado de la división de `RegistroLoteService`), `ARQUITECTURA_SISTEMA.md` (texto opcional en la API y contrato de `/api/inventory/transformaciones/`) y el plan de CI/CD.
+  - Este CHANGELOG: se quitó «(sin commitear)» de 18 entradas anteriores que ya están en los commits `2958f52`…`f981927` (sin push).
+  - Grafo de conocimiento actualizado (`graphify update .`).
+- **Pendientes:**
+  1. Probar las migraciones DJ001 sobre un respaldo de producción en SQL Server (riesgo RD-05).
+  2. Decisión del usuario: ¿un fallo de la reserva MTO o de la sincronización MES debe bloquear el registro del lote? Hoy solo deja un aviso en el log.
+  3. Ruff Etapa 5 (`ruff format`) después del merge de `MES` a `staging`; ESLint como gate; Tailwind 4.
+
+### 5 de Octubre de 2026 — Ruff, Etapas 2 y 3: autofix, reglas de defectos y seguridad; bandit retirado
+
+Ejecución de `docs/superpowers/plans/2026-10-05-migracion-ruff.md`. Ruff queda en **0** con todas las reglas de las Etapas 1 a 3 activas.
+
+**Etapa 2** (correcciones automáticas seguras): 427 cambios de `I` (orden de imports), `UP` (sintaxis de 3.12; 3.11 en `printing_service`, que tiene su propio `pyproject.toml`), `RUF100`, `RUF010` y `RUF022`. `makemigrations --check` sigue sin cambios.
+
+**Etapa 3** (defectos y seguridad): `B`, `S`, `BLE`, `DTZ`, `ASYNC`, `FAST`, `TRY400`, `LOG`, `G`, `T20` y `RUF059`.
+- **«Hoy» en UTC** (decisión del usuario): `sales_serializers` usa `timezone.now().date()` en la cartera vencida y en el vencimiento. Las pruebas y factories pasan a fechas con zona: los warnings de la suite bajan de 2031 a 1577.
+- **Defecto: la fecha del pedido se enviaba al frontend en un formato distinto al previsto.** `_fecha_pedido_to_iso_utc` usaba `django.utils.timezone.utc`, que Django 5.0 eliminó. El `AttributeError` quedaba tragado y se usaba el formato de respaldo: `+00:00` en vez de `Z` y, para un `date`, solo `AAAA-MM-DD`, que el frontend interpreta como el día anterior en Ecuador. Se reescribió sin el `except Exception`, con 6 pruebas (`test_fecha_pedido_iso_utc.py`).
+- **CWE-209 en `printing_service`:** los 8 endpoints de PDF y ZPL devolvían `str(exc)` en el 500. Ahora responden «Error interno al generar el documento.»; el detalle queda en la auditoría. Con prueba.
+- **Una prueba que no probaba nada:** «reversión de despacho con fallo intermedio» usaba un detalle sin lote, que la reversión salta sin fallar, y tragaba cualquier excepción. Ahora fuerza un fallo real después de restaurar el stock y comprueba el rollback completo.
+- **Pruebas más precisas:**
+  - 10 `assertRaises(Exception)` ahora esperan la excepción real: DRF `ValidationError`, Django `ValidationError` o `RuntimeError`;
+  - el pago con reconciliación fallida afirma el 500 en lugar de tragar la excepción.
+- **Excepciones acotadas o justificadas:**
+  - las fronteras de los endpoints de impresión y la auditoría *best-effort* llevan `noqa` con su motivo;
+  - la sincronización MES y la auditoría registran ahora la traza (`exc_info`);
+  - la auditoría de los microservicios captura solo `SQLAlchemyError`, y sus pruebas simulan un `OperationalError` real;
+  - los formateadores capturan `ValueError`/`TypeError` y el JWT, `PyJWTError`.
+- **Logging:** 106 llamadas pasan de f-string a formato `%s` y 26 de `logger.error(..., exc_info=True)` a `logger.exception`. B904: 30 `raise` encadenan su causa.
+- **`chmod` del SQLite de auditoría** fuera del *event loop* (`asyncio.to_thread`), en los 3 servicios.
+- **FastAPI:** las dependencias pasan a `Annotated[..., Depends(...)]`.
+- **Sin TLS desactivado:** el load test verifica TLS (CA propio opcional con `LOADTEST_CA_BUNDLE`).
+- **Código muerto eliminado:**
+  - `reporting_excel/src/services/excel_generator.py`, duplicado de `ExcelFormatter`, con sus 22 pruebas;
+  - `scripts/tests/test_pd.py`.
+- **Bandit retirado** del CI y del pre-commit: lo cubren las reglas `S` de Ruff. El CI publica el SARIF de Ruff.
+- **`ERA` descartada:** sus 6 hallazgos eran comentarios explicativos, no código muerto.
+- **Corrección de una afirmación previa:** la inyección ZPL ya estaba mitigada y probada por `zpl_sanitizer`; queda `noqa: S701` con el motivo.
+
+**Incidentes del proceso, corregidos y verificados:**
+1. Un script propio de conversión de logs calculó posiciones con columnas en bytes UTF-8 y dañó llamadas en 22 archivos (33 errores de sintaxis, ningún cambio silencioso de lógica).
+   - Se reconstruyeron desde `HEAD` con un conversor por caracteres y se verificó que ningún mensaje cambió.
+   - La reconstrucción había borrado dos líneas del 2 de octubre (`orden._justificacion_auditoria = justificacion` en el DELETE de OP). La suite lo detectó y se restauraron; un diff línea por línea confirma que fue el único código perdido.
+2. Un `ruff --fix --select RUF100` acotado borró `noqa` legítimos, y el `--fix` siguiente eliminó `import gestion.signals` de `apps.py`, es decir, el registro de las señales. Se restauró y se auditaron todos los `noqa` de `HEAD`.
+
+**Verificación:**
+- Backend: **1490/1490** pruebas, cobertura 91,22 %.
+- Microservicios: `reporting_excel` 54 (1 omitida solo en Windows; 88,83 %), `printing_service` 94 (98,34 %) y `scanning_service` 54 (93,71 %).
+- Ruff 0, mypy 0, Semgrep ERROR 0 y `makemigrations --check` sin cambios.
+- `actionlint` y `zizmor` 0, y `check-jsonschema` válido.
+
+**Pendiente:**
+1. Ruff Etapa 4: 134 hallazgos de `DJ`, `SIM`, `RET`, `C4`, `PERF` y `PTH`; la migración de los 32 `CharField` con `null=True`; y la refactorización de 9 funciones con complejidad mayor que 15, entre ellas `registrar_operacion` (47) y `registrar_lote` (30).
+2. Etapa 5: `ruff format`, después del merge de `MES`.
+3. ESLint a 0 y como gate.
+4. Tailwind 4.
+
+### 5 de Octubre de 2026 — CI/CD Fase 2: gates bloqueantes, Ruff (Etapa 1), dependencias sin CVE y defectos destapados
+
+Ejecución de la Fase 2 de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`. Cada gate se volvió bloqueante solo después de dejar el código en 0, sin líneas base que escondan deuda.
+
+**Defectos reales encontrados por los gates nuevos.** Se corrigieron con TDD: cada prueba se vio en rojo antes del cambio.
+- **Generar una OP desde el Plan Maestro sin bodega de salida daba 500** (`FieldError`). `ReposicionService.generar_orden_desde_plan` filtraba `Bodega` por un campo `activa` que no existe, y el formulario permite omitir la bodega.
+  - Detectado por mypy.
+  - Ahora toma la primera bodega de la sede del plan.
+- **Un lote de una OP bajo pedido (MTO) registrado sin máquina no se reservaba para su pedido.**
+  - La creación de la operación MES, que exige máquina, fallaba dentro del mismo `try` que la reserva y que el avance del plan MTS, y el `except` se los saltaba en silencio.
+  - Ahora el lote toma la máquina asignada a la OP si el payload no la trae, la operación MES solo se crea con máquina y operario (y si no, lo dice en el log) y la reserva MTO ocurre siempre.
+- **`HasScope` reescrito como fábrica de clases de permiso.**
+  - Era una instancia con un `__call__` que devolvía `self` para engañar a DRF.
+  - Ahora `&`, `|` y `~` funcionan de forma nativa y el tipado es correcto.
+  - Se sumaron pruebas de composición y de aislamiento entre scopes.
+
+**Gates del CI (`ci.yml`).**
+- **Ruff** reemplaza a flake8 y lintea **todo** el Python del repo; antes los 3 microservicios y `scripts/` quedaban fuera y tenían 48 violaciones.
+  - Configuración en `pyproject.toml`, con paridad exacta mediante las reglas *preview* de pycodestyle listadas una por una.
+  - Hallazgo: una clave `'area'` duplicada en `stress_test_data.py`.
+  - Bandit sigue hasta que entren las reglas `S` (Etapa 3).
+- **mypy bloqueante**, ahora con los plugins de Django y DRF, que no estaban activos: de 598 errores a **0**. Además de los dos defectos anteriores:
+  - `despacho_reversion` sin bodega de origen ahora da 400 con mensaje y no un error interno;
+  - un import inexistente (`timezone.timedelta`);
+  - `saldo_calculado` queda declarado en `Cliente`;
+  - el resto fueron anotaciones de tipo.
+- **Semgrep** como job nuevo, bloqueante en `ERROR` (0 hallazgos). 5 falsos positivos de «credenciales en logs» quedan anotados con su motivo; esos logs registran el servicio o la IP, nunca el secreto.
+- **SCA bloqueante:** `pip-audit` en los 4 servicios y `npm audit` de producción desde moderada. Las dependencias de desarrollo solo bloquean en CRITICAL.
+- **Cobertura del backend bloqueante:** se quitó `continue-on-error`.
+- **Microservicios:**
+  - un solo umbral, en cada `pytest.ini` (`reporting_excel` 85 %, `printing_service` 95 %, `scanning_service` 90 %);
+  - suite completa en una sola corrida.
+  - **`printing_service` corría solo `tests/unit`,** con 22 pruebas fuera, y su lista de dependencias armada a mano no tenía PyJWT; ahora instala su `requirements.txt` real, salvo WeasyPrint, que las pruebas simulan.
+- **`security.yml`:** los mismos gates, Trivy sobre las 5 imágenes y Semgrep con versión fijada.
+
+**Dependencias con CVE actualizadas.**
+- Python: DRF 3.16.1 → 3.17.2, PyJWT 2.14.0 → 2.15.0 (los 4 servicios), requests 2.32.5 → 2.33.0, python-multipart 0.22 → 0.31 (también fijado con `==` en `reporting_excel`), python-dotenv 1.0.1 → 1.2.2 y WeasyPrint 68.1 → 70.0 (dos CVE; solo usa `HTML(...).write_pdf()`, sin las opciones que cambiaron).
+- Frontend:
+  - `npm audit fix`: axios, form-data, lodash, rollup, vite y otras;
+  - React Router 6 → 7.18.4 (*open redirect* en producción);
+  - Vitest 4.1.11;
+  - `tailwindcss-animate` pasa a `devDependencies`;
+  - se quitó `@types/react-router-dom` v5, que estaba desfasado.
+- Producción queda con **0 vulnerabilidades** en npm y en pip.
+
+**Limpieza.**
+- Se eliminaron 6 serializers huérfanos que el plan de división del 19-ago dejó «para un cambio aparte»: `_reporting_serializers.py` completo, `RegistrarLoteSerializer` (con horas opcionales, el mismo contrato laxo que ya había causado un `IntegrityError`), su `ConsumoInputSerializer` y `StockQuimicoSerializer`.
+- También se eliminaron `scanning_service/tests/test_validate_endpoint.py.bak` (de abril, contradice el comportamiento actual) y `frontend/fix_mocks.py` (script de un solo uso).
+
+**ESLint.** Se instaló la *flat config* (ESLint 10, typescript-eslint, react-hooks 7 y react-refresh), se agregó `npm run lint` y se quitó el `eslintConfig` de CRA. **Todavía no es gate:** reporta 1146 hallazgos, entre ellos **201 `any` en código de producción** (el estándar del proyecto los prohíbe) y 51 `setState` dentro de efectos. Corregirlos es un refactor del frontend.
+
+**Verificación:**
+- Backend: **1484/1484** pruebas, cobertura 91,20 %. Se corrió en un venv limpio con los `requirements.txt` nuevos, igual que en el CI.
+- Microservicios: `reporting_excel` 76 (1 omitida solo en Windows), `printing_service` 94 y `scanning_service` 54, cada uno en su venv.
+- Frontend con React Router 7: `tsc` limpio, **1888/1888** y build de producción correcto.
+- Ruff 0, mypy 0 en 265 archivos, Semgrep ERROR 0, `pip-audit` 0 en los 4 servicios y `npm audit --omit=dev` 0.
+- `actionlint` y `zizmor` 0, y `check-jsonschema` valida los workflows.
+
+**Pendiente de la Fase 2:**
+1. Etapas 2 a 5 de Ruff.
+2. ESLint a 0 y como gate.
+3. Tailwind CSS 4, para cerrar los HIGH de la cadena de build.
+
+`frontend/dist/` cambió al compilar porque sigue versionado: hay que ejecutar `git rm -r --cached frontend/dist`.
+
+### 5 de Octubre de 2026 — CI/CD: Fases 0 y 1 (contención de seguridad y flujo de ramas)
+
+Ejecución de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, con las decisiones del usuario:
+- `master` es producción y la rama por defecto; `staging` es integración;
+- todo entra por PR a `staging` y de ahí a `master`;
+- GitLab se elimina y el deploy irá con un runner propio;
+- la auditoría de rutas queda fuera del CI.
+
+También se aprobó el plan de Ruff (`2026-10-05-migracion-ruff.md`) con sus decisiones: «hoy» en UTC, migración propia para `DJ001` y `ruff format`.
+
+**Fase 0 — contención de seguridad.**
+- **Las 50 referencias a actions están fijadas por SHA de commit,** con la versión en un comentario, y se subieron a la mayor vigente: `checkout` v7.0.1, `setup-python` v7.0.0, `setup-node` v7.0.0, `upload-artifact` v7.0.1, `build-push-action` v7.4.0, `setup-buildx-action` v4.4.1, `login-action` v4.6.0, `metadata-action` v6.2.0, `codeql-action` v4.38.2 y `ssh-action` v1.2.5.
+  - Se revisaron las notas de cada versión mayor y ninguna rompe lo que usan los workflows.
+  - Requieren un runner v2.327.1 o superior, lo que hay que tener en cuenta para el runner propio.
+- **Trivy:** `trivy-action` pasa de `@master` a v0.36.0 por SHA y el binario se fija en v0.75.0 (CVE-2026-33634).
+- **`.github/dependabot.yml`:** actualizaciones semanales de actions, pip (backend y 3 servicios), npm e imágenes base. Todos los PRs van a `staging`, con parches y minors agrupados.
+- **Mínimo privilegio:** `permissions: {}` en los 4 workflows y permisos por job según lo que cada uno usa. Además, `timeout-minutes` en todos los jobs y `persist-credentials: false` en los 14 checkouts.
+- **Nuevo job `workflow-lint`** (`actionlint` + `zizmor`) dentro del `quality-gate`. Las excepciones de zizmor van en `.github/zizmor.yml`, con motivo y fecha de salida.
+- **GitLab CI eliminado** (`.gitlab-ci.yml`). README, `ARQUITECTURA_SISTEMA.md` §8.4 y `ESTANDARES_DESARROLLO.md` §7 quedan al día; el README también tenía cifras viejas (89 %, 998 pruebas).
+
+**Defectos encontrados y corregidos al endurecer:**
+- **El CD podía desplegar código de un fork (RS-14).** El filtro `workflow_run` con `branches: [master]` compara el nombre de la rama de origen, así que un PR desde un fork con una rama llamada `master` lo cumplía. Ahora `ci-guard` exige además un `push` al propio repositorio.
+- **Inyección de comandos en el rollback (RS-15).** El «motivo» escrito por el operador se interpolaba en el script de notificación. Ahora los valores llegan por `env` y el JSON se arma con `jq`. Lo mismo se hizo en el CD y en la guardia.
+- **Las notificaciones de deploy y rollback nunca se enviaban.** El `if: env.WEBHOOK_URL != ''` evaluaba un `env` declarado en el mismo paso, que no existe al evaluar el `if`. La variable pasa al nivel del job.
+- **Los 3 microservicios llegaban a producción sin escanear (RS-12).** La mitigación del 22-sep vivía solo en GitLab, que no se ejecutaba. La matriz de Trivy del CD ahora cubre las 5 imágenes; los satélites usan `ignore-unfixed`, el mismo criterio que tenía GitLab.
+
+**Fase 1 — flujo de ramas.**
+- **Nuevo job `branch-policy`:** en un PR hacia `master` falla si la rama de origen no es `staging`. Es parte del `quality-gate`.
+- **`.github/CODEOWNERS`** para `.github/`, `infrastructure/`, los Dockerfiles, `database/` y las migraciones.
+- **Disparadores del CI:** PRs hacia `staging` y `master` y push a `staging`. Las ramas de trabajo se validan en su PR; abrirlo como borrador da feedback en cada push.
+  - **El push a `master` no se agrega todavía:** activaría el `cd.yml` actual, que nunca se ha disparado. Llega con `release.yml` en la Fase 3.
+- **`DEPLOYMENT_SETUP.md`:** flujo nuevo y la configuración que el usuario debe hacer en GitHub.
+- `REGISTRO_RIESGOS.md`: RS-12 actualizado y RS-13, RS-14 y RS-15 nuevos.
+
+**Verificación** (en local, con las mismas herramientas que usará el CI):
+- `actionlint` 1.7.12 con `shellcheck`: 0 hallazgos. La línea base tenía 2 avisos de shellcheck.
+- `zizmor` 1.30.1: 0 hallazgos. La línea base tenía 102, de ellos 61 altos.
+- `check-jsonschema` valida los 4 workflows y `dependabot.yml`.
+- 0 `uses:` sin fijar.
+- Los workflows no se pueden ejecutar en local; la primera corrida real será en el PR de `MES` a `staging`.
+
+**Pendiente del usuario** (ajustes de GitHub, detallados en `.github/DEPLOYMENT_SETUP.md`):
+1. Poner `master` como rama por defecto y borrar `main`.
+2. Crear los rulesets de `master` y `staging` con el check obligatorio «Quality Gate · Barrera de Calidad».
+3. Configurar el environment `production` con revisores.
+4. Ejecutar `git rm -r --cached frontend/dist`.
+
+**Siguiente:** Fase 2 del CI/CD, con la migración a Ruff (Etapa 1).
+
+### 5 de Octubre de 2026 — Formulario único de máquina, pruebas lentas, stashes, revisión de Trivy y plan de CI/CD
+
+Pedido del usuario: cerrar los pendientes 3, 4 y 6 del 2-oct, revisar Trivy, actualizar los manuales y evaluar el CI/CD.
+
+**1. Un solo formulario de máquina** (pendiente 3).
+- `jefe-area/MaquinaDialog.tsx` pasa a ser el único formulario de crear y editar máquina. Lo abren el lápiz de la tarjeta (**Máquinas por línea**) y **Gestión de Máquinas**, que pierde su formulario propio.
+- Reúne todos los campos que antes estaban repartidos: nombre, estado, capacidad, eficiencia ideal, operarios asignados y la merma vendible (producto y bodega).
+- Valida antes de enviar: nombre sin solo espacios, capacidad mayor que 0 y eficiencia entre 0 y 1.
+- Al editar usa `PATCH`, como `ManageMaquinas`; antes la tarjeta usaba `PUT`. La merma solo se envía si la máquina la trajo, para no borrar una configuración que el formulario no mostró.
+- Los errores muestran el mensaje del backend (`getApiErrorMessage`).
+- **Defecto corregido:** guardar desde un lugar no refrescaba el otro, porque la tarjeta usa `fetchDashboardData` y la tabla la caché `['maquinas']` de React Query. Ahora el diálogo invalida la caché y `ManageMaquinas` recibe `onChange` (crear, editar y eliminar), así que ambas vistas se actualizan.
+- `ManageMaquinas` recibe además `operarios`.
+
+**2. Pruebas lentas sin `testTimeout` propio** (pendiente 4). Se quitó `vi.setConfig({ testTimeout: 45_000 })` de los tres archivos, midiendo antes y después:
+
+| Prueba | Antes | Ahora | Causa |
+|---|---|---|---|
+| `BuscadorLotes` — navegar en un bloque | 8,0 s | 0,97 s | `getByRole('button', {name})` calculaba el nombre accesible de unos 120 botones de fila |
+| `InventoryDashboard` — Recepción F0-001 | 6,5 s | 2,0 s | `findByRole('option', {name})` sobre todo el dashboard, unos 0,6 s por cada select |
+| `VendedorDashboard.detalle` (archivo) | 49,6 s | 28,9 s | un `setTimeout` por tecla de `userEvent` y consultas por rol sin acotar |
+
+- `ui/controles-paginacion` ahora es un `<nav aria-label="Paginación">`: además de mejorar la accesibilidad, permite acotar las consultas.
+- Las pruebas acotan las consultas a la paginación, al diálogo abierto o al listbox del select, y usan `userEvent.setup({ delay: null })`.
+- No cambió ninguna aserción.
+
+**3. Stashes** (pendiente 6). Se descartaron los 7 stashes que solo contenían `graphify-out`.
+- Se **conserva** `stash@{0}` («Cambios locales del equipo», 12-ago-2026): tiene código en 9 archivos, como paginación y filtros de OP, stock disponible en requisitos y `KpiProduccionView`, sobre la base `490ad7f` del 30-jul.
+- Descartarlo lo decide el equipo.
+
+**4. Trivy: revisión** (sin cambios en los workflows).
+- `security.yml` y `cd.yml` usan `aquasecurity/trivy-action@master`, y `.gitlab-ci.yml` usa `aquasec/trivy:latest`. Son referencias mutables, el vector del compromiso de Trivy del 19 al 23 de marzo de 2026 (CVE-2026-33634 / GHSA-69fq-xp46-6x23): se reescribieron 75 tags de `trivy-action` y se publicaron imágenes `latest` maliciosas que robaban secretos de CI.
+- **TexCore no estuvo expuesto:** los workflows se crearon el 8 de abril de 2026 y no hay corridas en esa ventana.
+- La última corrida de Trivy fue el 24 de julio de 2026 (Security Scan, en verde). El escaneo semanal no corre porque la rama por defecto (`main`) no tiene workflows.
+- Versiones vigentes: `trivy-action` v0.36.0 y Trivy v0.75.0.
+- La corrección está en el plan de CI/CD.
+
+**5. Plan de CI/CD:** `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`. Contiene un diagnóstico contra 10 principios (6 críticos, 9 altos, 10 medios), la arquitectura objetivo, 7 fases (de la 0 a la 6) y las decisiones pendientes del usuario. Los críticos:
+- el CD nunca se disparó desde un merge;
+- la rama `MES` no pasa por CI desde el 9 de septiembre;
+- el escaneo semanal no corre;
+- las actions están en referencias mutables;
+- el umbral de cobertura del backend no bloquea;
+- el CI falla en el 82 % de sus corridas.
+
+**Documentación.**
+- `MANUAL_JEFE_AREA.md` §5: el formulario único con sus campos y validaciones, el refresco entre las dos vistas y la eliminación con justificación.
+- `matriz_trazabilidad_pruebas.md`.
+- El grafo de graphify.
+
+**Verificación:**
+- Frontend: `tsc` limpio y **1888/1888** pruebas en 129 archivos (21 nuevas de `MaquinaDialog` y 2 de sincronización en el panel).
+- Cobertura 95,67 / 90,16 / 93,62 / 96,61 %.
+- El backend no cambió.
+
+**Pendientes, por prioridad:**
+1. Revisar y commitear: lo del 2 y el 5 de octubre sigue sin commitear.
+2. Decidir sobre el plan de CI/CD (§6 del plan) y ejecutar la Fase 0, que es contención de seguridad.
+3. Correr la suite del backend en SQL Server antes de desplegar.
+4. Decidir qué hacer con `stash@{0}`, el del equipo.
+
+### 2 de Octubre de 2026 — Resumen del día y punto de retorno
+
+Jornada dedicada a cerrar los cuatro hallazgos de la revisión de manuales del 1-oct y a dejar al día las pruebas de backend y frontend. El detalle de cada paso está en las tres entradas siguientes. **Todo está sin commitear**: el commit lo hace Brandon.
+
+| Bloque | Resultado |
+|---|---|
+| **Pull** | `MES` actualizada a `bd78c11`. Los cambios locales de `graphify-out/` quedaron en `stash@{0}` («graphify-out pre-pull»); el grafo ya está regenerado, así que ese stash se puede descartar. |
+| **Hallazgo 1** — eliminar OP | Funciona: el diálogo reutilizable `shared/JustificacionDialog` pide la justificación, que queda en el AuditLog. Un fallo interno responde 500 genérico. |
+| **Hallazgo 2** — formulario de OP | Fórmula (solo con versión oficial), bodega de químicos y justificación del cambio cuando hay químicos descontados. |
+| **Hallazgo 3** — componentes sin montar | Mezcla montada en la asignación del Jefe de Área, solo con la OP pendiente y con suma ≤ 100 %. Stubs `AreaMovementsTable` y `ApprovalRequests` eliminados. |
+| **Hallazgo 4** — procesos | Pestaña **Procesos** del Tintorero (PATCH, sin DELETE, código inmutable) y botón **Procesos** en Gestión de Máquinas (PUT `/maquinas/{id}/procesos/`, servicio `ProcesosMaquinaService`). |
+| **Defecto transversal** | `getApiErrorMessage` mostraba «success: false \| error: [object Object]» en los toasts 400/403; ahora muestra `error.message`. |
+| **Pruebas backend** | **1478** en verde, cobertura **91,25 %**. Las 1478 siguen la convención `test_[objeto]_dado_…_cuando_…_entonces_…`: se renombraron 203. |
+| **Pruebas frontend** | **1865** en verde, cobertura 95,49 / 90,01 / 93,12 / 96,47 %. Los 1799 títulos siguen `[objeto] dado … cuando … entonces …`: se renombraron 171. |
+| **Gates** | `flake8` 0; `tsc` limpio; `makemigrations --check` sin cambios; auditoría de rutas: 0 sin consumidor. |
+
+**Documentación actualizada hoy:**
+- Manuales de Jefe de Planta, Jefe de Área, Tintorero y Admin de Sistemas.
+- `ROLES_Y_PERMISOS.md` y `matriz_trazabilidad_pruebas.md`.
+- `HU_MODULO_VENTAS.md`, `REVERSION_PAGOS.md` y `REVERSION_DESPACHO.md` (nombres de pruebas).
+- `.agent/workflows/` (admin-sede, jefe-area).
+- El grafo de graphify.
+
+**Pendientes, por prioridad:**
+1. **Revisar y commitear** los cambios del día. Hay unos 115 archivos fuera de `graphify-out/`; ver `git status`.
+2. **Correr la suite en SQL Server** antes de desplegar: hoy todo se verificó en SQLite local (`settings_test_local`). Hay que abrir Docker Desktop y usar `bash scripts/run_backend_tests.sh`.
+3. **Unificar los dos formularios de máquina** (`jefe-area/MaquinaDialog.tsx` y el formulario de `ManageMaquinas.tsx`): están duplicados.
+4. **Pruebas lentas del frontend:** `InventoryDashboard`, `BuscadorLotes` y `VendedorDashboard.detalle` tienen `testTimeout` de 45 s por archivo. Conviene acelerarlas, por ejemplo con tablas más chicas o menos `userEvent.type`, y quitar el ajuste.
+5. **Auditoría de rutas en el CI:** sigue fuera por decisión del usuario.
+6. **Limpieza de stashes:** hay 8 stashes viejos de `graphify-out` en `git stash list`; se pueden descartar tras revisarlos.
+
+**Para retomar:**
+```bash
+# Backend (SQLite local, sin Docker)
+DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python -m pytest gestion/ inventory/ internal_api/ -q --nomigrations   --cov=gestion --cov=inventory --cov=internal_api --cov-config=.coveragerc
+python -m flake8 gestion/ inventory/ TexCore/ internal_api/ --max-line-length=120 --extend-ignore=E203,W503 --exclude=*/migrations/*
+DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python scripts/auditar_rutas_frontend.py
+# Frontend (correr la cobertura sin otras cargas: hay pruebas pesadas)
+cd frontend && npx tsc --noEmit && npx vitest run --coverage
+```
+
+### 2 de Octubre de 2026 — Pruebas del frontend: brechas del código nuevo y convención de nombres
+
+Pedido del usuario: verificar el frontend igual que el backend.
+
+**Brechas cubiertas** (7 pruebas de caracterización del código de hoy). Cada una se comprobó con mutación: se alteró la línea cubierta, la prueba falló y luego se restauró.
+- `JustificacionDialog`: cerrar con Escape llama a `onClose` y limpia el campo.
+- `ProcesosMaquinaDialog`: Cancelar y Escape cierran sin guardar.
+- `ManageProcesosTintoreria`:
+  - error del servidor al desactivar → toast con el mensaje, sin avisar al panel;
+  - la descripción se envía recortada;
+  - Cancelar cierra sin llamar a la API.
+- `OrdenFormDialog`: volver a «Sin fórmula» y «Sin bodega» envía ambos en `null`; con fórmula y sin bodega se muestra el aviso de que no habrá descuento.
+- `OrdenesAsignacionPanel`: el panel lateral de mezcla se cierra.
+- No se prueban dos guardas inalcanzables desde la interfaz, que solo existen para que TypeScript acote el tipo (`ProcesosMaquinaDialog`, `ComponenteMezclaPanel`).
+
+**Convención ISTQB de nombres.** 171 títulos en 29 archivos no seguían `[objeto] dado … cuando … entonces …`: 107 no tenían estructura y 64 omitían «cuando».
+- Se renombraron según el título y sus aserciones, sin cambiar los cuerpos.
+- Se conservan los prefijos de trazabilidad (`[R-01]`, `[EP]`, `[VL]`, `[Estado]`) y la interpolación de `it.each`.
+- Ahora los 1799 títulos cumplen la convención.
+- Ningún documento vigente citaba los títulos viejos; solo una entrada antigua de este CHANGELOG, que se conserva.
+
+**Verificación:**
+- `tsc` limpio.
+- **1865/1865** pruebas en 128 archivos.
+- Cobertura 95,49 / 90,01 / 93,12 / 96,47 % (statements / branches / functions / lines; umbrales 94 / 89 / 91 / 95).
+
+### 2 de Octubre de 2026 — Pruebas del backend: brechas del código nuevo y convención de nombres
+
+Pedido del usuario: revisar y completar las pruebas del backend.
+
+**Brechas cubiertas** (código tocado hoy y vecino). Son pruebas de caracterización, que pasan con el código actual; dos de ellas se comprobaron con mutación (se quitó la línea cubierta y la prueba falló):
+- `destroy` de una OP: una `ValidationError` del servicio de químicos se propaga como 400, no como 500 genérico. Comprobada con mutación.
+- `ProcesosMaquinaService.reemplazar`: un proceso ya asignado se conserva, sin recrear su fila. Comprobada con mutación.
+- Componentes de mezcla: el filtro `?orden=` que usa el panel, y un producto de otra sede → 400.
+- `perform_update` de una OP: la primera descarga de químicos al asignar fórmula y bodega a una orden existente.
+
+**Convención ISTQB de nombres.** 203 pruebas en 33 archivos no seguían `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]`. Se renombraron según su docstring y sus aserciones, sin cambiar los cuerpos.
+- Los archivos con más casos: `tests_integrados.py` (36), `test_pago_seguridad_p0.py` (14) y `test_anticipos_pagos_parciales_p1.py` (10).
+- Ahora las 1478 pruebas del backend cumplen la convención.
+- Se actualizaron las referencias en documentos vigentes: `HU_MODULO_VENTAS.md`, `REVERSION_PAGOS.md`, `REVERSION_DESPACHO.md` y un comentario de `test_pdf_produccion_views.py`.
+- Las entradas antiguas del CHANGELOG, los planes y las specs conservan los nombres de su época.
+
+**Verificación** (SQLite local, `settings_test_local`):
+- **1478 pruebas** en verde, cobertura **91,25 %**.
+- `flake8`: 0. Las firmas con mocks que pasaban de 120 caracteres se partieron en dos líneas.
+
+### 2 de Octubre de 2026 — Cierre de los hallazgos de la revisión de manuales
+
+Se cierran los cuatro hallazgos que dejó la revisión de manuales del 1-oct-2026. Las decisiones de producto las tomó el usuario: eliminar los dos stubs, montar la mezcla en la asignación del Jefe de Área, dar pantalla a los procesos de tintorería y por máquina, y dejar la auditoría de rutas fuera del CI por ahora. Se trabajó con TDD: cada prueba nueva se vio en rojo antes del cambio.
+
+**1. Eliminar una orden de producción ya funciona.**
+- `JefePlantaDashboard.handleOrdenDelete` envía la `justificacion`. El `window.confirm` se reemplaza por el nuevo diálogo reutilizable `shared/JustificacionDialog` (mínimo 10 caracteres; no se cierra si la acción falla), que se abre desde el menú ⋯ y desde el detalle.
+- Backend (`OrdenProduccionViewSet.destroy`):
+  - una justificación de solo espacios ya no pasa la validación;
+  - la justificación queda en el AuditLog del DELETE (antes llegaba vacía);
+  - un fallo interno responde 500 genérico, sin el texto de la excepción (antes: 400 con `str(e)`, CWE-209).
+- El `window.prompt` de los litros de baño con químicos descontados (`OrdenDetalleSheet`) también pasa a `JustificacionDialog`.
+
+**2. Formulario de orden con fórmula, bodega de químicos y justificación.**
+- `OrdenFormDialog` agrega **Fórmula de Color**, que solo ofrece fórmulas con versión oficial y conserva la ya asignada, y **Bodega de Químicos**.
+- **Justificación del cambio** aparece, y es obligatoria, solo al editar una orden con químicos descontados.
+- La bodega no se exige junto con la fórmula: el Jefe de Área puede asignarla después con `completar_detalles`.
+- `perform_update` también recorta la justificación.
+- `OrdenProduccion` no tiene campo `justificacion`: se retira del tipo TS, de la precarga en `handleEdit` y de la sección de notas del detalle, que nunca se mostraba. Las justificaciones están en la Auditoría.
+
+**3. Componentes de mezcla montados; stubs retirados.**
+- En `OrdenesAsignacionPanel`, cada orden pendiente tiene **Componentes de mezcla**, que abre `ComponenteMezclaPanel` en un panel lateral.
+- Quitar un componente pide la justificación real. Antes enviaba siempre «Eliminado por jefe de área».
+- Reglas nuevas en `ComponenteMezclaOP.clean()`:
+  - la mezcla solo se modifica con la OP `pendiente`, porque los lotes ya consumen según ella;
+  - la suma de porcentajes no pasa del 100 %.
+- El borrado valida el mismo estado y recorta la justificación.
+- Se eliminan `jefe-area/AreaMovementsTable.tsx` y `admin-sede/ApprovalRequests.tsx` con sus pruebas, y sus referencias en `.agent/workflows/`.
+
+**4. Procesos de tintorería y por máquina con pantalla.**
+- `/procesos-tintoreria/` admite PATCH (tintorero y Admin de Sistemas):
+  - se editan nombre, tipo, descripción y activo; el código y la sede no cambian, porque las recetas citan el código;
+  - sin DELETE: un proceso se da de baja desactivándolo;
+  - lo leen además Jefe de Área, Jefe de Planta y Admin de Sede (permiso nuevo `IsLectorProcesosTintoreria`).
+- `/maquinas/{id}/procesos/` admite PUT `{procesos: [ids]}`:
+  - lo hacen el Jefe de Área de esa área, el Jefe de Planta o el Admin de Sistemas;
+  - el servicio nuevo `ProcesosMaquinaService.reemplazar` es atómico y solo acepta procesos activos de la sede de la máquina.
+- El GET de detalle de procesos de tintorería pasa de 404 a 405: la ruta existe para el PATCH, pero sigue sin `retrieve`.
+- Frontend:
+  - repositorio `lib/api/procesosTintoreriaApi`;
+  - pestaña **Procesos** del Tintorero (`ManageProcesosTintoreria`), que refresca los procesos del editor de fórmulas al guardar;
+  - botón **Procesos** en **Gestión de Máquinas** (`ProcesosMaquinaDialog`).
+  - Va en `ManageMaquinas` y no en `MaquinaDialog`, porque hay dos formularios de máquina y el diálogo propio no se acopla al guardado de ninguno.
+
+**Defecto transversal corregido.** `getApiErrorMessage` (`lib/apiError.ts`) no reconocía el sobre del handler unificado del backend (`{success, error: {code, message, fields}}`). Mostraba «success: false | error: [object Object]» en todos los toasts de errores 400/403. Ahora muestra `error.message`.
+
+**Documentación.**
+- Manuales: Jefe de Planta (formulario real de creación, eliminar con justificación), Jefe de Área (componentes de mezcla, procesos de la máquina), Tintorero (pestaña Procesos) y Admin de Sistemas (dónde se gestionan los procesos).
+- `ROLES_Y_PERMISOS.md` y `matriz_trazabilidad_pruebas.md` (sección nueva).
+
+**Verificación** (SQLite local con `settings_test_local`; el CI usa SQL Server):
+- Backend: **1473 pruebas** en verde, cobertura **91,17 %**.
+- `flake8`: 0; `makemigrations --check`: sin cambios; auditoría de rutas: **0 sin consumidor**.
+- Frontend: `tsc` limpio, **1858/1858** en 128 archivos, cobertura 95,35 / 89,89 / 92,83 / 96,37 % (statements / branches / functions / lines; umbrales 94 / 89 / 91 / 95).
+
+**Pruebas lentas.** `InventoryDashboard`, `BuscadorLotes` y `VendedorDashboard.detalle` (integración con tablas grandes y formularios completos) expiraban de forma intermitente al límite global de 20 s bajo `--coverage` en la suite completa; aisladas pasaban. Llevan `vi.setConfig({ testTimeout: 45_000 })` en su archivo, sin tocar aserciones.
+
+**Pendiente:**
+- La auditoría de rutas sigue fuera del CI (decisión del usuario).
+- Hay dos formularios de máquina duplicados (`MaquinaDialog` y el de `ManageMaquinas`); conviene unificarlos.
+- Correr la suite en SQL Server antes de desplegar.
+
+### 1 de Octubre de 2026 — Revisión completa de los manuales de usuario contra el frontend
+
+Se revisaron los 11 manuales y el README de `docs/manuales-usuario/` pantalla por pantalla contra el código del frontend: pestañas, campos, botones y mensajes. Solo cambia documentación; no se tocó código.
+
+**Manuales reescritos** (describían funciones que cambiaron o no existen):
+- **Tintorero:** el panel tiene 4 pestañas (Fórmulas, Stock de Químicos, Historial de Órdenes, Descargas de Químicos). Ya no existe el botón «Aprobar»: el flujo actual es receta viva → **Guardar versión actual (ensayo)** → **Marcar oficial**, más Ver receta, Comparar y Derivar por versión. También se documentan las fórmulas de laboratorio.
+- **Administrador de Sede:** la pestaña **Aprobaciones** solo muestra que el módulo de aprobación **no está activo** (los movimientos se procesan de inmediato). El manual estaba centrado en aprobar movimientos; ahora describe el monitoreo y la **Auditoría**, y aclara que el panel no tiene selector de sede.
+- **Vendedor:** nombres reales (Nuevo Cliente, Venta Nueva, Últimas Ventas, Reportes Excel). Se agregan los datos del cliente, IVA, retención, «¿El cliente pagó en caja?», la ficha con Deuda y Recibos, el **Seguimiento de Fabricación MTO** con **Crear OP**, y la edición limitada a pedidos pendientes.
+- **Jefe de Planta:** las 5 pestañas, que antes solo cubrían OP: se suman Plan Maestro (MTS), Corridas Continuas (MES), Transferencias Interárea y Buscador de Lotes. También se documentan los indicadores del día, **Acciones Gerenciales** (PDF), el menú de cada orden y el detalle con dosificación.
+
+**Manuales corregidos:**
+- **Bodeguero:** pestaña Catálogos, acciones del Kardex (historial, editar compra, eliminar con reversión), **Registrar Merma**, columnas de Stock (Físico, Comprometido MTO, Disponible), campos de Transfer y Transform, **Ejecutar Motor MRP**.
+- **Jefe de Área:** KPI reales (el manual citaba una «Distribución por Calidad» que no existe). Se retiran «Consumo de Mezcla» y «Movimientos de su Área», paneles que no se muestran. Se agregan Producción en Curso, Buscador de Lotes, Máquinas por línea, Flujo General y Etapas.
+- **Empaquetado:** la advertencia de tolerancia del 10 % aplica al **reetiquetar**, no al registrar un bulto. Se agregan los motivos de reimpresión, «Usuario Jefe» y la ficha de lote (Resumen, Movimientos, Consumos).
+- **Despacho:** el historial no registra «devoluciones»: tiene filtros, **Imprimir Historial**, **Generar Guía de Remisión** y **Revertir despacho**.
+- **Operario:** la pestaña **Producción Continua (MES)** y la ficha de lote.
+- **Ejecutivo:** el rango de Producción, el MRP con **Ejecutar Motor MRP** (única acción del rol), Stock por Bodega y la descarga de reportes.
+- **Administrador de Sistemas:** Resumen, Producción y **Auditoría**. Los procesos de tintorería no tienen pantalla.
+- **README:** solo el Administrador de Sistemas crea cuentas; se agregan la ficha de lote y el QR (solo red interna).
+
+**Hallazgos en el código (no corregidos; pendientes de decisión):**
+1. **Eliminar una orden de producción siempre falla.** `JefePlantaDashboard.handleOrdenDelete` envía `DELETE` sin `justificacion`, y `OrdenProduccionViewSet.destroy` la exige siempre (400).
+2. **El formulario de orden no permite elegir fórmula de color, bodega de químicos ni justificación,** aunque el backend los acepta. Desde la pantalla no se puede crear una orden con fórmula, ni editar una con químicos descontados (el backend pide justificación).
+3. **Componentes sin montar:** `jefe-area/ComponenteMezclaPanel.tsx` y `jefe-area/AreaMovementsTable.tsx` (solo los importan sus pruebas) y `admin-sede/ApprovalRequests.tsx`. Por eso nadie puede definir los componentes de mezcla de una orden (`componentes-mezcla/`) desde la interfaz, y la auditoría de rutas de la Fase B contó esa ruta como cubierta.
+4. **Procesos de tintorería y procesos por máquina** solo se administran desde el admin de Django (`/admin/`), que nginx no expone: en el servidor no hay pantalla para mantenerlos.
+
+### 1 de Octubre de 2026 — Resumen del día
+
+Jornada dedicada a cerrar la **Fase B** del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` §7: que cada ruta `api/` del backend tenga una pantalla que la use o se retire. El detalle de cada paso está en las entradas de abajo. Resumen:
+
+| Bloque | Resultado |
+|---|---|
+| **B1** — rutas sin consumidor | Retiradas las rutas duplicadas o muertas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos, detalle REST sin uso). Catálogo y usuarios con los helpers únicos de sede. |
+| **B2** — bodega | Recepción de materia prima F0-001 como **única vía de compra** (la COMPRA genérica se rechaza). Pantallas nuevas **Recepción**, **Materia prima** y **Stock a fecha de corte**. Escrituras de stock limitadas a bodegas operables y destino en la misma sede. |
+| **B3** — tintorería y órdenes | Dosificación de fórmula y de orden, fórmulas derivadas, receta de cada versión, asignación del Jefe de Área en una sola operación (`completar_detalles`), catálogo de **procesos de producción** con pantalla propia. |
+| **B4** — producción | Ficha de lote con **Consumos** y **Costo** por rol, todos los registros de transformación de una orden; lotes sin DELETE, edición y rechazo solo por su dueño, jefes y admins. |
+| **B5 + B6** — indicadores y cierre | Reporte de **eficiencia del día** y **desempeño del operario** para el Jefe de Área, filtro por **vendedor** en Ventas. `scripts/auditar_rutas_frontend.py` devuelve **0 rutas sin consumidor**. |
+| **Decisiones del usuario** | Venta de contado sin pago registrado permitida; Administrador de Sede como rol de monitoreo (transferencias interárea: consulta, no crea) y conserva el resto de sus permisos; **migraciones unificadas** (`gestion` 0001 + 0002, `inventory` 0001) con procedimiento para rehacer el servidor de pruebas. |
+| **Pruebas** | Backend **1441** pruebas en SQL Server (91,1 %), frontend **1820** (95,41 / 90,03 / 92,98 / 96,39 %), todas en verde y ninguna saltada. Matriz de trazabilidad al día. |
+
+**Seguridad (OWASP A01):** además de cubrir rutas, la Fase B cerró accesos indebidos encontrados al construir cada pantalla, entre ellos: borrado de lotes sin revertir stock; edición de órdenes por cualquier rol; escrituras de inventario sin acotar a la sede; transformaciones abiertas a cualquier usuario autenticado; MRP ejecutable por cualquier rol; edición de pedidos y pagos sin auditoría; y detalles de pedido anidados que saltaban la validación de precio y peso. Cada caso tiene su prueba, que se vio en rojo contra el código anterior.
+
+**Documentación actualizada hoy:**
+- `docs/historias-usuarios/ROLES_Y_PERMISOS.md`: reglas de acceso de todos los cambios.
+- `docs/manuales-usuario/`: los manuales de 8 roles.
+  - Bodeguero: Recepción F0-001, Materia prima, Stock a fecha de corte y reglas de bodega.
+  - Administrador de Sistemas: 7 secciones de inventario y catálogo de Procesos.
+  - Jefe de Área: asignación, eficiencia del día y desempeño, registros de transformación y consumos.
+  - Jefe de Planta: dosificación de la orden, consumos y costo en la ficha de lote, edición solo por su rol.
+  - Tintorero: detalle de la fórmula con Dosificación, Versiones (Ver receta) y Derivadas.
+  - Ejecutivo: filtro por vendedor y ficha de lote.
+  - Administrador de Sede: rol de monitoreo.
+  - Vendedor: venta de contado y pedidos sin borrado.
+- `docs/modulos/DASHBOARD_EJECUTIVO.md`: las 7 pestañas de inventario.
+- `docs/requerimientos/PLAN_PRUEBAS.md`: TC-040 (compra por recepción F0-001).
+- `docs/matriz_trazabilidad_pruebas.md`: estado de las pruebas.
+- Planes en `docs/superpowers/plans/2026-10-01-*.md` y spec §7 cerrada.
+
+**Pendiente:** la auditoría de rutas no está en el CI (decisión del usuario: se agregará más adelante). Al rehacer el servidor de pruebas, seguir el procedimiento de la entrada «Decisiones sobre los pendientes de la Fase B y migraciones unificadas».
+
+### 1 de Octubre de 2026 — Pruebas al día: revisión de la suite y matriz de trazabilidad
+
+Pedido del usuario: dejar actualizadas las pruebas (más de 1000) antes de tocar el CI, que **no se modifica** por ahora.
+
+- **Estado de la suite:** backend **1441 pruebas** en SQL Server 2022 (base creada con las migraciones unificadas), cobertura 91,1 %; frontend **1820 pruebas** en 125 archivos, cobertura 95,41 / 90,03 / 92,98 / 96,39 %. Todas en verde, **ninguna saltada**: las dos que antes se omitían eran de la migración de datos 0014, retirada con la unificación.
+- **Sin pruebas desfasadas:** se buscaron en backend y frontend referencias a rutas retiradas, componentes eliminados y permisos o comportamientos cambiados durante la Fase B. Las coincidencias que quedan son de rutas vigentes (`ordenes-produccion/stock-quimicos/`).
+- **`docs/matriz_trazabilidad_pruebas.md` actualizada:**
+  - Cabecera con el estado actual.
+  - Filas corregidas: grupos de solo lectura, áreas acotadas por sede, movimientos sin COMPRA genérica, procesos por máquina también para el Jefe de Planta, techo RNF-03 de 35 consultas.
+  - Retiradas las filas de subprocesos y de la migración 0014, reemplazadas por la de migraciones unificadas.
+  - Corregido un archivo que no existía (`VersionesFormulaSheet` → `VersionesFormulaPanel`).
+  - Nueva sección «Fase B» con las 12 áreas cubiertas (backend) y 5 filas nuevas de frontend.
+  - Tabla de cobertura al día: seguía en 81,2 % / 379 pruebas y citaba `fail_under = 78`; ahora llega a 91,1 % / 1441 con `fail_under = 90`, más el estado del frontend.
+  - Todos los archivos citados existen, salvo los dos que la sección histórica documenta como retirados.
+- **Comandos sin pruebas** (`seed_data`, `stress_test_data`, `stress_ventas_data`): ejecutados sobre una base SQL Server nueva con las migraciones unificadas, tras `migrate`, `apply_sql_optimizations` y `seed_production_masters`. Los tres terminan sin errores.
+
+### 1 de Octubre de 2026 — Decisiones sobre los pendientes de la Fase B y migraciones unificadas
+
+Plan: `docs/superpowers/plans/2026-10-01-decisiones-fase-b-y-unificacion-migraciones.md`.
+
+#### Decisiones del usuario
+
+- **Venta de contado sin pago registrado: se permite.** Hay un día para pagar; el personal adelanta la facturación pero no entrega el producto hasta el pago, y eso es gestión interna. El comportamiento no cambia. Queda fijado con pruebas en `test_sales_views_extra.VentaDeContadoTestCase`: un cliente sobre su límite y con cartera vencida recibe el pedido de contado (201) y se le rechaza el pedido a crédito (400).
+- **El Administrador de Sede es un rol gerencial de monitoreo.** En transferencias interárea ahora puede **listarlas** (antes recibía 403) y ya **no puede crearlas** (antes sí). Permisos nuevos: `IsTransferenciaInterareaWriter` (Jefe de Planta y Admin de Sistemas) e `IsTransferenciaInterareaReader`. Dos pruebas nuevas, rojas antes del cambio.
+
+#### Migraciones unificadas
+
+- `gestion`: las 17 migraciones pasan a `0001_initial`, generada desde los modelos actuales. Se conserva `0002_fix_token_blacklist_mssql`: quita una restricción de `token_blacklist` en SQL Server antes de su `0008`, y también hace falta en una base nueva.
+- `inventory`: las 4 migraciones pasan a `0001_initial`.
+- Se descartan las migraciones de datos que solo transformaban datos ya existentes (precarga de empaque por sede, producto intermedio → colorante, fases → procesos de tintorería, enlace de compras con su lote de MP), junto con sus pruebas: `MigracionFasesAProcesosTestCase` y `EnlaceComprasExistentesTestCase`.
+- La corrección de datos de las transformaciones anteriores a B2 ya no hace falta: al rehacer la base, esos movimientos desaparecen.
+- Los scripts `database/V2…V6` no cambian: los aplica `apply_sql_optimizations` después de `migrate` y no dependen de los nombres de las migraciones.
+
+#### Procedimiento para el servidor de pruebas
+
+La base del servidor de pruebas tiene registradas las migraciones viejas en `django_migrations`, así que **hay que rehacerla**; no se puede migrar encima.
+
+1. Respaldar la base actual si hay algo que conservar (los datos de prueba se pierden).
+2. Detener el backend y eliminar la base (`DROP DATABASE <DB_NAME>`) o crear una nueva con otro nombre.
+3. Crear la base vacía: `python scripts/create_db.py`.
+4. Levantar el backend: el `entrypoint.sh` corre `migrate` (las migraciones unificadas) y `apply_sql_optimizations`.
+5. Sembrar los maestros: `python manage.py seed_production_masters` (grupos, permisos y el usuario `admin`). Después, el Administrador de Sistemas crea sedes y áreas reales; para datos de demostración, `seed_data`.
+
+#### Verificación
+
+- Backend en SQL Server 2022 con base nueva (contenedor de pruebas recreado, sin `KEEP_DB`): **1441 tests OK** (117 s), cobertura **91,1 %**. Orden aplicado: `gestion.0001` → `token_blacklist` 0001–0007 → `gestion.0002_fix_token_blacklist_mssql` → `inventory.0001`.
+- **Arranque real reproducido en SQL Server** (misma imagen y red de pruebas, base desechable): `create_db.py` → `migrate` → `apply_sql_optimizations`. Los cuatro scripts V2, V4, V5 y V6 se aplicaron sin errores, y una segunda pasada confirmó que son idempotentes. Siguen `migrate --check` sin pendientes y `seed_production_masters` (11 roles y el usuario `admin`). Los scripts V2–V6 tienen el nombre de la base fijo (`USE [texcore_db]`), algo que ya era así: el servidor debe usar `DB_NAME=texcore_db`.
+- Frontend: `tsc` limpio; **1820/1820** (125 archivos); cobertura 95,41 / 90,03 / 92,98 / 96,39 %.
+- `makemigrations --check`: sin cambios; `flake8` del CI: 0.
+
+#### Decisión posterior
+
+- Ante la pregunta de pasar al Administrador de Sede a solo lectura en todo el sistema, el usuario decidió **dejarlo como está**: conserva sus permisos de escritura en órdenes, lotes, ventas, catálogo, inventario, despacho y MRP. Solo cambia lo de transferencias interárea (puede listarlas, no crearlas).
+
+### 1 de Octubre de 2026 — Fase B, pasos B5 y B6: indicadores y cierre — 0 rutas sin consumidor
+
+**Resumen:** con B5 (indicadores) y B6 (detalle REST sin uso) se cierra la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7). **`scripts/auditar_rutas_frontend.py` devuelve 0**: toda ruta `api/` del backend tiene su llamada en el frontend o fue retirada. La Fase B empezó con 43 rutas sin consumidor.
+
+#### Seguridad (OWASP A01)
+
+- **Áreas:** `AreaViewSet` no filtraba por sede. Cualquier usuario autenticado pedía el `reporte-eficiencia` de un área de **otra sede**, con nombres y productividad de sus operarios, y el listado de áreas traía todas las sedes. Ahora el listado y el detalle se acotan con `filtrar_por_sede`. El reporte queda para Jefe de Área (solo su área), Jefe de Planta y admins (nuevo permiso `IsSupervisorProduccion`).
+- **Desempeño del operario:** cualquier usuario de la sede (un vendedor u otro operario) veía los lotes y la productividad de cualquier compañero. Ahora, por decisión del usuario, lo ven el propio operario (solo el suyo), su Jefe de Área (los de su área) y el Jefe de Planta y los admins (su sede).
+
+#### Integración (B5)
+
+- **Jefe de Área:** «Eficiencia del día» con producción y eficiencia por máquina y productividad por operario. Al elegir un operario se abre su desempeño: producción de hoy y últimos lotes.
+- **Ejecutivo:** filtro «Vendedor» en la pestaña Ventas (`users/vendedores/`), que vuelve a pedir los pedidos con `vendedor_id`. Se muestra solo a quien puede listar vendedores (ejecutivo y admin de sistemas); el admin de sede, que usa el mismo panel, no lo ve.
+- Repository `lib/api/indicadoresApi.ts` y tipos `types/indicadores.ts`.
+
+#### Retiro (B6)
+
+- Sin `retrieve` (ninguna pantalla, microservicio, script ni prueba de carga lo usaba): `inventory/stock/`, `inventory/audit-logs/`, `procesos-tintoreria/` y `operaciones-produccion/`. Sus listados siguen disponibles.
+
+#### Pruebas
+
+- Backend:
+  - `gestion/tests/test_alcance_indicadores.py` (11; 7 rojas antes de implementar, mientras que las otras 4 documentan reglas que ya se cumplían) y un caso de B6 en `test_rutas_retiradas_y_alcance_catalogo.py` (rojo antes de implementar).
+  - Actualizadas: `test_catalog_views.py` verificaba que un usuario de una sede listara las áreas de **otra**; ahora verifica lo contrario.
+  - La prueba de rendimiento RNF-03 del panel del Jefe de Planta sube su techo de 34 a 35 consultas. La consulta extra es el chequeo de rol del aislamiento por sede en `/api/areas/`, documentado en el desglose de la prueba, y no depende del número de filas.
+- Frontend: `indicadoresApi.test.ts`, `ReporteEficienciaArea.test.tsx` y casos nuevos en `JefeAreaDashboard` y `EjecutivosDashboard` (filtro por vendedor; sin filtro si la lista de vendedores falla).
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1440 tests OK** (125 s), cobertura **91,1 %**; incluye las pruebas de rendimiento RNF-03.
+- Frontend: `tsc` limpio; **1820/1820** (125 archivos); cobertura 95,41 / 90,03 / 92,98 / 96,39 %.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; **auditoría de rutas: 0**.
+
+#### Pendiente
+
+- **Fase B cerrada.** Quedan sin cambiar las decisiones de producto anotadas en el plan:
+  - la venta de contado sin pago registrado;
+  - `admin_sede` y las transferencias interárea;
+  - la corrección de datos de las transformaciones anteriores a B2, que siguen distorsionando el kárdex.
+- Propuesta: agregar `scripts/auditar_rutas_frontend.py` al CI para que una ruta nueva sin consumidor rompa el build.
+
+### 1 de Octubre de 2026 — Fase B, paso B4: producción — lotes, transformaciones, consumos y costo
+
+**Resumen:** B4 integra en la ficha de lote los consumos de la mezcla y el costo F0-002, y en la trazabilidad de la orden todos los registros de transformación. Rutas sin consumidor: **11 → 7**. La verificación destapó huecos en lotes, órdenes y mezcla.
+
+#### Seguridad (OWASP A01)
+
+- **Lotes:** toda acción no listada en `get_permissions` solo exigía autenticación para operario, empaquetado, jefes y admins.
+  - `rechazar` (borra el lote y revierte su stock) y `PATCH` (cambia el peso y ajusta stock) se hacían sobre **cualquier lote de la sede**. Ahora los hacen el operario sobre los lotes que registró, el Jefe de Área, el Jefe de Planta y los admins; el empaquetado ya no.
+  - El `DELETE` genérico **borraba el lote sin revertir su stock** (una prueba lo vio responder 204). Se retira: el camino es `rechazar`.
+  - `obtener-costo` exponía costos de materia prima y químicos al operario y al empaquetado, y no a los roles que ven costos de MP. Pasa a `IsTrazabilidadCostosRole` (bodeguero, jefe de planta, ejecutivo, admins).
+- **Órdenes de otra sede:** `transformaciones`, `trazabilidad` y `registrar-transformacion` cargaban la orden sin acotar por sede, y `_puede_operar_area` dejaba pasar a Jefe de Planta y Admin de Sede de cualquier sede. Ahora la orden se busca con `filtrar_por_sede` (otra sede → 404) y se mantiene el control de área.
+- **`consumo-lote-detalle/`** no filtraba por sede: cualquier rol listaba los consumos de todas las sedes. Ahora se acota con `filtrar_lotes_por_sede` y queda solo en `list`.
+- **`componentes-mezcla/`** copiaba la regla de sede a mano: un usuario sin sede veía los componentes de todas las sedes, y las escrituras aceptaban orden, bodega o producto de otra sede. Pasa a `filtrar_por_sede`, con validación al escribir.
+
+#### Integración
+
+- Ficha de lote (registro de pestañas D6):
+  - «Consumos»: lotes de origen consumidos en la mezcla;
+  - «Costo»: desglose F0-002 de materia prima, químicos, operario y máquina, con el total y el margen, para los roles de costos.
+- `TrazabilidadProducto`: «Ver todos los registros» (carga a pedido) muestra todas las transformaciones de la orden, también las rechazadas, que la trazabilidad no incluye.
+- Repositories: `lotesApi.consumos` / `costo` y `ordenesApi.transformaciones`.
+
+#### Pruebas
+
+- Backend: `gestion/tests/test_alcance_lotes_y_transformaciones.py` (14: 13 rojas antes de implementar; el alta de un componente con datos de su sede ya funcionaba). Actualizadas por el cambio de contrato:
+  - las pruebas «jefe de otra área» que usaban un usuario de **otra sede** pasan a esperar 404 (`test_transformacion_api.py`);
+  - las de `test_production_views_extra.py` usan un usuario de la **misma sede y otra área**, y siguen cubriendo el 403 del control de área;
+  - el usuario de la prueba de consumos toma la sede del lote.
+- Frontend: casos nuevos en `lotesApi`, `ordenesApi`, `FichaLoteDialog` (pestañas por rol, Consumos y Costo) y `TrazabilidadProducto`; pruebas nuevas `RegistrosTransformacion.test.tsx` y `PanelesConsumoCosto.test.tsx` (estados vacío y de error, y costo sin margen).
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1428 tests OK** (121 s), cobertura **91,0 %**.
+- Frontend: `tsc` limpio; **1811/1811** (123 archivos); cobertura 95,43 / 90,07 / 93,01 / 96,4 %. Branches había bajado a 89,99 % (el umbral del CI es 89); con dos casos más de `PanelCosto` e `inventarioApi` vuelve sobre 90.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 7.
+
+#### Pendiente
+
+- **Fase B, B5–B6** (7 rutas): reporte de eficiencia del área, desempeño del operario y lista de vendedores; retiro de los `retrieve` sin uso (stock, auditoría, procesos de tintorería, operaciones).
+
+### 1 de Octubre de 2026 — Fase B, paso B3: tintorería, órdenes y catálogo de procesos
+
+**Resumen:** B3 integra la dosificación (de fórmula y de orden), las fórmulas derivadas, la receta de cada versión, los procesos de tintorería por máquina y el catálogo de procesos de producción. Rutas sin consumidor: **19 → 11**; incluye `completar_detalles`, que el plan tenía en B4. Al verificar las rutas de órdenes apareció un hueco grave en su edición.
+
+#### Seguridad (OWASP A01, CWE-209)
+
+- **Edición de órdenes abierta a cualquier rol:** `PATCH /ordenes-produccion/{id}/` solo exigía autenticación. Un vendedor, despacho, operario o empaquetado de la sede cambiaba peso, fórmula o bodega de químicos de una orden, y eso **dispara descargas de químicos del stock**. Ahora `update`/`partial_update` exigen `IsJefePlantaOrAdmin`.
+- **`completar_detalles`** (la acción del Jefe de Área):
+  - asignaba los ids del payload sin validar: máquina, operario, bodegas, productos o fórmula de otra sede;
+  - un Jefe de Área sin área se saltaba el control de área;
+  - un id no numérico terminaba en un 400 con el texto de la excepción, y la operación no era atómica.
+  - Ahora: serializer de entrada (`CompletarDetallesOrdenSerializer`); la máquina debe ser del área de la orden y el resto de referencias, de su sede (productos y fórmulas también pueden ser globales); todo va en una transacción, y un error interno devuelve un 500 genérico.
+  - `iniciar: true` pasa la orden a `en_proceso` con la misma validación de transición de `cambiar_estado`.
+
+#### Integración
+
+- **Jefe de Área:** la asignación de máquina y operario usa `completar_detalles` con `iniciar` (antes, un `PATCH` genérico con `estado`).
+- **Jefe de Planta (`OrdenDetalleSheet`):** `DosificacionOrdenPanel` muestra la vista previa de químicos con los litros de baño propuestos (`calcular-dosificacion`, sin guardar nada) y los procesos de tintorería de la máquina asignada (`maquinas/{id}/procesos/`). Ambas acciones admiten al Jefe de Planta con el nuevo permiso de lectura `IsDosificacionRole`.
+- **Tintorero (`FormulaDetalle`):**
+  - pestaña «Dosificación» sobre la fórmula guardada, calculada en el servidor. La calculadora en vivo de `FormulaQuimica` sigue, porque calcula la receta que se está editando, aún sin guardar;
+  - pestaña «Derivadas» con las fórmulas nacidas de esta;
+  - «Ver receta» de cada versión, que muestra la receta congelada.
+- **Catálogo de procesos de producción** (`process-steps/`):
+  - pantalla «Procesos» en Gestión de Administración de Sistemas: alta, edición y baja; un proceso en uso no se elimina (409);
+  - selector opcional «Proceso» al registrar una operación MES (el backend ya aceptaba `proceso_id`).
+- Repositories nuevos: `ordenesApi`, `formulasApi` y `procesosApi`. Componente compartido `TablaInsumosDosificacion` (dosificación de fórmula y de orden).
+
+#### Pruebas
+
+- Backend: `gestion/tests/test_ordenes_edicion_y_asignacion.py` (12, todas rojas antes de implementar), `test_catalogo_procesos.py` (6) y un caso de `proceso_id` en `test_produccion_continua.py`. Estos dos últimos pasaron a la primera: documentan el contrato de rutas que el backend ya cumplía y que ahora tienen consumidor. `tests_integrados.test_flujo_completo_produccion` migra la asignación del Jefe de Área a `completar_detalles`.
+- Frontend: `ordenesApi`, `formulasApi` y `procesosApi`, `DosificacionOrdenPanel`, `DosificacionFormulaPanel`, `DerivadasFormula`, `RecetaVersionDialog` y `ManageProcesos`. Casos nuevos en `JefeAreaDashboard`, `FormulaDetalle`, `VersionesFormulaPanel`, `AdminSistemasDashboard` y `CorridaContinuaDashboard`.
+- En Vitest 4.1, `mockRejectedValue(new Error(...))` tras `mockReset()` se reporta como fallo aunque el componente atrape la promesa. Las pruebas de error usan `mockRejectedValueOnce`, como el resto del repo.
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1414 tests OK** (122 s), cobertura **91,0 %**.
+- Frontend: `tsc` limpio; **1796/1796** (121 archivos); cobertura 95,41 / 90,06 / 92,97 / 96,38 % (statements / branches / functions / lines). Branches queda justo sobre el umbral de 90.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 11.
+
+#### Pendiente
+
+- **Fase B, B4–B6** (11 rutas): transformaciones de la orden, consumo y costo del lote, indicadores, y retiro de los `retrieve` que sigan sin uso.
+
+### 1 de Octubre de 2026 — Fase B, paso B2: bodega — recepción F0-001 única, alcance de las escrituras de stock y stock a fecha de corte
+
+**Resumen:** B2 integra en el frontend la materia prima (recepción y lotes) y el stock a fecha de corte. Rutas sin consumidor: **23 → 19**. Por decisión del usuario, la recepción se unifica en F0-001. La pestaña «Entrada» registraba las compras como un `COMPRA` genérico, sin lote de MP, costo ni lote del proveedor, y por eso quedaban fuera de la trazabilidad materia prima → lote producido. Al verificar las rutas aparecieron huecos en **todas** las escrituras de stock de `inventory`.
+
+#### Seguridad e integridad (OWASP A01, CWE-209)
+
+- **Escrituras de stock sin alcance de bodega:**
+  - `POST /inventory/movimientos/` sumaba o descontaba stock en cualquier bodega de cualquier sede.
+  - `POST /inventory/transferencias/` sacaba stock de bodegas de otra sede.
+  - `POST /inventory/transformaciones/` solo exigía **autenticación**: cualquier rol, vendedor incluido, consumía stock de cualquier bodega.
+  - Nuevo helper único `validar_bodega_operable` / `validar_traslado` (`inventory/permissions.py`): la bodega donde sale o entra el stock está en `bodegas_visibles`, y el destino de un traslado es de la sede del origen. Las transformaciones pasan a `IsInventoryWriterOrAdmin`. Editar o borrar un movimiento también exige operar su bodega.
+- **Lotes ajenos:** con `lote_codigo` (movimientos) o `nuevo_lote_codigo` (transformaciones) se hacía `get_or_create` de un `LoteProduccion`. Una compra creaba un «lote de producción» falso o se enganchaba a uno existente con el mismo código, aunque fuera de otra sede. Se retira la creación en movimientos (su único consumidor era la «Entrada» reemplazada); en transformaciones, un código existente debe ser de la sede del usuario. El `lote` por id se acota con `filtrar_lotes_por_sede`.
+- **Materia prima:** `admin_sede` veía los lotes de todas las sedes, y el `create`/`update`/`destroy` genérico esquivaba `MateriaPrimaService` (stock + COMPRA). Ahora `materia-prima/` queda en `list` + `registrar-entrada`, y la recepción valida la bodega (operable) y el producto y el proveedor (globales o de la sede de la bodega).
+- **CWE-209:** tres respuestas 500 devolvían el texto de la excepción: crear y borrar movimiento, transferencia y transformación. Ahora el mensaje es genérico y el detalle queda en el log.
+
+#### Recepción F0-001 como única vía de compra
+
+- `POST /inventory/movimientos/` con `COMPRA` → 400, con aviso de usar `materia-prima/registrar-entrada/`.
+- Nuevo FK `MovimientoInventario.materia_prima_lote` (migración `inventory/0004`). La migración de datos enlaza las COMPRA existentes con su lote por `documento_ref = 'MP-<lote>'`.
+  - Editar la COMPRA ajusta `cantidad_kg` del lote; no puede quedar por debajo de lo consumido, y el lote se marca agotado si se iguala.
+  - Borrarla elimina el lote solo si no tiene consumos (`MateriaPrimaService.ajustar_cantidad_recibida` / `anular_recepcion`; guarda en `MovimientoReversionService`).
+- País y calidad viajan al movimiento COMPRA.
+
+#### Stock a fecha de corte (`retro-kardex/`)
+
+- Lógica en `kardex_service.stock_a_fecha`: agregación en SQL (tres consultas, sin importar cuántos movimientos haya) en lugar de recorrer en Python todos los movimientos del producto.
+- Corrige:
+  - el saldo de la bodega ajena en una transferencia, que aparecía;
+  - la fecha de corte, que excluía ese mismo día (`fecha__lte` contra las 00:00). Ahora una fecha corta al final de ese día local y una fecha con hora, en ese instante;
+  - la agrupación por **nombre** de bodega, que se repite entre sedes. Cada fila trae `bodega_id`, `bodega` y `sede`;
+  - el producto no acotado a la sede.
+- **Entradas fantasma en el kárdex:** las transformaciones guardaban el CONSUMO con una `bodega_destino` «informativa» y la PRODUCCION con una `bodega_origen` «informativa». El kárdex las leía como entrada y salida reales. Ya no se guardan; los movimientos de transformación anteriores conservan el defecto en el kárdex.
+
+#### Frontend
+
+- Repository `lib/api/inventarioApi.ts` (listar MP, recepción multipart con certificado, stock a fecha) y tipos `types/inventario.ts`.
+- Pestaña «Recepción» (antes «Entrada») con el formulario F0-001: proveedor, lote del proveedor, costo, fecha, n.º de documento, certificado, país y calidad. Pestaña nueva «Materia prima» con los lotes recibidos (recibido, disponible o consumido, costo, certificado; filtros por proveedor y «solo disponibles»), paginada por bloques con `usePaginacionIncremental` (el backend acepta `page_size` con `PaginacionAcotada`). «Stock a fecha de corte» dentro de la pestaña Kárdex.
+- Código muerto retirado: `components/operario/InventoryForm.tsx` e `InventoryHistory.tsx` y sus pruebas (ningún componente los importaba).
+
+#### Pruebas
+
+- Nuevas: `inventory/tests/test_alcance_escrituras_inventario.py` (17), `gestion/tests/test_recepcion_materia_prima_alcance.py` (17), `inventory/tests/test_stock_a_fecha.py` (8); frontend `inventarioApi.test.ts` (5), `RegistrarEntradaView.test.tsx` (3), `MateriaPrimaView.test.tsx` (4) y `StockAFechaView.test.tsx` (4). Las pruebas nuevas se vieron rojas antes de implementar.
+  - Dos casos que el plan daba por rotos ya funcionaban: una recepción duplicada y una fecha inválida respondían 400. Se corrigió el plan.
+  - `StockAFechaView` se escribió junto con su prueba, sin corrida roja previa.
+- Actualizadas por el cambio de contrato: los movimientos `COMPRA` de prueba pasan a `AJUSTE` o a la recepción F0-001; los bodegueros de prueba reciben sus bodegas asignadas; las pruebas de transformación usan un bodeguero con productos y bodegas de su sede, y la de error interno verifica que no se filtra el detalle; las de `InventoryDashboard` reemplazan el formulario «Entrada» por la recepción F0-001 y las pestañas nuevas.
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1395 tests OK** (125 s), cobertura **90,9 %**; la migración `inventory/0004` se aplica sin errores.
+- Frontend: `tsc` limpio; **1764/1764** (113 archivos); cobertura 95,49 / 90,44 / 93,11 / 96,43 % (statements / branches / functions / lines).
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 19.
+
+#### Pendiente
+
+- **Fase B, B3–B6** (19 rutas).
+- **Datos existentes:** los movimientos de transformaciones anteriores conservan las bodegas «informativas» y siguen distorsionando el kárdex de esas bodegas. Corregirlos es una migración de datos sobre producción y queda a decisión del usuario.
+
+### 1 de Octubre de 2026 — Fase B, paso B1: retiro de rutas sin consumidor y alcance de sede en escrituras
+
+**Resumen del día:** se inicia la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7) con el plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. B1 retira las rutas muertas y, al verificarlas, cierra huecos de control de acceso e integridad que la auditoría del 29-sep no había visto. Las rutas del backend sin llamada en el frontend bajan de **43 a 23**; las restantes son pantallas por construir (B2–B5).
+
+#### Auditoría reproducible
+
+- Nuevo `scripts/auditar_rutas_frontend.py`: cruza las rutas `api/` de Django con `frontend/src` y sale con código 1 si alguna no tiene consumidor. Reconoce URLs con la acción interpolada (`/maquinas/${m.id}/${accion}/`), que el cruce del 29-sep no veía: `maquinas/{id}/oee/` sí tenía consumidor. Detectó además tres rutas que el spec no listaba (detalle de `pedidos-venta/`, de `pagos-cliente/` y `versiones/{n}/`).
+
+#### Rutas retiradas (vista + router + serializer huérfano; los modelos se conservan)
+
+- `quimicos/` (alias de `chemicals/`), `detalle-formulas/` (las fases se escriben anidadas en la fórmula; la ruta esquivaba el versionado y no filtraba por sede), `detalles-pedido/`, `area-process-steps/` y `ordenes-produccion-subprocesos/` con sus 4 acciones (flujo anterior a MES; `jefe_planta` veía todas las sedes).
+- Solo lectura o solo alta: `groups/` (solo `list`), `paros-maquina/` y `transferencias-interarea/` (`list` + `create`: son registros históricos del OEE y de la cadena de trazabilidad), `pedidos-venta/` y `pagos-cliente/` (`list` + `create` + acciones de negocio), `requerimientos-material/` (`list`) y `sugerencias-compra/` (`list` + `ejecutar-mrp`).
+
+#### Seguridad e integridad (OWASP A01)
+
+- **Ventas:** `PATCH /pedidos-venta/{id}/` aceptaba `estado`, `esta_pagado`, `guia_remision` y `fecha_despacho` (un vendedor marcaba un pedido como despachado o pagado sin despacho ni conciliación) y `DELETE` lo borraba; ambos esquivaban `modificar`/`anular`. `PUT/PATCH /pagos-cliente/{id}/` cambiaba el monto sin conciliar.
+- **Detalles de pedido sin validar en el flujo real:** la regla «precio ≥ costo base» solo existía en `detalles-pedido/`, que el frontend no usa. `POST /pedidos-venta/` con detalles anidados los guardaba sin validar (precio bajo el costo, peso negativo, producto de otra sede). Ahora `DetallePedidoEntradaSerializer` valida cada detalle antes de crear el pedido, y el límite de crédito se calcula sobre los valores validados.
+- **Configuración de planta:** etapas y transferencias devolvían todas las sedes a `jefe_planta` (y las transferencias, a `admin_sede`). Etapas, transferencias, máquinas, líneas y paros aceptaban área, máquina, órdenes, bodegas u operarios de otra sede. Nuevos helpers únicos en `gestion/permissions.py`: `validar_visible` (movido desde `sales_views`), `validar_misma_sede` y `areas_gestionables`.
+- **MRP:** cualquier rol autenticado editaba o borraba sugerencias de compra y disparaba `ejecutar-mrp` (recalcula todas las sedes). Nuevo permiso `IsMRPRole` (bodeguero, ejecutivo, admin_sistemas, admin_sede); el ejecutivo ahora ve todas las sedes.
+- **Copias sueltas de la regla de sede** (usuarios, máquinas, paros, líneas, MRP, catálogo): filtraban `sede=user.sede`, de modo que un usuario sin sede veía los registros sin sede y, en el catálogo, **modificaba los productos globales**. Pasan a `filtrar_por_sede` y al nuevo `filtrar_catalogo_por_sede` (lectura: globales + su sede).
+
+#### Pruebas
+
+- Nuevas: `gestion/tests/test_alcance_sede_configuracion_planta.py` (27) y `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` (5); casos nuevos en `test_sales_views_extra.py`, `test_control_acceso_sede.py`, `tests_integrados.py` e `inventory/tests/test_views_extra.py`. **Todas las pruebas nuevas se verificaron rojas contra `HEAD`** (worktree temporal) y verdes con el cambio.
+- Actualizadas por el cambio de contrato: se eliminan las de las rutas retiradas (subprocesos, `area-process-steps`, `detalle-formulas`, `detalles-pedido`); las de `destroy` de pagos pasan a `revertir` (mismas ramas de error); anticipos, anulación y `precio_base` usan el flujo real (pedido con detalles anidados y listado); las de grupos verifican que la escritura ya no existe. `test_permisos_por_defecto.py` conserva sus 10 pruebas. Los fixtures de etapas y transferencias creaban cada objeto en una sede distinta; ahora comparten sede.
+
+#### Verificación
+
+- Backend en SQLite local (`manage.py test gestion inventory internal_api --settings=TexCore.settings_test_local`): **1352 tests OK**.
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1352 tests OK** (125 s), cobertura **90,8 %** (umbral 90).
+- Frontend: `tsc` limpio; `npm test` **1763/1763** (111 archivos). B1 no toca el frontend; se comprobó que ninguna pantalla usa los métodos retirados (`EditarPedidoModal` usa `modificar`; los formularios de máquina envían `area`).
+- `flake8` con la configuración del CI: 0.
+
+#### Pendiente
+
+- **Fase B, pasos B2–B6** (23 rutas): materia prima y kárdex a fecha de corte; fórmulas derivadas, dosificación y catálogo de procesos; transformaciones, consumo y costo del lote; indicadores; retiro de los `retrieve` que sigan sin uso.
+- **Decisiones de producto (no se cambiaron):**
+  - Una venta de contado (`esta_pagado: true` al crear) omite el límite de crédito y el bloqueo por cartera vencida sin que exista un pago registrado.
+  - `admin_sede` puede crear transferencias interárea pero no listarlas.
+- Nada de lo de hoy está commiteado (el usuario hace los commits).
+
 ## Septiembre 2026
+
+### 30 de Septiembre de 2026 — Correcciones de la auditoría de tesis: permiso por defecto (C-1), 503 sin broker (C-2) y puertos de desarrollo (M-4)
+
+**Resumen del día:** se cierran tres hallazgos de `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md` (C-1, C-2 y M-4); el informe queda como evidencia histórica, con la marca de resuelto bajo cada uno.
+
+#### Seguridad (C-1)
+
+- `TexCore/settings.py`: `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`, de modo que toda vista sin `permission_classes` explícito exige autenticación.
+- `GroupViewSet` (`gestion/views/core_views.py`) pasa a `permission_classes=[IsSystemAdmin]`; `/api/groups/` ya no es público.
+- `gestion/custom_jwt_views.py`: login y refresh declaran `AllowAny` explícito por claridad y defensa en profundidad; `TokenViewBase` de simplejwt ya define `permission_classes = ()`, así que el permiso por defecto nunca los habría bloqueado.
+- Pruebas: 9 en `gestion/tests/test_permisos_por_defecto.py` (6 de grupos y 3 de configuración) y 4 en `gestion/tests/test_core_views.py` (`AccesoPublicoYAdminTrasPermisoPorDefectoTestCase`: health anónimo 200, login anónimo 200, refresh anónimo solo con la cookie de refresh 200, `admin_sistemas` lista grupos 200).
+- El recorrido de rutas de `test_permisos_por_defecto.py` reconoce las vistas `@api_view` porque su `__qualname__` termina en `'WrappedAPIView'` (`.endswith('WrappedAPIView')`), ya que DRF reasigna `__module__` al de la función y siempre escribe `permission_classes` en la clase generada. Antes una vista `@api_view` sin `@permission_classes` pasaba como si declarara permisos.
+
+#### Robustez (C-2)
+
+- Nuevo setting `REPORTES_ASYNC_HABILITADO` (`TexCore/settings.py`, variable de entorno, `false` por defecto). Con el broker caído, `.delay()` tarda 20-70 s en fallar (reintentos de kombu y del result backend Redis) y bloquea un worker síncrono de gunicorn; producción no despliega Redis y corre 3 workers. Con el flag apagado, `inventory/reporting_proxy.py` responde a `?async=true` con 503 al instante, sin encolar.
+- Segunda defensa: con el flag activo y el broker caído (`kombu.exceptions.OperationalError`) responde el mismo 503, no 500.
+- `infrastructure/docker/docker-compose.yml` (que sí levanta Redis y `celery_worker`) fija `REPORTES_ASYNC_HABILITADO=true` en el backend; `.env.example` y `.env.prod.example` la documentan en `false`.
+- Pruebas en `inventory/tests/test_reporting_proxy_extra.py`: `test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle` y `test_get_dado_async_deshabilitado_cuando_get_async_entonces_503_inmediato_sin_encolar` (verifica que `delay` no se llama); la prueba 202 existente corre con el flag activo.
+
+#### Infraestructura (M-4)
+
+- `infrastructure/docker/docker-compose.yml`: los puertos 1433 (db) y 6379 (redis) de desarrollo quedan ligados a `127.0.0.1`. `docker-compose.prod.yml` ya no publicaba 1433 (`expose`).
+- `docker/docker-compose.windows.yml` (el compose de uso local): 1433 pasa a `"127.0.0.1:1433:1433"`. M-4 queda cerrado en ambos composes de desarrollo.
+
+#### Verificación
+
+- Suite completa del backend (2026-09-30, `DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python -m pytest gestion inventory internal_api -p no:cacheprovider --no-cov --no-migrations -q -W ignore`): **1329 passed, 2 skipped, 46 subtests passed, 0 failed** (146 s). Antes (HEAD `7217448`): 1314 passed, 2 skipped; se suman 13 pruebas de C-1 (9 en `test_permisos_por_defecto.py` y 4 en `test_core_views.py`) y 2 de C-2 (`test_reporting_proxy_extra.py`), 15 en total.
+- Corrida en SQLite local (`settings_test_local`), no en SQL Server ni en el CI.
+- Proceso: las tareas 1 a 3 del plan `docs/superpowers/plans/2026-09-30-correcciones-auditoria-tesis.md` se ejecutaron en paralelo. Cada una pasó por una revisión propia y hubo una revisión final de todo el diff. La revisión final motivó el flag `REPORTES_ASYNC_HABILITADO`, el cierre de M-4 en `docker-compose.windows.yml`, la detección de `@api_view` y la prueba de refresh.
+- `inventory/tests/test_views_endpoints.py`: los comentarios de las pruebas 401 de transferencia y kárdex decían que DRF caía en `AllowAny`. Ahora explican que cada vista declara su propio permiso (`IsInventoryWriterOrAdmin` / `IsInventoryStaffOrAdmin`) y que ese permiso rechaza al anónimo.
+
+#### Cobertura (diagnóstico, sin cambios de código)
+
+- El «58 %» de `docs/matriz_trazabilidad_pruebas.md` (tabla «Estado de cobertura») es la **línea base histórica** de la primera corrida contra SQL Server (220/243, 14 rojos), no el estado actual. La tabla quedó desactualizada: se detiene en 81,2 % y cita `fail_under = 78`, mientras que `.coveragerc` exige 90.
+- Medición actual en SQLite local (`coverage run --rcfile=.coveragerc`, datos fuera del repo para no tocar el `.coverage` versionado): **90,7 %**, con 9218 sentencias, 611 sin cubrir y 1329 pruebas.
+- El último `.coverage` versionado (Docker contra SQL Server, 29-sep) da **89,6 %**, por debajo del umbral. SQL Server mide alrededor de 1 punto menos que SQLite, así que el margen es mínimo. Además, el paso de cobertura del CI tiene `continue-on-error: true` (`.github/workflows/ci.yml:229`) y no bloquea.
+- Módulos con más líneas sin cubrir: `gestion/views/mes_views.py` (67,3 %, 83 líneas), `gestion/services/genealogia_service.py` (75,7 %), `inventory/services/reposicion_service.py` (78,4 %), `inventory/services/reserva_service.py` (80,1 %) y `gestion/services/registro_lote.py` (80,6 %). Les siguen `mrp_engine.py`, `internal_api/views/reporting_views.py`, `internal_api/services/reporting_data.py` y `ejecucion_produccion.py` (81-82 %).
+- Pendiente de decisión: meta de cobertura con margen sobre SQL Server, hacer bloqueante el paso del CI y actualizar la tabla de la matriz.
+
+### 29 de Septiembre de 2026 — Carga emulando producción, control de acceso (OWASP A01), paginación de lotes y ficha de lote (commiteado en `7217448`)
+
+**Resumen del día:** tras bajar `MES` (commits `cab00fb`, `8594f97`), se corrió todo en Docker contra SQL Server 2022 y se emuló producción con 100 usuarios concurrentes. En orden:
+
+1. Los errores de la carga venían de las herramientas de prueba.
+2. Al rastrear sus dependencias con `graphify` apareció un patrón de control de acceso roto, que se auditó y cerró en todo el backend (§3).
+3. Las mediciones siguientes destaparon un deadlock en despacho (§4) y un listado de lotes sin paginar como único cuello de botella (§6).
+4. Por pedido del usuario se diseñó con la metodología superpowers (spec + plan) y se implementó la Fase A: paginación incremental de lotes, ficha de lote con la genealogía integrada y una auditoría automática de rutas del backend sin pantalla en el frontend (§6).
+
+Al cierre del día: backend 1316 tests, frontend 1763 tests, flake8 0; carga de 100 usuarios con p99 de 140 ms y ningún error 500, 403 ni 404.
+
+#### 1. Verificación en Docker / SQL Server 2022
+
+- Las pruebas RNF-03 de ayer (`PanelJefePlantaRendimientoTest`, `KardexBodegaRendimientoTestCase`) solo se habían corrido en SQLite y fallaban en `setUpTestData` con SQL Server: `bulk_create()` no devuelve los pk en mssql-django y el siguiente `bulk_create` que los usaba como FK lanzaba `ValueError`. Corregido releyendo las órdenes / creando los proveedores uno a uno. Con esto queda validado en SQL Server el saldo corrido del kárdex (`SUM() OVER`) que ayer solo se probó en SQLite.
+- Migraciones `0014`–`0017` aplicadas sin error sobre SQL Server 2022 (pendiente de entorno del 24-sep).
+
+#### 2. Prueba de carga emulando producción (`docker-compose.prod.yml`, gunicorn, `DEBUG=0`)
+
+100 usuarios y los 11 roles reales, durante 6 minutos (unos 3,5 minutos efectivos tras la precarga de logins). La primera corrida dio mediana 19 ms y p95 58 ms, pero dos escrituras fallaban al 100 %, ambas por las herramientas de prueba. Las cifras finales del día están en §6 y en `scripts/loadtest/README.md`; los CSV de la corrida final, en `scripts/loadtest/resultados/`.
+
+- **Transferencias 403:** `locustfile.py` las hacía con `DespachoUser`, rol que nunca tuvo permiso (`IsInventoryWriterOrAdmin`; en la UI solo `TransferView.tsx`). Movida a `BodegueroUser`.
+- **Registro de lote 400:** `stress_test_data` creaba las OPs en proceso sin `operario_asignado` (el operario demo solo veía OP-SIM-003, sin materia prima). Ahora las asigna y repone la materia prima de entrada.
+- **Reversión de despacho 42% (encontrado al investigar):** re-sembrar borraba los `MovimientoInventario` VENTA pero dejaba el historial de despachos, que la reversión rechaza a propósito (fail-loud). La semilla ahora limpia también el historial.
+
+#### 3. Control de acceso (OWASP A01) — huecos cerrados
+
+La investigación destapó que `RegistrarLoteProduccionView` aceptaba a **cualquier usuario autenticado** sobre **cualquier orden** (verificado: un vendedor registró un lote y descontó materia prima). Se auditaron todas las vistas que obtienen objetos por id. Corregido:
+
+- **Regla única de sede** en `gestion/permissions.py` (`ve_todas_las_sedes`, `filtrar_por_sede`, `filtrar_lotes_por_sede`) y de bodega en `inventory/permissions.py` (`bodegas_visibles`), reemplazando las copias dispersas en órdenes, fórmulas, KPI, PDF, MES, ventas, stock, movimientos, bodegas, kárdex, escaneo y reportes. Corrige dos fallos sutiles de las copias: un usuario **sin sede** veía los registros sin sede (o, en MES, todas las sedes), y **`admin_sede` veía todas las sedes** en stock, alertas, bodegas, movimientos, kárdex, escaneo y reportes Excel.
+- **Registro de lote:** roles permitidos, orden de otra sede → 404, operario limitado a su área o a su orden asignada, máquina y operario acreditado de la sede de la orden (la máquina define las bodegas que se descuentan).
+- **MES:** corridas y operaciones exigían solo autenticación y ahora exigen rol de producción; planes, rol de Jefe de Planta/admin. `iniciar-corrida` valida sede, área, línea, máquina, orden, plan y pedido; `crear-desde-alertas` rechaza sede y supervisor ajenos; `generar-orden`, bodegas y máquina ajenas; `necesidades-reposicion` ya no acepta `?sede=` ajeno.
+- **Trazabilidad:** QR (`/trazabilidad-lote/`), genealogía MES y `/trazabilidad/lote-produccion/` acotadas por sede; esta última, que expone proveedores y costos, solo para bodeguero, jefe de planta, ejecutivo y admins.
+- **KPI de área:** el jefe de planta podía pedir áreas de otra sede.
+- **Kárdex por bodega** (nuevo ayer): no verificaba acceso a la bodega.
+- **Despacho:** pedidos y stock de cualquier sede; ahora solo pedidos de su sede y stock de bodegas visibles.
+- **Ventas:** pedidos, pagos y detalles de pedido sin filtro de sede (`/detalles-pedido/` era legible por cualquier rol); pedidos y pagos aceptaban clientes de otra sede o de otro vendedor y tomaban la sede del payload o del usuario. Ahora toman la sede de su cliente.
+- **CWE-209:** 10 respuestas 500 (MES, ventas, despacho, stock de químicos) devolvían el texto de la excepción; ahora mensaje genérico y detalle en el log. El registro de lote respondía 400 ante un error interno; ahora 500.
+- **Pruebas nuevas:** `gestion/tests/test_control_acceso_sede.py` e `inventory/tests/test_control_acceso_bodegas.py` (45 casos, EP por rol y por sede). Se ajustaron los tests que usaban usuarios sin rol o sin sede. El techo del kárdex pasa de 6 a 7 consultas por la autorización de bodega (constante); el panel de Jefe de Planta conserva 34 leyendo los grupos una sola vez.
+
+- **Listado de lotes** (`LoteProduccionViewSet`): no filtraba por sede (solo acotaba al jefe de área); ahora `filtrar_lotes_por_sede`, también en retrieve y acciones de detalle.
+
+#### 4. Concurrencia: deadlock en despacho (SQL Server 1205)
+
+Al re-medir con las correcciones apareció un 500 en `process-despacho`: SQL Server abortó la transacción como víctima de deadlock. Cada despacho bloqueaba el stock lote por lote en el orden de escaneo, y la reversión en el de sus detalles; dos transacciones con lotes compartidos en orden distinto se interbloqueaban.
+
+- El despacho bloquea todas sus filas de stock en una sola consulta ordenada por `(lote, id)`, con ids de lote y de bodega resueltos antes de la transacción. Dentro del `select_for_update`, la subconsulta de bodegas asignadas llevaba el p95 del despacho de 120 a 410 ms y el de la reversión a 2 s. La reversión recorre sus detalles en el mismo orden de lote.
+- Defensa en profundidad: despacho y reversión reejecutan la transacción si SQL Server la elige víctima (`inventory/utils.py`: `es_deadlock`, `INTENTOS_DEADLOCK`). Los dos endpoints de reversión comparten ahora `_revertir_y_borrar` (antes duplicaban la transacción).
+- Pruebas: `inventory/tests/test_deadlock_reintento.py` (reintenta ante 1205, no ante otros errores de BD, 500 al agotar intentos).
+- Corrida final: 0 errores 500, despacho p95 160 ms, reversión p95 190 ms.
+
+#### 5. Deuda técnica
+
+- `flake8` (configuración del CI, incluyendo `internal_api/`): 8 → **0** (3 de ayer que el changelog daba por 0, 3 líneas largas en `services_formula.py` resueltas con `_decimal_opcional`).
+- Eliminado `puede_ver_bodega` tras unificar su uso.
+
+#### 6. Fase A — paginación de lotes, ficha de lote y cobertura backend → frontend
+
+Spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md`, plan `docs/superpowers/plans/2026-09-29-paginacion-lotes-y-ficha-lote.md`. Pedido del usuario: páginas de 30, las 4 primeras de una vez y el resto a medida que se navega; integrar la genealogía; y que nada del backend quede sin su llamada en el frontend.
+
+- **Auditoría de rutas (automática, 191 rutas `api/`):** 45 rutas del backend no tenían llamada en el frontend. El cruce inverso (110 URLs del frontend) no encontró llamadas a rutas inexistentes. La Fase A integra 4 de esas rutas (genealogía del lote, cadena de materias primas, movimientos por lote y eficiencia de máquina); la clasificación del resto está en §7 del spec, **pendiente de aprobación**.
+- **Backend:**
+  - `LotesProduccionPagination` pasa a ser siempre activa (30 por página, máximo 120). Se retira el opt-in «por compatibilidad», que devolvía todo el historial.
+  - Nuevo `GET /lotes-produccion/resumen-hoy/`: bultos, peso y promedio del día con `timezone.localdate()`, en una sola consulta.
+  - Bug: `MovimientosPorLoteAPIView` daba 500 si un movimiento no tenía usuario, por la precedencia del `or`/`if`.
+- **Frontend (patrones):**
+  - Repository `lib/api/lotesApi.ts`.
+  - Hook genérico `usePaginacionIncremental` (Strategy de obtención; bloques de 4×30 en una petición; precarga del bloque siguiente al llegar a su última página; descarta respuestas tardías; `habilitado`; errores del servidor legibles).
+  - `useCargaRemota`.
+  - Componente compartido `TablaLotesPaginada`, extendido por composición (`accionesExtra`).
+  - Registro declarativo de pestañas en la ficha.
+- **Ficha de lote** (`components/lotes/FichaLoteDialog.tsx`), abierta desde todas las tablas de lotes. Pestañas: Resumen, Genealogía (el antiguo `GenealogiaLoteModal`, ahora panel), Movimientos y Materias primas y costos. Cada rol ve solo las pestañas que su endpoint permite, y cada panel carga sus datos al activarse.
+- **Pantallas:**
+  - Jefe de Área: tabla paginada; la carga por máquina ahora viene de `maquinas/{id}/eficiencia/`, que antes no tenía consumidor, y se elimina el cálculo del navegador con día UTC. El rechazo usa un diálogo con motivo y toasts, en lugar de `window.prompt`/`alert`: era deuda anotada en el código.
+  - Empaquetado: historial paginado y totales del día desde `resumen-hoy` (mismo bug UTC). `BuscadorLotes` pasa al hook, y se retira un `try/catch` alrededor de `useAuth` que solo existía para tests.
+  - Operario: pide una página de 10 en lugar de todo su historial.
+  - Admin de Sistemas: tabla paginada por sede; mostraba el id de la máquina en lugar del nombre.
+  - Bodeguero: el total sale del `count`; cargas opcionales en paralelo con `Promise.allSettled`.
+  - Se retira la prop muerta `lotesProduccion` de `InventoryDashboard`.
+- **Deuda cerrada de paso:**
+  - Los 18 bloques de paginación copiados a mano pasan a `ControlesPaginacion` (navegación numérica, bloqueo mientras carga, etiqueta del total).
+  - Imports sin uso en 19 componentes.
+  - Callbacks vacíos `handleReimpreso`.
+  - Semilla de estrés: la reposición de materia prima del operario va al final (el paso de alertas de stock bajo la vaciaba), y la numeración de pasos pasa a 1/9…9/9.
+  - Locustfile: pide los lotes igual que el frontend y genera códigos de lote únicos.
+- **Carga (100 usuarios):** `/lotes-produccion/` pasa de mediana 840 ms (p99 2.4 s) a **p95 170 ms**. Global: p99 140 ms, máximo 541 ms, 0 errores 500/403/404, registro de lote sin rechazos.
+
+**Verificación final (SQL Server 2022, `scripts/run_backend_tests.sh`):** backend **1316 tests OK**, cobertura **90.7 %**, `makemigrations --check` sin cambios, `manage.py check` limpio, `flake8` 0; frontend **1763/1763** (111 archivos), cobertura 95.37 / 90.50 / 92.68 / 96.36 % (statements / branches / functions / lines), `tsc` limpio; `scanning_service` 54, `reporting_excel` 77, `printing_service` 94.
+
+#### 7. Documentación actualizada
+
+- `docs/historias-usuarios/ROLES_Y_PERMISOS.md`: la regla de sedes y bodegas, quién registra lotes, los roles de MES y de la trazabilidad con costos, las reglas de ventas y la de errores internos (CWE-209).
+- `scripts/loadtest/README.md`: los fallos esperados; que un 403 indica un rol mal asignado en el script; resultados de referencia del 29-sep; se retira la referencia a CSVs del 22-sep que no existían.
+- `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` y `docs/superpowers/plans/2026-09-29-paginacion-lotes-y-ficha-lote.md` (plan completado, 15/15 pasos).
+- Grafo `graphify` regenerado (`graphify update .`).
+
+#### 8. Pendiente
+
+**Requiere aprobación del usuario — Fase B (§7 del spec):** quedan 41 de las 45 rutas del backend sin llamada en el frontend.
+- *Construir la pantalla* (funcionalidad de negocio):
+  - recepción y listado de materia prima (`materia-prima/`, `registrar-entrada/`);
+  - costo del lote (`obtener-costo/`);
+  - kárdex a fecha de corte (`retro-kardex/`);
+  - fórmulas derivadas y cálculo de dosificación de fórmula y de orden;
+  - procesos por máquina;
+  - transformaciones y `completar_detalles` de la orden;
+  - consumo por lote;
+  - reporte de eficiencia del área, desempeño del operario y lista de vendedores.
+- *Verificar y retirar del backend* (posible duplicado o código muerto):
+  - `quimicos/` (misma vista que `chemicals/`);
+  - `detalle-formulas/` y `detalles-pedido/` (ya se escriben anidados);
+  - `process-steps/`, `area-process-steps/` y `ordenes-produccion-subprocesos/` (flujo anterior a MES);
+  - escritura en `groups/`;
+  - edición y borrado de `paros-maquina/` y `transferencias-interarea/`.
+- *Detalle REST sin consumidor* (`retrieve` de stock, auditoría, requerimientos de material, procesos de tintorería, operaciones y consumo por lote): retirar el método si ninguna pantalla lo va a usar.
+
+**A validar con usuarios reales (cambios de comportamiento de hoy):**
+- El **Administrador de Sede** ya no ve datos de otras sedes: stock, bodegas, movimientos, pedidos, pagos ni reportes Excel.
+- El **Vendedor** solo puede crear pedidos y pagos de los clientes que tiene asignados.
+- El **Operario** registra lotes solo en su área o en la orden que tiene asignada.
+- La trazabilidad con costos de materia prima solo la ven bodeguero, jefe de planta, ejecutivo y admins.
+
+**Entorno y datos de prueba:**
+- Cada vez que se vuelve a correr `stress_ventas_data`, se acumula deuda en los mismos clientes y sube la tasa de pedidos rechazados por crédito en la prueba de carga (74 % → 94 %). Es una validación correcta, pero resta valor a la medición. Conviene que la semilla limpie o renueve la cartera.
+- Queda un `git stash` local con una versión antigua de `graphify-out/`, ya superada por el pull. Se puede descartar.
+- Arrastrado del 25-sep, no revisado hoy: el `pytest` instalado en el contenedor `backend` apunta a una ruta del host. `manage.py test` funciona como alternativa.
+- Nada de lo de hoy está commiteado (el usuario hace los commits).
+
+### 28 de Septiembre de 2026 — Cierre de RNF-03, kárdex escalable y cero deuda técnica (commiteado en `cab00fb`)
+
+**Resumen del día (una sesión, cuatro bloques):**
+
+1. **RNF-03 cerrado a nivel de código:** los tres umbrales del backlog quedan asertados en pruebas que fallan solas (reloj + techo de consultas), y el loadtest tiene fila con fallo explícito para cada uno.
+2. **Las pruebas destaparon N+1 reales** en el mixin de auditoría, el panel de Jefe de Planta y el listado de movimientos, y se corrigieron en su causa (ningún umbral se subió).
+3. **Kárdex rediseñado para no degradarse con el historial:** saldo calculado por la base, paginación en servidor en pantalla y export Excel compartiendo una sola consulta. Corrige además un **saldo incorrecto** que mostraba la pantalla.
+4. **Deuda técnica cerrada:** 2 bugs de seguridad y de datos, la regresión de fórmulas de la Fase 2, los 11 tests de frontend que fallaban, el test de permisos de `reporting_excel` en Windows y el gate `flake8` del CI (97 → 0).
+
+- **Verificación final (SQLite, `settings_test_local`):** backend **1225 passed / 2 skipped**, cobertura **90.4 %** (`fail_under = 90`), `manage.py check` sin problemas, `makemigrations --check` sin cambios, `flake8` (comando del CI) **0**; `scanning_service` 54, `reporting_excel` 76 + 1 skipped (solo en Windows), `printing_service` 94; frontend **1552/1552** + `tsc` limpio.
+
+#### RNF-03 — Rendimiento y tiempo de respuesta
+
+- **TEX-22 (kárdex < 3000 ms):** `KardexBodegaRendimientoTestCase` siembra 5000 movimientos del producto en la bodega (+2000 de ruido, FK variadas) y pide la **última página** del rango (peor caso del OFFSET). Aserta < 3 s y **≤ 6 consultas**.
+- **TEX-17 (panel de Jefe de Planta < 3000 ms con la sede cargada):** `PanelJefePlantaRendimientoTest` reproduce las 9 peticiones de `JefePlantaDashboard.tsx` (suma en serie, cota superior del `Promise.all`) sobre 500 órdenes, 1500 lotes y 1000 componentes de mezcla, con todas las FK pobladas. Aserta < 3 s y **≤ 34 consultas**, cifra idéntica con 50 y con 500 órdenes; el desglose por endpoint está documentado en el test.
+- **TEX-44 (escaneo < 2500 ms):** el gate de `test_validate_latency.py` sigue en 1.0 s; el docstring ahora cita el requisito formal y explica por qué el gate es más estricto.
+- Los docstrings dicen qué mide cada prueba: **piso in-process**, sin red, sin Nginx y sin SQL Server; su valor es detectar regresiones.
+- `scripts/loadtest/locustfile.py`: fila `/api/inventory/bodegas/[id]/kardex/ (RNF-03)` con `response.failure()`, y fila `panel Jefe de Planta (RNF-03)`. Esta última lanza las 9 GET en paralelo con un gevent `Group` y marca fallo explícito vía `events.request.fire`. No se ejecutó: queda listo para cuando haya entorno.
+- **N+1 corregidos (cada uno probado reintroduciendo el defecto):**
+  - `AuditableModelMixin.__init__` tomaba el snapshot de las FK auditables con `getattr(self, fk)`, que consulta la base **antes** de que Django pueble la caché de `select_related`. Resultado: una consulta por fila en **todo** listado de un modelo auditable (el kárdex hacía 5005 consultas). Ahora lee `<fk>_id`.
+  - Panel de Jefe de Planta, 302 → 34 consultas:
+    - órdenes: `producto_salida` al JOIN, prefetch de la mezcla con su producto y bodega, y `peso_producido` sumando el `prefetch_related('lotes')` que ya se cargaba en lugar de hacer un `aggregate()` por orden;
+    - máquinas: sus 4 FK y `operarios`;
+    - usuarios: `superior`.
+  - `/inventory/movimientos/`: 258 → 4 consultas por página (`select_related` incluida la sede, que lee `Bodega.__str__`).
+
+#### Kárdex: saldo en la base y paginación en servidor (TEX-22 CA-1/CA-2/CA-3)
+
+- **Defecto de datos encontrado:** la pantalla del kárdex **no** usaba `KardexBodegaAPIView`. Pedía `/inventory/movimientos/` (paginado a 50), leía solo la primera página y acumulaba el saldo en el navegador desde 0. Con más de 50 movimientos mostraba un **saldo incorrecto** y el CSV salía truncado. Además, el export Excel del servidor usaba `saldo_resultante`, que es una foto del stock por lote y no un saldo de kárdex, y no distinguía entradas de salidas.
+- **`inventory/services/kardex_service.py` (`KardexService`)** es la fuente única de la pantalla y del Excel:
+  - saldo inicial con un `SUM(CASE ...)`;
+  - saldo corrido con `SUM() OVER (ORDER BY fecha, id ROWS UNBOUNDED PRECEDING)`, que SQL Server evalúa **antes** de `OFFSET/FETCH`: cada página trae su saldo correcto leyendo solo sus filas;
+  - `values()` sin instanciar modelos;
+  - `fecha_fin` incluye todo el día (antes excluía el último);
+  - el filtro por tipo se aplica **después** de la ventana, vía `QUALIFY` emulado (soportado por mssql-django 1.6), para no alterar el saldo.
+- **`GET /inventory/bodegas/{id}/kardex/`:** responde `{count, next, previous, saldo_inicial, results}`, con `page_size` de 50 por defecto y 500 como máximo (`inventory/pagination.py`, compartido con `/inventory/movimientos/`). La fila virtual «SALDO INICIAL» se sustituye por `saldo_inicial`. Un filtro inválido responde 400 (`FiltroKardexInvalido`).
+- **Export Excel (`reporting_data.get_kardex`):** usa la misma consulta. Agrega columnas de entrada, salida y bodega destino, y saldo solo cuando hay producto; respeta `tipo`. `internal_api /reports/kardex/` también acepta `tipo`.
+- **Pantalla (`useKardex.ts`, `KardexView.tsx`):**
+  - con bodega + producto consume el kárdex paginado (saldo del servidor, orden cronológico); si no, el listado paginado;
+  - cambiar de página o recargar usa los filtros de la última consulta;
+  - tras editar o eliminar recarga la página actual;
+  - muestra el total de movimientos;
+  - **«Exportar Excel»** usa el export del servidor (se retira el CSV armado en el navegador).
+- Se eliminaron `calcularSaldoAcumulado` y `normalizeBodegaKey`, que quedaron como código muerto.
+- Aclaración de arquitectura: los exports Excel **sí** usan `reporting_excel`, pero solo para formatear. Django consulta los datos en proceso y hace `POST /generate`. El compose local no levanta el satélite, así que en local responden 502.
+
+#### Deuda técnica cerrada
+
+- **Seguridad (OWASP A01):** `OrdenProduccionViewSet` solo acotaba a jefe_area y operario. Jefe de planta, admin de sede, bodeguero y tintorero listaban y **abrían órdenes de otras sedes**. Ahora aplica la regla del resto del sistema: superuser, admin_sistemas y ejecutivo ven todas las sedes; el resto solo la suya, y el detalle de otra sede responde 404.
+- **Pérdida de datos:** `FormulaColorWriteSerializer.fases` tenía `default=list`, así que un PUT que omitía `fases` (p. ej. renombrar) **borraba toda la receta**. Ahora se conserva; `fases: []` explícito la sigue vaciando.
+- **Regresión de la Fase 2 (pendiente del 24-sep):** `ManageFormulas.tsx` no podía editar fórmulas aprobadas. Deja de enviar el campo legacy `detalles`. Al integrar la Fase 4 (D7, 29-sep), editar ya no crea versión: se retiró el envío de `motivo` y su mínimo de 10 caracteres, y basta con la justificación de auditoría.
+- **Errores engañosos:** una fecha imposible (`2026-13-45`) daba 500 en `internal_api` y «Ruta de reporte no permitida» en el export. `parse_date` lanza su propio `ValueError` cuando el formato calza. Ahora responde 400 con el motivo.
+- Paginación duplicada entre las vistas de kárdex y movimientos unificada en `PaginacionAcotada`.
+- **Tests de frontend (pendiente del 24-sep):**
+  - `vitest.setup.ts` instala un `Storage` en memoria cuando Node ≥ 25 tapa el `localStorage` de jsdom; CI usa Node 24 y habría fallado al subir de versión;
+  - `GenealogiaLoteModal.test.tsx`: `getAllByText` (el código se muestra en tres lugares) y `userEvent.click` (Radix Tabs activa en `mousedown`).
+- **`reporting_excel`:** el test de permisos 0600 se separó en uno independiente del SO, que verifica que el código pide 0600, y otro con los permisos reales solo en POSIX. En Windows no existen permisos POSIX.
+- **Gate `flake8` del CI: 97 → 0.**
+  - 42 imports sin uso, 5 variables sin uso (se conserva la llamada, cuyo efecto importa), 3 líneas vacías finales y 2 nombres ambiguos (`l` → `lote`).
+  - 26 líneas largas envueltas sin cambiar el comportamiento.
+  - 19 nombres de test ISTQB acortados a ≤ 120 caracteres, conservando la estructura `dado_…_cuando_…_entonces_…`.
+
+#### Documentación actualizada
+
+`docs/matriz_trazabilidad_pruebas.md` (sección RNF-03, técnica **RND** en la leyenda y defectos 9-15), `PRODUCT_BACKLOG.md` (verificación de TEX-17 y TEX-22), `PLAN_PRUEBAS.md` (TC-053 corregido, TC-053b..h), `ARQUITECTURA_SISTEMA.md` (contratos del kárdex, movimientos e `internal_api`), `DIAGRAMAS_SECUENCIA.md` (consulta de kárdex paginada), `MODELO_DATOS.md` (`saldo_resultante` no es saldo de kárdex), `PERFORMANCE.md`, `DASHBOARD_EJECUTIVO.md` (parámetros reales del export), `ROLES_Y_PERMISOS.md` (alcance por sede de las órdenes) y `MANUAL_BODEGUERO.md` (nuevo comportamiento del kárdex).
+
+#### Pendiente
+
+- **Sin verificar localmente:**
+  - `bandit` no está instalado en este equipo. Los cambios no agregan SQL crudo, subprocess ni deserialización.
+  - La suite contra SQL Server (`settings_test`, Docker). En particular: la ventana `SUM() OVER` + `OFFSET/FETCH` y el `QUALIFY` emulado del filtro por tipo en mssql-django.
+  - Ejecutar el loadtest.
+- **Entorno:** `docker/docker-compose.windows.yml` no incluye `reporting_excel`, así que los exports Excel responden 502 en local.
+
+### 25 de Septiembre de 2026 — Fases 3-4 de tintorería, cobertura frontend >90% en branches y fix de arranque en microservicios (commiteado en `33cdc00`)
+
+**Resumen del día:** continuación directa de la spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. Se retomó el entorno (pull de `MES`, migraciones y contenedores), se cerraron las Fases 3 y 4 de tintorería (backend + frontend), se validó todo contra `graphify`, se subió la cobertura de branches del frontend por encima del 90% literal solicitado, y se corrigió un bug de arranque (`greenlet` faltante) que afectaba a los tres microservicios FastAPI.
+
+#### 0. Entorno y deuda técnica encontrada al retomar la rama
+
+- **`infrastructure/docker/docker-compose.yml`:** tenía una clave `environment` duplicada en un servicio; se fusionó en una sola.
+- **`printing_service`:** SQLAlchemy 2.1 dejó de traer `greenlet` como dependencia implícita del extra `asyncio`; el servicio no arrancaba (`ImportError: SQLAlchemy asyncio module requires greenlet`). Fix: `sqlalchemy[asyncio]>=2.0,<3.0` en `printing_service/requirements.txt`.
+- **Base de datos de desarrollo:** historial de migraciones corrupto/desalineado (`InconsistentMigrationHistory`); resuelto reconstruyendo el estado de migraciones del contenedor `db`.
+- **Bug real encontrado en smoke test de API (no en tests unitarios):** una división exacta de `Decimal` (p. ej. `1000.00/100.000`) serializaba en notación científica (`"1E+1"`) en vez de `"10.0000"` en las respuestas JSON de dosificación. Corregido con `.quantize(Decimal('0.0001'))` en los 3 puntos de cálculo afectados (`gestion/services/descarga_quimicos.py` y servicios relacionados de fórmula).
+
+#### 1. Fase 3 — Litros de baño, dosificación, historial y descargas de químicos
+
+- **Backend:** `litros_bano` en la orden de producción (baño de tintura), cálculo de dosificación por fórmula/versión oficial a partir del volumen de baño de la máquina y los litros reales, servicio de descarga de químicos (`gestion/services/descarga_quimicos.py`) con su propio historial.
+- **Frontend:** sección "Baño de Tintura" en `OrdenDetalleSheet.tsx` (edición de `litros_bano` vía PATCH con justificación de auditoría), `DescargasQuimicosTintoreria.tsx` (nuevo) e `HistorialOrdenesTintoreria.tsx` (nuevo) en `components/tintura/`.
+
+#### 2. Fase 4 — Ensayos y derivación de fórmulas (decisiones D7-D10)
+
+Instrucción explícita del usuario que gobernó todo el trabajo: **"no dejamos ninguna deuda técnica"** — sin atajos, sin código huérfano, sin parches de compatibilidad hacia atrás.
+
+- **Backend:**
+  - Se separó "crear versión" de "marcar oficial" (antes una sola acción `aprobar`/`versionar`): `VersionadoFormulaService.crear_version()` y `.marcar_oficial()` como operaciones independientes, más `.derivar()` para clonar una fórmula como punto de partida de un ensayo (`FormulaColor.formula_origen`, `.version_origen`, `.motivo_derivacion`, `.es_laboratorio`) y `._reconstruir_fases_desde_snapshot()`.
+  - `gestion/views/formula_views.py`: se fusionaron los dos `@action` que compartían `url_path='versiones'` (GET historial / POST crear) en uno solo con `methods=['get', 'post']` — dos acciones con el mismo `url_path` no se fusionan solas en DRF, la primera registrada gana para todos los métodos y la segunda respondía 405. Se agregaron las acciones `marcar_oficial`, `derivar` y `derivadas`.
+  - Serializers: se retiró `AprobarFormulaSerializer`, se agregaron `CrearVersionSerializer` y `DerivarFormulaSerializer`; se simplificó `FormulaColorWriteSerializer` (sin `motivo` ni auto-versionado en `update()`, ahora explícito vía los nuevos endpoints).
+  - Migración `0017_formula_derivacion_y_ensayos.py`.
+  - `gestion/tests/test_versionado_formula.py` reescrito para el nuevo modelo de dos acciones (185 tests).
+- **Frontend (`components/tintura/`):**
+  - `FormulaDetalle.tsx` (nuevo): vista de 3 pestañas (Receta / Versiones / Órdenes), reemplaza la navegación anterior basada en `Sheet`.
+  - `VersionesFormulaPanel.tsx` (nuevo, reemplaza `VersionesFormulaSheet.tsx`, que se eliminó junto a su test): historial de versiones en línea con comparador de diffs y acciones crear-versión / marcar-oficial / derivar.
+  - `DialogosFormula.tsx`: `AprobarFormulaDialog` reemplazado por `CrearVersionDialog`; nuevo `DerivarFormulaDialog`.
+  - `lib/types.ts`: campos de derivación en `FormulaColor`, `observaciones` en `VersionFormulaResumen`.
+- **Verificación:** backend 1208 tests OK / 90.3% cobertura; validado contra `graphify query`/`graphify explain` que todos los símbolos nuevos quedaron indexados y que no quedaron referencias a los símbolos retirados (`aprobar`, `versionar`, `AprobarFormulaSerializer`, `VersionesFormulaSheet`).
+
+#### 3. Cobertura de tests del frontend por encima del 90% en branches
+
+Pedido explícito del usuario, aclarado en el momento: **"necesito que mas de 90% este testeado, no que los test pasen mas del 90%"** — es decir, porcentaje de código cubierto (statements/branches/functions/lines), no tasa de aprobación de tests.
+
+- Progreso de branches globales: 84.00% (punto de partida antes de este trabajo) → 89.38% → **90.16%** (resultado final), cumpliendo los 4 umbrales del proyecto (`vite.config.ts`: statements 94%, branches 89%, functions 91%, lines 95%) con margen.
+- Statements 94.94%, functions 91.81%, lines 96.1% al cierre.
+- Archivos con más tests nuevos: `CorridaContinuaDashboard.test.tsx` (2→41), `PlanProduccionMTS.test.tsx` (3→24), `SeguimientoPedidoMTOModal.test.tsx`, `GenealogiaLoteModal.test.tsx`, `ManageProductos.test.tsx` (+7), `ManageBodegas.test.tsx` (+4), `BodegueroDashboard.test.tsx` (+5), `ManageUsers.test.tsx` (+9), además de los archivos nuevos de la Fase 3 (`DescargasQuimicosTintoreria.test.tsx`, `HistorialOrdenesTintoreria.test.tsx`) que partían de 0%/2.63%.
+- **Disciplina aplicada:** antes de escribir un test para una rama sin cubrir, se verificó que fuera alcanzable desde la UI real. Se identificó y **no se testeó a propósito** una rama muerta en `PlanProduccionMTS.tsx:145` (`detalle.saldo_pendiente || detalle.cantidad_planificada`), inalcanzable porque el guard de visibilidad del botón "Generar OP" (`Number(saldo_pendiente) > 0`) impide llegar a ese código con un `saldo_pendiente` falsy-pero-presente.
+- Verificación final: `npm test -- --run` → 104 archivos / 1700 tests, sin regresiones.
+
+#### 4. Fix de arranque en `scanning_service` y `reporting_excel` (mismo bug que `printing_service`)
+
+Al levantar todos los servicios para correr su batería completa de tests, `scanning_service` y `reporting_excel` no arrancaban con el mismo `ImportError: SQLAlchemy asyncio module requires greenlet` ya visto y corregido en `printing_service` — sus `requirements.txt` tenían `sqlalchemy>=2.0,<3.0` sin el extra `[asyncio]`. Corregido a `sqlalchemy[asyncio]>=2.0,<3.0` en ambos y reconstruidas las imágenes Docker (`docker compose build scanning reporting_excel`).
+
+**Batería completa de tests ejecutada tras el fix, todo en verde:**
+
+| Suite | Resultado |
+|---|---|
+| Frontend (Vitest) | 104 archivos / 1700 tests |
+| Backend Django (`manage.py test --settings=TexCore.settings_test`) | 1208 tests |
+| `printing_service` | 94 tests |
+| `scanning_service` | 54 tests (94% cobertura, umbral 90%) |
+| `reporting_excel` | 76 tests |
+
+**Pendiente detectado, no corregido (fuera de alcance de hoy):** el `pytest` instalado dentro del contenedor `backend` (en `/app/venv`) tiene el shebang apuntando a una ruta absoluta del host (`/home/desarrollo/Documentos/Desarrollo/TexCore/venv/bin/python`), que no existe dentro del contenedor — el venv se generó/copió con rutas del entorno de build en vez de rutas del contenedor. `python manage.py test` funciona con normalidad como alternativa (documentado en `CLAUDE.md` del proyecto).
+
+### 24 de Septiembre de 2026 — Recetas versionadas de tintorería (spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`)
+
+**Resumen del día (dos sesiones, todo sin commitear):**
+
+- **Sesión 1:** Fase 1 completa (catálogo `ProcesoTintoreria`, `MaquinaProceso`, migración `0014`, `formula_color` a PROTECT) y la parte de versionado del backend de la Fase 2 (`VersionFormula`, servicio, endpoints de aprobar/historial/diff, reglas 1-3). Se cortó a mitad de la Fase 2.
+- **Sesión 2 (continuación, 24→25 sep):** se cerró la Fase 2 completa:
+  1. Reglas 4-5: `OrdenProduccion.version_formula` congelada al lanzar la OP; sin versión oficial se rechaza el lanzamiento.
+  2. Migración `0015_versionado_formula`.
+  3. Frontend de tintorería: versión oficial en la lista, aprobar con motivo, motivo al editar una aprobada, crear variante, historial y diff de versiones, fases con el catálogo de procesos + ciclo.
+  4. Retiro de la compatibilidad `nombre` de la Fase 1.
+  5. Deuda técnica: F821 de `stress_test_data`, PUT que anulaba `sede`/`area` (DRF 3.16) en 5 serializers, `TypeError` con OPs sin peso requerido, zona horaria en «producción de hoy», cobertura 89.2 % → 90.3 % y umbral unificado.
+  6. Seeders adaptados a la regla 4, bug de `ui/textarea.tsx` (sin `forwardRef`), matriz de trazabilidad y 16 documentos actualizados (manuales, arquitectura, modelo de datos, plan de pruebas, auditorías).
+- **Verificación final:** backend 1175 passed / 2 skipped, cobertura 90.3 %, `makemigrations --check` sin cambios, frontend 1538 passed + `tsc` limpio (11 fallos preexistentes ajenos, ver «Pendiente»).
+
+El detalle de cada punto está en las secciones siguientes.
+
+#### Fase 1 — Cimientos (COMPLETA, sin commitear)
+
+- **Modelos:** nuevo catálogo `ProcesoTintoreria` por sede (`codigo` único por sede, patrón `SedeResolvableMixin` + `AuditableModelMixin`); nueva tabla intermedia `MaquinaProceso` (par único; valida que el proceso sea de la sede del área de la máquina); `Maquina.volumen_bano_litros` (distinto de `capacidad_maxima`, que es kg/turno); `FaseReceta.nombre` (enum de 5 valores) reemplazado por `FaseReceta.proceso` (FK PROTECT) + `ciclo`; `OrdenProduccion.formula_color` pasa de CASCADE a **PROTECT**.
+- **Migración `0014_procesos_tintoreria`:** crea los 5 procesos legacy (`PRE_TRATAMIENTO`, `TINTURA`→colorante, `LAVADO`, `SUAVIZADO`→acabado, `AUXILIARES`→auxiliar) en cada sede (y un juego sin sede si hay fórmulas sin sede), reapunta las fases y es reversible. Probada ida y vuelta 0013↔0014 con `MigrationExecutor` en SQLite.
+- **API:** `GET/POST /procesos-tintoreria/` y `GET /maquinas/{id}/procesos/` (ambos `IsTintoreroOrAdmin`); `volumen_bano_litros` expuesto en `MaquinaSerializer`; borrar una fórmula con OPs responde **409** «tiene N órdenes de producción asociadas».
+- **Compatibilidad temporal:** el serializer de fases sigue aceptando/devolviendo el `nombre` legacy (el frontend no se tocó en Fase 1). Ver pendientes de Fase 2 para su retiro.
+- **Bug preexistente corregido:** `AuditableModelMixin.__init__` leía campos diferidos (`.only()`) y entraba en recursión infinita cuando el colector de borrado de Django cargaba OPs relacionadas → borrar una fórmula con OPs daba 500 (incluso antes, con CASCADE).
+- **Pruebas:** `gestion/tests/test_procesos_tintoreria.py` (33 casos, ISTQB EP/BVA/TD/STT/CB-D). Suite backend local: 1090 passed, 2 skipped (los de migración, que requieren correr sin `--nomigrations`). Cobertura 89.0 % (cumple `setup.cfg` 89, **no** `.coveragerc` 90).
+
+#### Fase 2 — Versionado (COMPLETA, sin commitear)
+
+Decisiones tomadas con el usuario: reglas 4-5 (congelar versión al lanzar la OP) se incluyen en Fase 2; editar una fórmula aprobada crea la versión N+1 **ya oficial**; se cierran los atajos (solo se aprueba por `/aprobar/`, `version` de solo lectura, `duplicar` pasa a «crear variante»); **no** se hace migración de datos.
+
+**Backend — versionado (primera sesión):**
+
+- Modelo `VersionFormula` (inmutable salvo `es_oficial`; `delete` rechazado; `unique_together (formula, numero)`; `UniqueConstraint` condicional: una sola oficial por fórmula; motivo ≥ 10 caracteres).
+- `gestion/services/versionado_formula.py` — `VersionadoFormulaService`: `construir_snapshot` (esquema §5.5, guarda código y descripción del producto), `aprobar` (regla 2), `versionar` (regla 3), `diff` (fases por `orden`, insumos por `producto_id`) y `asegurar_version_oficial` (idempotente: aprueba la fórmula en pruebas o versiona la aprobada sin versiones; lo usan los seeders y servirá para la migración de datos pendiente).
+- Serializers: `motivo` obligatorio al editar una fórmula aprobada (crea versión nueva oficial); `estado` no se cambia por PUT/POST (400 → usar `/aprobar/`); `version` de solo lectura; `version_oficial` en la lectura (anotado con `Subquery`, sin N+1); la respuesta de create/update usa la representación de lectura.
+- Endpoints: `POST /formula-colors/{id}/aprobar/`, `GET /formula-colors/{id}/versiones/`, `GET .../versiones/{n}/`, `GET .../versiones/{a}/diff/{b}/` (PUT/DELETE sobre versiones → 405). `duplicar` exige `{codigo, nombre_color}`, crea la variante en pruebas, sin versiones y **con la sede de la original** (antes quedaba sin sede).
+
+*Todo lo que sigue se hizo en la sesión 2.*
+
+**Backend — reglas 4-5 (congelar la versión al lanzar la OP):**
+
+- `OrdenProduccion.version_formula` (FK PROTECT a `VersionFormula`, null, solo lectura en `OrdenProduccionSerializer`). Se congela en **un único punto**, `OrdenProduccion.save()`, al salir de `pendiente` (a `en_proceso` o directo a `finalizada`, y también si la OP se crea ya en proceso); cubre los 5 caminos que lanzan una OP (`registro_lote`, `ejecucion_produccion`, `lote_stock_adjustment`, `production_lote_views` y PUT/PATCH). Con `save(update_fields=['estado'])` agrega `version_formula` a los campos guardados.
+- Regla 4: si la fórmula no tiene versión oficial **se rechaza el lanzamiento** (`ValidationError` → 400). `registro_lote` y `ejecucion_produccion` son atómicos: el rechazo revierte lote, stock y estado.
+- Regla 5 (`OrdenProduccion.clean`): una OP lanzada no cambia de fórmula ni de versión. Las OPs legacy que ya estaban en proceso no se bloquean (no hay migración de datos). La lectura del estado inicial usa `__dict__` para no disparar consultas por campos diferidos.
+- `gestion/exceptions.py`: el manejador global traduce el `ValidationError` de Django (reglas de `Model.clean()/save()`) a 400 en vez de 500.
+- `FormulaColorFactory`: una fórmula `aprobada` nace con su versión oficial v1 (sin ella sus OPs no se podrían lanzar en los tests).
+- **Migración `0015_versionado_formula`** (`VersionFormula` + `OrdenProduccion.version_formula`); `makemigrations --check` sin cambios pendientes.
+- Seeders: `seed_data` aprueba «Rojo Intenso» con `asegurar_version_oficial` (antes cambiaba `estado` a mano, sin versión) y `stress_test_data` asegura la versión antes de crear OPs lanzadas. Verificados contra SQLite: OP-SIM-003 congela `FORM-ROJO-001 v1` y las 101 OPs de estrés lanzadas tienen versión. `load_million` usa `bulk_create` (no pasa por `save()`) y no se ve afectado.
+
+**Frontend (`frontend/src/components/tintura/`, `lib/types.ts`):**
+
+- Lista de fórmulas: columna «Versión oficial», acciones con `aria-label` (Editar, Aprobar —solo en pruebas—, Historial de versiones, Crear variante).
+- `DialogosFormula.tsx`: diálogo «Aprobar» con motivo (≥ 10 caracteres) y diálogo «Crear variante» con código y nombre de color.
+- Editor: sin selector de estado (badge de solo lectura); campo «Motivo del cambio» obligatorio al editar una fórmula aprobada (se envía solo en ese caso); fases con selector del catálogo `/procesos-tintoreria/?activo=true` + `ciclo`.
+- `VersionesFormulaSheet.tsx`: panel lateral con el historial (número, oficial, motivo, fecha, autor) y la comparación entre dos versiones (diff de datos, fases agregadas/eliminadas/modificadas e insumos).
+- `TintoreroDashboard`: carga el catálogo de procesos, `POST .../aprobar/` y `duplicar` con `{codigo, nombre_color}`; muestra el mensaje de error del backend.
+- **Bug corregido en `ui/textarea.tsx`:** no usaba `forwardRef` (React 18), así que `register()` de react-hook-form no leía su valor (cualquier formulario con `Textarea` + `register` enviaba el campo vacío).
+- Pruebas: `FormulaQuimica.test.tsx` (45), `VersionesFormulaSheet.test.tsx` (7), `TintoreroDashboard.test.tsx` (25). `npx tsc --noEmit` limpio.
+
+**Compatibilidad `nombre` de Fase 1 retirada:** el serializer de fases ya no acepta ni devuelve el `nombre` del antiguo enum (`nombre`/`nombre_display`); la fase exige `proceso`. Se eliminó `ProcesoTintoreria.nombre_fase_legacy`; `obtener_legacy()` queda solo para los comandos de siembra y las factories. `FormulaFasesCompatApiTestCase` pasa a `FormulaFasesProcesoApiTestCase` (el `nombre` legacy ahora da 400).
+
+**Deuda técnica cerrada:**
+
+- F821 en `stress_test_data.py`: `bodega_pt` nunca se definía (sí `bodegas_pt`); ahora es la bodega PT de la primera sede.
+- **DRF 3.16 y FK anulables (bug confirmado en 4 serializers más):** DRF da `default=None` a los campos anulables de un `unique_together`; un PUT que los omitía dejaba `sede` (Producto, Proveedor, Cliente, OrdenProduccion) o `area` (Maquina) en NULL, sacando el registro del filtro multi-tenant. Nuevo `ConservarOmitidosEnPutMixin` (`gestion/serializers/_common.py`) aplicado a esos serializers y a `LoteProduccionSerializer`, `DetalleFormulaSerializer` y `FormulaColorWriteSerializer` (reemplaza el parche ad-hoc de la primera sesión). Lo omitido se conserva; un valor o null explícito sigue cambiándolo.
+- **`peso_neto_requerido = None` (producción continua) daba `TypeError`** al comparar lo producido con la meta en `registro_lote`, `lote_stock_adjustment` y el rechazo de lote de `production_lote_views`. Sin meta la OP ya no se finaliza sola (solo con `completar_orden`).
+- **Zona horaria en «producción de hoy»:** `core_views` (reporte de eficiencia del área y desempeño del operario) y la eficiencia de máquina usaban `date.today()` (zona del SO) contra `hora_final__date` (TIME_ZONE = UTC): entre las 00:00 y las ~02:00 UTC excluían lotes del día. Ahora `timezone.localdate()`. `tests_jefe_area.py` y `test_core_views.py` dependían de la hora del reloj y ahora son deterministas.
+- **Cobertura 90.3 %** (`.coveragerc`, la del CI; antes 89.2 %). Umbral unificado: se eliminó el `[coverage:*]` duplicado de `setup.cfg` (89), que coverage.py ignora cuando existe `.coveragerc`. Pruebas nuevas: `test_report_dispatch.py`, `test_lote_stock_adjustment.py`, `test_registro_lote_estado_op.py`, `test_put_conserva_campos_omitidos.py`.
+- `docs/matriz_trazabilidad_pruebas.md` actualizada con los casos de Fase 2.
+
+**Verificación (SQLite, `settings_test_local`):** suite backend **1175 passed, 2 skipped** (los de migración) · cobertura 90.3 % · frontend 1538 passed.
+
+**Documentación actualizada al versionado:** manuales de usuario (`MANUAL_TINTORERO.md` reescrito: aprobar, motivo, historial/diff, variantes, catálogo de procesos, FAQ; notas en Jefe de Planta, Operario y Administrador de Sistemas), `ARQUITECTURA_SISTEMA.md` (ERD con `VersionFormula`/`ProcesoTintoreria`/`MaquinaProceso`, endpoints —la ruta documentada `/api/formulas-color/` era incorrecta: es `/api/formula-colors/`— y paso de lanzamiento en el flujo de producción), `MODELO_DATOS.md`, `DICCIONARIO_ELIMINACION.md` (PROTECT; el script SQL de borrado de fórmulas ahora aborta si hay OPs y borra las versiones), `DIAGRAMAS_SECUENCIA.md` (borrado de fórmula con 409), `PLAN_PRUEBAS.md` (RN-20/20b, transiciones de fórmula y OP, TC-072..073f), `HU_MODULO_PRODUCCION.md`, `ROLES_Y_PERMISOS.md`, `DESCARGA_QUIMICOS.md`, auditoría ISA-88, auditoría del backlog (A-1 marcado como resuelto) y estado de fases en el spec.
+
+**Pendiente fuera de alcance (detectado en esta sesión):**
+
+- **Regresión en el panel del Administrador de Sistemas:** `frontend/src/components/admin-sistemas/ManageFormulas.tsx` edita código/nombre/descripción de una fórmula con su propio formulario y envía solo `_justificacion_auditoria`. Desde la Fase 2, editar una fórmula **aprobada** exige `motivo` (≥ 10) y el backend responde 400: el Administrador ya no puede renombrar fórmulas aprobadas. Arreglo sugerido: enviar la justificación también como `motivo` (validando ≥ 10 caracteres) cuando la fórmula está aprobada.
+- Frontend: 11 tests preexistentes fallan en este equipo y no tienen relación con este cambio: `src/lib/printing.test.ts` (9; Node 25 expone su propio `localStorage` experimental, que tapa el de jsdom: `window.localStorage.clear is not a function`) y `GenealogiaLoteModal.test.tsx` (2; «Found multiple elements with the text: LOT-HILO-001»).
+- `LoteStockAdjustmentService` (corrección y rechazo de lote) sigue calculando químicos con el campo legacy `gramos_por_kilo` de la receta viva: pasarlo a `orden.version_formula.snapshot` es la regla 6 (Fase 3 del spec).
+
+#### Pendiente de entorno (no verificable en el equipo de desarrollo actual, sin Docker)
+
+- Validar las migraciones `0014` y `0015` contra **SQL Server 2022**: `migrate gestion 0015` / `migrate gestion 0013` (vuelta atrás) y la `UniqueConstraint` condicional (índice filtrado) de `VersionFormula`.
+- Correr la suite backend con `settings_test` (SQL Server vía Docker, `scripts/run_backend_tests.sh`).
+- **Migración de datos postergada:** las fórmulas que ya están `aprobada` en producción no tienen `VersionFormula`. Antes de desplegar las reglas 4-5 hay que crearles una versión nº 1 oficial (snapshot de su receta actual, motivo «Versión inicial migrada»); si no, sus OPs no podrán lanzarse. La lógica ya existe: `VersionadoFormulaService.asegurar_version_oficial(formula, motivo, None)` es idempotente; falta envolverla en una migración de datos (o comando) y probarla contra SQL Server.
+
+#### Próximos pasos (en orden sugerido)
+
+1. ~~Corregir la regresión de `ManageFormulas.tsx`~~ — cerrado el 28-sep-2026.
+2. Con Docker disponible: migración de datos de fórmulas aprobadas + validar `0014`/`0015` y la suite contra SQL Server (bloquea el despliegue).
+3. Fase 3 del spec — «Orden y paneles»: `OrdenProduccion.litros_bano` (regla 8: ≤ `volumen_bano_litros` de la máquina), descarga y corrección de lote calculadas desde `version_formula.snapshot` (regla 6), dosificación unificada en backend (`POST /ordenes-produccion/{id}/calcular-dosificacion/`) y retiro del cálculo del frontend, pestañas «Historial de órdenes» y «Descargas de químicos». Decisiones abiertas antes de empezar: quién captura `litros_bano` y cuándo, si se puede lanzar sin litros, y qué pasa con las OPs antiguas sin ese dato.
+4. ~~Tests frontend preexistentes (`printing.test.ts` con Node 25, `GenealogiaLoteModal.test.tsx`)~~ — cerrado el 28-sep-2026.
+
+### 22 de Septiembre de 2026 (portado desde `refactorizacion`/`feature`)
+
+#### Cierre de CVEs CRITICAL/HIGH (RS-11) y cobertura Trivy para los 3 microservicios satélite (RS-12)
+
+Continuación directa del escaneo Trivy de hoy: se actualizaron las dependencias con CVE conocido y se cerró la brecha de cobertura del pipeline que dejaba a los 3 microservicios satélite sin ningún escaneo de seguridad automatizado.
+
+- **Dependencias actualizadas** en los 4 `requirements.txt` (raíz/backend, `scanning_service`, `reporting_excel`, `printing_service`): `PyJWT` 2.10.1 → **2.14.0** (cierra CVE-2026-48526, bypass de autenticación), `cryptography` 42.0.8 → **50.0.1** (cierra múltiples CVE incluyendo vulnerabilidades de OpenSSL embebido). Solo en el backend: `Django` 5.2.7 → **5.2.17** (cierra **CVE-2025-64459, CRITICAL — inyección SQL**, y varios HIGH adicionales publicados desde 5.2.8), `sqlparse` 0.5.3 → **0.6.0** (cierra CVE-2026-54284, DoS).
+- Se optó por la última versión estable dentro de líneas seguras (Django se mantiene en la rama LTS 5.2.x, sin saltar a la 6.x — cambio mayor no solicitado) en vez de solo la versión mínima con fix, para no dejar CVEs HIGH conocidos sin cerrar por quedarse corto en la actualización.
+- **Verificación exhaustiva tras cada bump:** rebuild `--pull --no-cache` de las 5 imágenes de producción (fuerza paquetes de sistema operativo frescos, no solo las dependencias de Python), suite completa de cada servicio sin regresiones (backend 333 tests — mismos 6 fallos preexistentes ya documentados y no relacionados, `scanning_service` 35/35, `reporting_excel` 27/27, `printing_service` 38/38), y flujo end-to-end real Django → `printing_service` (firma JWT con RS256 usando la nueva `cryptography` 50.0.1) confirmado funcionando tras cada reconstrucción.
+- **Resultado del re-escaneo Trivy:** `Django`, `PyJWT`, `cryptography` y `sqlparse` en **0 vulnerabilidades** en las 4 imágenes. Los únicos CRITICAL restantes (`libxml2` CVE-2026-6653 en `printing_service`, `linux-libc-dev` CVE-2026-43185 en `printing_service`/`reporting_excel`) son paquetes base de Debian **sin parche publicado todavía** en el repositorio — no corregibles por el equipo hoy, documentados como monitoreo continuo en `docs/requerimientos/REGISTRO_RIESGOS.md` (RS-11).
+- **`.gitlab-ci.yml`:** nuevo job `scan:images-satellites` (stage `scan`) que escanea `printing_service`, `scanning_service` y `reporting_excel` con Trivy — antes solo `backend`/`nginx` tenían este control. Usa `--ignore-unfixed` para bloquear únicamente CVEs CRITICAL/HIGH **con parche disponible** (los de aplicación, que sí controlamos), sin poner el pipeline permanentemente en rojo por CVEs de sistema operativo que no tienen fix publicado todavía — documentado en un comentario dentro del propio archivo para que quede claro que no es una relajación arbitraria del gate. El job `deploy` ahora también depende de `scan:images-satellites` además de `scan:images` (RS-12).
+
+#### Escaneo Trivy de las 5 imágenes de producción y corrección de llave privada embebida
+
+Se corrió `trivy image --severity CRITICAL,HIGH` (misma imagen `aquasec/trivy:latest` que usa `.gitlab-ci.yml`) contra las 5 imágenes de producción construidas localmente (`backend`, `nginx`, `printing_service`, `scanning_service`, `reporting_excel`), y se actualizó la documentación de arquitectura (`docs/arquitectura/MICROSERVICIO_IMPRESION.md`, `docs/arquitectura/MICROSERVICIOS.md`) y el registro de riesgos (`docs/requerimientos/REGISTRO_RIESGOS.md`, entradas RS-09 a RS-11) con el fix de autenticación de `printing_service` de hoy y los hallazgos de este escaneo.
+
+- **Hallazgo corregido — llave privada TLS embebida en la imagen del backend:** `Dockerfile.prod` usa `COPY . .` con el repo completo como contexto de build, y `.dockerignore` no excluía `nginx/certs/`. Esto embebía `nginx-selfsigned.key` dentro de la imagen `backend`, detectable por cualquiera con acceso a esa imagen (registry, capa Docker) — un vector de exposición separado del que motivó el fix de `printing_service`. Corregido agregando `nginx/certs/` a `.dockerignore`; verificado con rebuild + re-escaneo (0 coincidencias tras el fix, tenía 1 antes).
+- **CVEs identificados en este escaneo** (Django 5.2.7 CRITICAL de inyección SQL CVE-2025-64459; PyJWT 2.10.1 CVE-2026-48526 bypass de autenticación; `cryptography` 42.0.8 múltiples CVE): **corregidos el mismo día**, ver la entrada de arriba ("Cierre de CVEs CRITICAL/HIGH (RS-11)..."), escrita después de este hallazgo inicial. Los CVEs CRITICAL a nivel de paquetes del sistema operativo base (Debian: `perl-base`, `linux-libc-dev`, `libxml2`) siguen sin parche publicado en el repositorio de paquetes — no requieren acción de código, se resuelven cuando Debian lo publique.
+- **Resumen por imagen** (severidad CRITICAL/HIGH, componentes de aplicación + sistema operativo):
+  - `backend`: 108 SO + 15 Python (1 CRITICAL: Django) — antes también 1 secreto (llave TLS), ya en 0.
+  - `nginx`: 36 SO (0 CRITICAL).
+  - `printing_service`: 212 SO + 10 Python (2 CRITICAL: paquetes SO).
+  - `scanning_service`: 108 SO + 8 Python (3 CRITICAL: paquetes SO).
+  - `reporting_excel`: 191 SO + 5 Python (1 CRITICAL: paquete SO).
+- Hasta este hallazgo, el `TRIVY_SEVERITY=CRITICAL,HIGH` del pipeline (`.gitlab-ci.yml`, stage `scan`) solo corría sobre `backend` y `nginx` — los 3 microservicios satélite no tenían un job de escaneo Trivy dedicado en CI. **Cerrado el mismo día**, ver la entrada de arriba (job `scan:images-satellites`, RS-12).
+
+#### Autenticación JWT en printing_service (hueco de seguridad encontrado en validación contra el anteproyecto capstone)
+
+Al validar el código contra el documento `docs/Anteproyecto_Capstone_Final_Version.pdf` (que exige que los 3 microservicios satélite — scanning_service, printing_service, reporting_excel — se comuniquen con JWT asimétrico RS256), se encontró que **`printing_service` no tenía ninguna autenticación**: cualquier actor con acceso a la red interna de Docker podía generar PDFs de notas de venta (con datos de clientes, montos, información comercial) y etiquetas ZPL arbitrarias sin ninguna credencial, a diferencia de `scanning_service` y `reporting_excel` que ya usaban JWT RS256.
+
+- **`printing_service/src/main.py`**: agregado middleware `verify_jwt_service_token` (idéntico en diseño al de `reporting_excel`) que exige un JWT Bearer RS256 válido (`iss=texcore`, `type=service_access`) en todo endpoint salvo `/health`. Variable de entorno `INTERNAL_JWT_PUBLIC_KEY` ahora requerida (fail-fast si falta).
+- **`printing_service/requirements.txt`**: agregado `PyJWT==2.10.1` y `cryptography==42.0.8` (esta última es necesaria para que PyJWT soporte el algoritmo RS256 — sin ella la verificación falla con "Algorithm not supported", detectado y corregido durante la verificación end-to-end de esta misma sesión).
+- **`gestion/utils.py` (`PrintingService`)**: el backend Django ahora firma un JWT de corta duración (60s) con `JWTServiceAuthentication.generate_token()` (ya existente en `internal_api/authentication.py`, reutilizado sin duplicar lógica) y lo envía como `Authorization: Bearer` en ambas llamadas a `printing_service` (`/pdf/nota-venta` y `/zpl/etiqueta`).
+- **`infrastructure/docker/docker-compose.yml` y `docker-compose.prod.yml`**: agregada la variable `INTERNAL_JWT_PUBLIC_KEY` al servicio `printing`.
+- **Tests nuevos** (`printing_service/tests/conftest.py`, `test_auth_middleware.py`, siguiendo el mismo patrón de `bypass_jwt` que ya usa `reporting_excel`): 9 tests cubriendo rechazo sin header, header sin `Bearer`, token expirado, tipo de token incorrecto, emisor no reconocido, y que `/health` sigue sin requerir auth.
+- **`.gitlab-ci.yml`**: el job `test:printing-service` ahora instala `PyJWT` y corre toda la suite (`pytest tests/`) en vez de solo `test_nota_venta_calculos.py`.
+- **Verificación end-to-end**: reconstruido el stack de producción local (gunicorn + `DEBUG=False`) y confirmado manualmente: petición sin token → 401; token forjado/inválido → 401; llamada real desde `PrintingService.generate_zpl_label()` (Django firmando el JWT) → 200 con el ZPL generado correctamente. Suite completa de `printing_service`: 38/38 tests pasando. Suite backend (`gestion`, `internal_api`, `inventory`) corrida dentro del contenedor de producción: sin regresiones nuevas (los 6 fallos preexistentes en `internal_api/tests/test_scanning_views.py`/`test_reporting_views.py` son el mismo bug de drift de campos `producto`/`bodega` documentado en otra sesión, no relacionado con este cambio).
+
+#### Medición del Umbral de Escaneo (<1s) y Rediseño del Stress Test de 100 Usuarios por Rol Real
+
+A solicitud de validar que el escaneo de lotes durante el despacho responde en menos de 1 segundo, y de ampliar el stress test de 100 usuarios (que solo cubría 3 tareas de solo-lectura) para que simule el flujo de trabajo real de planta, se rediseñó por completo `scripts/loadtest/locustfile.py` (portado originalmente desde la rama `MES`, confirmado que es herramienta de infraestructura genérica sin relación con el motor MES) y se corrigieron varios bugs reales encontrados durante la validación bajo carga:
+
+- **Simulación por rol real, no por actividad inventada:** el locustfile tiene ahora **exactamente 11 clases `HttpUser`**, una por cada grupo RBAC real de Django (`admin_sistemas`, `admin_sede`, `bodeguero`, `despacho`, `ejecutivo`, `empaquetado`, `jefe_area`, `jefe_planta`, `operario`, `tintorero`, `vendedor`), cada una autenticada con su usuario demo dedicado y ejecutando únicamente las acciones HTTP que ese rol tiene permitido hacer en el sistema real (permission classes, checks de grupo, y las vistas del frontend específicas de cada rol). Los 100 usuarios virtuales se reparten con peso igual entre las 11 clases y corren todos simultáneamente.
+- **Umbral de negocio de escaneo validado en dos niveles:**
+  - Nivel servicio: nuevo `scanning_service/tests/integration/test_validate_latency.py` (piso de referencia sin red real, mide solo el overhead interno de FastAPI + `LoteValidationService`).
+  - Nivel end-to-end bajo carga real: la tarea `DespachoUser.flujo_despacho` marca cada llamada de escaneo como fallo explícito si supera 1 segundo, registrada bajo un nombre propio (`/api/scanning/validate (en despacho)`) para verse aislada en los reportes de Locust.
+- **Bugs reales corregidos durante la validación** (no solo del script de carga):
+  - `gestion/management/commands/stress_test_data.py`: usaba campos `producto`/`bodega` inexistentes en `OrdenProduccion` (drift de esquema histórico) — corregido a `producto_entrada`/`producto_salida`/`bodega_entrada`/`bodega_salida`; además el comando creaba `LoteProduccion` sin su `StockBodega` asociado (nada era escaneable/despachable) y el usuario demo `user_despacho` no tenía bodegas asignadas (`bodegas_all=True` faltante) — ambos corregidos. **Nota al portar a `feature`:** este archivo ya tenía ambos fixes aplicados de forma independiente en esta rama; no se tocó de nuevo.
+  - `scanning_service/src/domain/models.py` y `django_client.py`: el modelo de dominio (`OrdenProduccion.producto`) no coincidía con el campo que `validation_service.py` esperaba (`producto_salida`) — causaba HTTP 500 en cada escaneo real contra el backend. Corregido en ambos archivos y en su test de integración correspondiente.
+  - `inventory` (reversión de despacho): `historial.delete()` fallaba siempre con `ProtectedError` porque `DetalleHistorialDespachoPedido.historial` es una FK `PROTECT` que nunca se limpiaba — bug real que afecta cualquier reversión de despacho en producción, no solo el stress test. Corregido limpiando esa FK antes de borrar el encabezado.
+  - `locustfile.py`: pedido de venta requería `guia_remision` (no estaba en el payload de prueba); la tarea de reversión asumía un campo `revertido` inexistente en `HistorialDespacho` (el endpoint en realidad elimina el registro al revertir); y la precarga de sesión de los 11 roles necesitaba espaciar los logins a 13s (antes 3s) para respetar el rate-limit de nginx (`login_zone`, 5/min, burst 3) sin recibir 429 — además cada `HttpUser.on_start()` ahora espera activamente (con timeout) a que su rol termine de autenticarse, ya que Locust genera los usuarios casi de inmediato mientras la precarga de 11 logins en serie tarda ~2.5 minutos.
+- **Hallazgo crítico de entorno — `runserver` + `DEBUG=True` no sirven para medir capacidad:** la primera corrida completa de 100 usuarios contra el stack de desarrollo (`docker-compose.yml`, backend con `manage.py runserver` y `DEBUG=True`) mostró tiempos de respuesta de hasta **32 segundos** en peticiones GET simples, y la tarea de despacho nunca llegó a completar un ciclo de escaneo real en los 3 minutos de la prueba — no por un problema del endpoint de escaneo, sino porque el resto del sistema estaba saturado por el logging SQL verboso de DEBUG y el servidor de desarrollo mono-proceso. Se identificó que el repositorio ya cuenta con una configuración de producción (`infrastructure/docker/docker-compose.prod.yml`, `infrastructure/docker/Dockerfile.prod`, gunicorn con 3 workers, `DEBUG=0`) que no se estaba usando para las pruebas de carga.
+- **Resultado final validado, contra el stack de producción local (gunicorn 3 workers, `DEBUG=False`):**
+  - 1227 peticiones en 3 minutos, mediana global 92ms, p95 380ms, p99 690ms (frente a los 14-32 segundos del servidor de desarrollo).
+  - **`POST /api/scanning/validate (en despacho)`: 96 peticiones, 0 fallos, p95 = 270ms, máximo 323ms** — el umbral de negocio de <1s queda confirmado bajo carga real de 100 usuarios concurrentes con los 11 roles corriendo simultáneamente.
+  - Fallas residuales (4.16%), todas explicadas y esperadas (documentadas en `scripts/loadtest/README.md`): contención real de stock entre varios `DespachoUser` compitiendo por un pool pequeño de lotes sembrados, límite de crédito de clientes excedido (validación de negocio legítima tras el seed masivo), y 404 en endpoints de `/api/reporting/*` que pertenecen a trabajo de la rama `MES` aún no portado a `feature`.
+- **Documentación:** `scripts/loadtest/README.md` actualizado con la lista de los 11 roles, los umbrales de referencia por endpoint, la sección de "fallos esperados (no son bugs)", y el tiempo de precarga (~2.5 min) como comportamiento esperado, no un cuelgue.
+
+> **Nota de portado (`refactorizacion` → `feature`):** las cuatro entradas anteriores se escribieron originalmente en la rama `refactorizacion` (commit `91a0f94`) y se traen aquí sin cambios de fondo, adaptando solo rutas de archivo que en `feature` ya tenían una estructura distinta (p. ej. `inventory/views.py` dividido en `inventory/views/` + `inventory/services/`). Ver `docs/superpowers/plans/2026-09-22-portar-seguridad-y-deps-a-feature.md`.
+
+### 21 de Septiembre de 2026
+
+#### Eliminación Definitiva de Stored Procedures Obsoletos y Saneamiento DDL (SQL Server 2022)
+
+En continuidad con las pruebas de estrés del 31 de agosto de 2026 (donde se evidenció que los 21 Stored Procedures de reportes constituían código muerto y que toda la extracción de datos opera al 100% mediante Django ORM, `internal_api` e índices sargables), se realizó el saneamiento definitivo de los artefactos residuales en la base de datos y la documentación:
+
+- **Eliminación Física de V3:** Se retiró definitivamente del repositorio el script `database/V3__optimize_stored_procedures_texcore.sql` que contenía las 21 definiciones T-SQL en desuso.
+- **Script de Limpieza Idempotente (`database/V6__drop_obsolete_stored_procedures.sql`):** Creado script DDL con sentencias `DROP PROCEDURE IF EXISTS` para los 21 procedimientos (`sp_GetKardexBodega`, `sp_GetStockActualBodega`, `sp_GetOrdenesProduccionGerencial`, etc.), garantizando que cualquier instancia de SQL Server 2022 quede limpia de objetos huérfanos al ejecutarse.
+- **Actualización del Orquestador DDL (`gestion/management/commands/apply_sql_optimizations.py`):**
+  - Removido `V3` de `SQL_FILES` e incorporado `V6` (`V2` optimizaciones base, `V4` índices de carga concurrente, `V5` índices MES y `V6` drop de SPs).
+  - Actualizados docstrings y textos de ayuda del comando.
+- **Saneamiento de Guías y Reglas de Asistentes:**
+  - `AGENTS.md`: Eliminada la directiva obsoleta que instruía el uso de los 21 SPs; ahora estipula el uso canónico de `internal_api` y Django ORM optimizado con índices nativos.
+  - `CLAUDE.md`: Actualizada la sección de reglas de base de datos y reporting.
+  - `database/README.md`: Documentada la secuencia oficial de scripts (`V2`, `V4`, `V5`, `V6`) eliminando V3.
+  - `README.md`: Actualizada la tabla de stack tecnológico y la descripción de la carpeta `database/`.
+  - `docs/arquitectura-bd/MODELO_DATOS.md` y plan de trabajo MES: Depuradas las referencias a los SPs en desuso.
+
+#### Sincronización Bidireccional Reactiva entre Productos y Químicos (Frontend & Base de Datos)
+
+Para resolver el desacople en memoria donde los químicos creados o editados no aparecían de inmediato en la lista de productos (y viceversa) sin tener que recargar la página completa con F5, se diseñó e implementó un motor de sincronización puro y reactivo bajo metodología Superpowers (especificación en `docs/superpowers/specs/2026-09-21-sincronizacion-productos-quimicos-design.md` y plan en `docs/superpowers/plans/2026-09-21-sincronizacion-productos-quimicos.md`):
+
+- **Módulo Puro de Sincronización (`frontend/src/lib/catalogSync.ts`):**
+  - Implementadas funciones inmutables de conversión y reconciliación: `isChemicalType`, `chemicalToProduct`, `productToChemical`, `syncAddChemicalToProducts`, `syncUpdateChemicalInProducts`, `syncAddProductToChemicals`, `syncUpdateProductInChemicals` y `syncRemoveItemById`.
+  - Suite unitaria dedicada en `frontend/src/lib/catalogSync.test.ts` con 100% de cobertura (14/14 tests pasando).
+- **Integración en Panel de Bodeguero (`frontend/src/components/bodeguero/BodegueroDashboard.tsx`):**
+  - Los handlers de químicos (`handleChemicalCreate`, `handleChemicalUpdate`, `handleChemicalDelete`) ahora sincronizan en caliente el estado `productos`.
+  - Los handlers de productos (`handleProductCreate`, `handleProductUpdate`, `handleProductDelete`) detectan productos de tipo `'quimico'` e `'insumo'` y sincronizan en caliente el estado `quimicos`.
+  - Cobertura de integración en `frontend/src/components/bodeguero/BodegueroDashboard.test.tsx` (34/34 tests pasando).
+- **Integración en Administración de Sistemas (`frontend/src/components/admin-sistemas/useSedeSpecificData.ts`):**
+  - Homologada la sincronización reactiva bidireccional en las mutaciones de sede de administración.
+  - Cobertura de integración en `frontend/src/components/admin-sistemas/useSedeSpecificData.test.ts` (62/62 tests pasando).
+- **Consistencia de Catálogo en Base de Datos (Scripts SQL / Inserción Directa):**
+  - Documentada la regla de integridad de catálogo: los químicos e insumos residen en la tabla `gestion_producto` (no en una tabla separada). Para ser reconocidos por `/chemicals/` y las vistas operativas, los scripts SQL directos deben poblar `tipo = 'quimico'` (o `'insumo'`) en minúsculas y definir `sede_id = NULL` (alcance global para todas las sedes) o el ID numérico de la sede activa del usuario.
+- **Harness de Pruebas Local (`TexCore/settings_test_local.py`):**
+  - Añadido parser de fallback estándar para cargar `.env.test` sin depender de la librería externa `python-dotenv`.
+- **Verificación Completa:**
+  - Compilación TypeScript estricta con `npx tsc --noEmit` (0 errores).
+  - Batería completa de 131 tests en frontend pasando al 100%.
+
+#### Reemplazo de 'Producto Intermedio' por 'Colorantes' en Catálogo (Backend & Frontend)
+
+A solicitud de planta textil para la gestión precisa de insumos y materias primas en procesos de tintorería y acabados, se sustituyó la opción *"Producto Intermedio"* por *"Colorantes"* (`tipo = 'colorante'`, etiqueta visible `"Colorantes"`) en todo el ciclo de vida del catálogo y bodega, bajo metodología Superpowers (especificación en `docs/superpowers/specs/2026-09-21-tipo-producto-colorante-design.md` y plan en `docs/superpowers/plans/2026-09-21-tipo-producto-colorante.md`):
+
+- **Backend Django (`gestion/models/catalogo.py`):**
+  - Actualizado `Producto.TIPO_CHOICES` reemplazando `('producto_intermedio', 'Producto Intermedio')` por `('colorante', 'Colorantes')`.
+  - Creada migración reversible `gestion/migrations/0013_replace_producto_intermedio_with_colorante.py` que actualiza registros existentes de `producto_intermedio` a `colorante` y altera la definición del campo.
+  - Saneada la migración `gestion/migrations/0002_fix_token_blacklist_mssql.py` para condicionar la ejecución de T-SQL dinámico exclusivamente a motores Microsoft SQL Server, habilitando la ejecución de suites de prueba locales sin dependencias externas.
+  - Creada suite de pruebas unitarias ISTQB CTFL v4.0 en `gestion/tests/test_catalogo_producto_colorante.py` (2/2 pruebas pasando).
+- **Frontend React / TypeScript:**
+  - `frontend/src/lib/types.ts`: Añadido `'colorante'` al tipo unión de `Producto.tipo`.
+  - `frontend/src/components/admin-sistemas/ManageProductos.tsx`:
+    - Selector del formulario de creación y edición: reemplazado `"producto_intermedio"` por `<SelectItem value="colorante">Colorantes</SelectItem>`.
+    - Selector de filtro por tipo: reemplazado `"producto_intermedio"` por `<SelectItem value="colorante">Colorantes</SelectItem>`.
+    - Badge de tabla: estilizado con paleta ámbar textil (`bg-amber-100 text-amber-800 border-amber-200`) mostrando la etiqueta `"Colorantes"`.
+  - `frontend/src/components/admin-sistemas/ManageProductos.test.tsx`:
+    - Nuevas pruebas unitarias verificando el renderizado del badge `"Colorantes"` y el filtrado interactivo de productos.
+    - Ejecutadas suites completas con Vitest: 52/52 pruebas pasando (`ManageProductos` y `BodegueroDashboard`).
+    - Verificación de tipos TypeScript estricta con `npx tsc --noEmit` (0 errores).
+
+#### Buscador Reactivo de Productos (Código y Descripción) para el Rol Bodeguero e Inventario
+
+A pedido de los operarios de bodega para agilizar el ingreso de compras de materias primas, transferencias y mermas, se rediseñó el componente selector de productos (`ProductSelect.tsx` en `frontend/src/components/ui/product-select.tsx`), implementando una experiencia de búsqueda instantánea y ergonómica bajo metodología Superpowers (plan en `docs/superpowers/plans/2026-09-21-buscador-productos-bodeguero.md` y especificación en `docs/superpowers/specs/2026-09-21-buscador-productos-bodeguero-design.md`):
+
+- **Buscador Sticky Integrado:** Barra de búsqueda fija en la cabecera del desplegable con auto-enfoque al abrir, ícono de lupa, contador de resultados y botón de borrado rápido.
+- **Búsqueda Bimodal e Insensible a Acentos:** Algoritmo de normalización NFD (`normalizeText`) que permite buscar simultáneamente por código SKU (ej. `HIL-001`, `TEL`) o por descripción con o sin tildes (ej. escribir `algodon` filtra `Hilo de Algodón`).
+- **Visualización de Alto Contraste:** Cada ítem y el gatillo del selector presentan tanto el código SKU en formato monoespaciado (`[HIL-001]`) como la descripción del producto y su categoría textil.
+- **Atajos de Teclado:** Presionar `Enter` en el campo de búsqueda cuando hay coincidencias selecciona automáticamente el primer resultado y cierra el menú; `Escape` cierra sin cambios.
+- **Saneamiento de Tipos:** Se añadieron `pedido_venta_reserva?: number | null;` en `LoteProduccion` y `numero_pedido?: string;` en `PedidoVenta` (`frontend/src/lib/types.ts`), garantizando compilación TypeScript sin errores (`npx tsc --noEmit`).
+- **Pruebas y Verificación:**
+  - Nueva suite unitaria dedicada en `frontend/src/components/ui/product-select.test.tsx` (7/7 tests pasando).
+  - Verificación de no-regresión en todas las pantallas de `bodeguero` y `admin-sistemas` (26 archivos de prueba, 512 tests pasando al 100%).
+
+### 17 de Septiembre de 2026
+
+#### Actualización Integral del Frontend (React / TypeScript) — Operatividad del Motor MES y Trazabilidad DAG
+
+En continuidad con el despliegue del motor MES en la rama `MES`, se avanzó en la actualización completa de la interfaz de usuario en React + TypeScript + Tailwind + Shadcn UI para que los usuarios finales de todos los roles (Jefe de Planta, Operario, Vendedor, Jefe de Área y Administrador) puedan visualizar, controlar y operar las modalidades de producción continua, Make-to-Stock (MTS), Make-to-Order (MTO), stock comprometido y el árbol de genealogía DAG (plan de trabajo en `plan_actualizacion_frontend_mes.md`).
+
+##### 1. Inventario y Stock Comprometido (Fase 1 Frontend — COMPLETADA 100%)
+- **Serializador Backend (`inventory/serializers.py`):** Se añadieron los campos computados de solo lectura `stock_comprometido` y `stock_disponible` en `StockBodegaSerializer` (`DecimalField(max_digits=12, decimal_places=3)`).
+- **Tipado e Interfaces (`frontend/src/components/admin-sistemas/inventoryUtils.ts`):** Ampliada la interfaz `StockItem` para incluir `stock_comprometido?: string;` y `stock_disponible?: string;`.
+- **Vista de Stock (`frontend/src/components/admin-sistemas/StockView.tsx`):**
+  - Se dividió la visualización en tres columnas operativas: "Físico Total", "Comprometido (MTO)" (con badge ámbar de advertencia visual cuando existen reservas activas de pedidos comerciales) y "Disponible" (resaltado en verde con stock neto liberable).
+- **Catálogo de Productos (`frontend/src/components/admin-sistemas/ManageProductos.tsx`):**
+  - Añadido soporte y estilizado visual con badge morado para el nuevo tipo industrial `'producto_intermedio'`.
+- **Pruebas:** Suites `StockView.test.tsx` (10/10) y `ManageProductos.test.tsx` (19/19) pasando al 100%.
+
+##### 2. Manufactura Continua y Reestructuración de Dashboards (Fase 2 Frontend — COMPLETADA 100%)
+- **Rutas API Canónicas (`frontend/src/components/produccion/CorridaContinuaDashboard.tsx`):**
+  - Eliminación de prefijos `/api/` redundantes en Axios (dado que `baseURL` ya es `/api`), garantizando el consumo canónico de `/corridas-produccion/`, `/operaciones-produccion/`, `/areas/`, `/maquinas/`, `/bodegas/` y `/productos/`.
+  - Pruebas unitarias de `CorridaContinuaDashboard.test.tsx` (2/2) pasando.
+- **Dashboard Jefe de Planta (`frontend/src/components/jefe-planta/JefePlantaDashboard.tsx`):**
+  - Reorganización de un layout vertical extenso a navegación por pestañas (`Tabs` de Shadcn UI) con `forceMount` para preservar el estado del usuario y compatibilidad con pruebas: "Órdenes de Producción", "Planificación MTS", "Manufactura Continua MES", "Transferencias Interárea" y "Control de Lotes".
+  - Suite `JefePlantaDashboard.test.tsx` pasando al 100% (32/32 tests).
+- **Dashboard Operario (`frontend/src/components/operario/OperarioDashboard.tsx`):**
+  - Implementación de selector de entorno para operarios entre "Órdenes de Trabajo (OP)" y "Producción Continua (MES)", permitiendo el registro de paradas de máquina, consumos de bobinas y salidas de producción continua directamente desde estaciones de planta.
+  - Suite `OperarioDashboard.test.tsx` pasando al 100% (46/46 tests).
+
+##### 3. Planificación Contra Stock MTS (Fase 3 Frontend — COMPLETADA 100%)
+- **Alineación de Endpoints (`frontend/src/components/jefe-planta/PlanProduccionMTS.tsx`):**
+  - Conexión estricta con los endpoints del backend: `/planes-produccion/necesidades-reposicion/`, `/planes-produccion/crear-desde-alertas/`, `/planes-produccion/{id}/generar-orden/`, `/planes-produccion/{id}/aprobar/` y `/planes-produccion/{id}/cerrar/`.
+  - Pruebas `PlanProduccionMTS.test.tsx` (3/3) pasando.
+
+##### 4. Producción Bajo Pedido MTO (Fase 4 Frontend — COMPLETADA 100%)
+- **Modal de Seguimiento MTO (`frontend/src/components/vendedor/SeguimientoPedidoMTOModal.tsx`):**
+  - Nuevo componente que detalla el progreso de manufactura ítem por ítem del pedido comercial (`PedidoVenta`), comparando peso solicitado vs fabricado, badges de estado (`pendiente`, `en_proceso`, `fabricado`), barra de progreso y botón para crear la Orden de Producción vinculada mediante `POST /pedidos-venta/{id}/generar-orden-mto/`.
+  - Nueva suite `SeguimientoPedidoMTOModal.test.tsx` (2/2) pasando.
+- **Dashboard de Ventas (`frontend/src/components/vendedor/VendedorDashboard.tsx`):**
+  - Integración del botón de acción con ícono de fábrica (`Factory`) para abrir el modal de seguimiento de fabricación directamente desde la lista de pedidos. Pruebas pasando (8/8).
+- **Control de Órdenes MTO vs MTS (`frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx`):**
+  - Filtro por modalidad ("Todas", "Solo MTO", "Solo MTS") y etiquetas distintivas en los códigos de orden (`MTO #<pedido_id>` vs `MTS Stock`).
+- **Detalle de Orden (`frontend/src/components/jefe-planta/OrdenDetalleSheet.tsx`):**
+  - Banner informativo destacando si la orden pertenece a un pedido comercial específico y qué ítems abastece.
+- **Buscador de Lotes (`frontend/src/components/empaquetado/BuscadorLotes.tsx`):**
+  - Badge morado `MTO: Pedido #<id>` cuando el lote producido cuenta con reserva exclusiva `pedido_venta_reserva`. Pruebas pasando (13/13).
+
+##### 5. Estado Actual del Plan y Próximos Pasos (Fase 5 y 6)
+- **Fase 5: Visualizador de Genealogía DAG de Lotes (En Progreso):**
+  - Se definieron los contratos TypeScript de respuesta DAG en `frontend/src/types/produccion.ts` (`GenealogiaNodoLote`, `GenealogiaArista`, `GenealogiaMateriaPrima`, `GenealogiaDespachoCliente`, `GenealogiaResponse`).
+  - Se codificó el componente base `frontend/src/components/produccion/GenealogiaLoteModal.tsx` consumiendo `/corridas-produccion/trazabilidad-lote/?codigo=<cod>&direccion=atras|adelante` con vistas de **Trace-Back** (lote raíz, ancestros y materias primas de origen de fardos/fibras) y **Trace-Forward Recall** (lotes derivados y matriz de clientes comerciales afectados).
+  - **Punto de corte actual:**
+    1. Calibrar los botones de alternancia de dirección y finalizar la suite `GenealogiaLoteModal.test.tsx`.
+    2. Incorporar el botón de apertura del modal de genealogía DAG en la tabla de `BuscadorLotes.tsx`.
+    3. Integrar la alternancia entre la vista lineal de OP y el árbol DAG en `TrazabilidadPorCodigoPage.tsx`.
+- **Fase 6: Verificación Integral (Pendiente):**
+  - Verificación de tipos `npx tsc --noEmit` en `frontend/`.
+  - Ejecución de suites completas de frontend (`npm test`) y backend (`pytest` / `manage.py test`).
+  - Actualización del knowledge graph (`graphify update .`).
+
+#### Motor Unificado de Manufactura Textil (MES Nivel 3) — Producción Continua, Contra Stock (MTS) y Bajo Pedido (MTO)
+
+Se realizó una auditoría profunda de arquitectura y procesos industriales textiles sobre TexCore,
+diseñando e implementando un motor unificado de ejecución de manufactura (MES Nivel 3 / ISA-95)
+capaz de operar bajo las tres modalidades productivas de la industria textil, sin deuda técnica,
+en la rama git `MES` (plan de trabajo en `docs/superpowers/plans/2026-09-17-mes-motor-unificado.md`):
+
+1. **Producción Continua:** Corridas desacopladas de turnos continuos y máquinas sin obligatoriedad de Orden de Producción formal previa.
+2. **Producción Contra Stock (Make-to-Stock / MTS):** Planes periódicos de producción agregada, reposición inteligente por necesidad neta y control de avance.
+3. **Producción Bajo Pedido (Make-to-Order / MTO):** Enlace directo con pedidos comerciales (`PedidoVenta`), reserva exclusiva de lotes y barreras de control de despacho.
+
+La implementación abarcó 6 fases consecutivas, con migraciones Django, scripts DDL T-SQL nativos en
+SQL Server 2022 (con aislamiento RCSI), capa de compatibilidad retroactiva, comando de migración de datos
+históricos, dashboards web y cobertura total de pruebas ISTQB CTFL v4.0.
+
+##### Fase 1: Catálogo Unificado y Alertas de Stock Agrupadas
+
+- **Producto Intermedio (`gestion/models/catalogo.py`):** Incorporación formal del tipo `'INTERMEDIO'`
+  en `Producto.TIPO_CHOICES` (hilo crudo, tela cruda/piscada, cintas intermedias). Permite modelar ítems
+  semielaborados en procesos textiles multi-etapa con trazabilidad y costeo propio sin forzarlos a ser
+  falsas materias primas ni productos terminados comerciales.
+- **Alertas de Stock Mínimo Agrupadas (`inventory/models/stock.py`):** Se resolvió la limitación de
+  alertas evaluadas a nivel de lote individual, que generaban falsos positivos cuando el stock estaba
+  distribuido en múltiples lotes pequeños. Se introdujo `StockBodega.get_stock_total_producto(producto, bodega)`
+  y endpoints/serializers para contrastar el stock agregado físico real contra el umbral mínimo del catálogo.
+- **Migraciones:** `gestion.0007_producto_tipo_intermedio.py` y `gestion.0008_stockbodega_alertas_agrupadas.py`.
+- **Tests:** `gestion/tests/test_catalogo_producto_intermedio.py` y `gestion/tests/test_alertas_stock_agrupadas.py`.
+
+##### Fase 2: Núcleo MES de Ejecución y Trazabilidad Nivel 3 (ISA-95)
+
+- **Modelos de Ejecución Industrial (`gestion/models/mes.py`):**
+  - `CorridaProduccion`: Orquestador de corridas en planta (asociadas a OP o desacopladas), con estados
+    `PLANIFICADA`, `EN_PROCESO`, `PAUSADA`, `FINALIZADA`, `CANCELADA`, línea/área, máquina, fechas reales,
+    operario responsable y notas operativas.
+  - `OperacionProduccion`: Etapas secuenciales dentro de una corrida (Urdido, Tintura, Secado, Bobinado,
+    Inspección, etc.) con medición de rendimiento porcentual, tiempos reales y control de avance.
+  - `ConsumoMaterial`: Insumos y lotes consumidos por operación (materia prima o productos intermedios)
+    con bloqueo concurrente `select_for_update()` y validación estricta de sede/bodega.
+  - `ProduccionSalida`: Productos y lotes generados por la operación (`LoteProduccion`), asignando las
+    unidades/metros/kilos producidos a bodega.
+  - `MermaDesperdicio`: Registro cuantitativo tipificado de mermas y desperdicios por categoría y motivo
+    (tara, merma de arranque, rotura de hilo, falla de teñido, residuo no recuperable) para cuadratura
+    exacta de balance de masa.
+  - `GenealogiaLote`: Modelo de Grafo Acíclico Dirigido (DAG) `(lote_padre, lote_hijo, operacion, cantidad_origen, cantidad_destino)`
+    con algoritmo de prevención de ciclos (`detectar_ciclos()`), permitiendo trazabilidad forward (hacia adelante,
+    de insumos a producto final) y backward (hacia atrás, de producto terminado a fardos de materia prima).
+- **Servicios:**
+  - `EjecucionProduccionService`: Servicio transaccional que valida balance de masa ($\sum \text{Consumos} = \sum \text{Salidas} + \sum \text{Mermas}$),
+    deduce stock consumido, genera lotes de salida, registra genealogía y soporta reversión atómica de operaciones
+    restaurando stock en bodegas.
+  - `GenealogiaService`: Motor de consulta de árbol genealógico textil ascendente y descendente.
+- **Migración:** `gestion.0009_nucleo_mes_ejecucion_genealogia.py`.
+- **Tests:** `gestion/tests/test_ejecucion_produccion_service.py` y `gestion/tests/test_lote_universal.py`.
+
+##### Fase 3: Modalidad 1 — Producción Continua
+
+- **Desacoplamiento Operativo:** `CorridaProduccion.orden_produccion` opcional (`null=True, blank=True`). Permite
+  el arranque inmediato de corridas por turno, máquina o campaña en procesos continuos de hilandería o tejeduría,
+  sin necesidad de que exista una Orden de Producción formal previa creada en oficinas.
+- **API REST:** `CorridaProduccionViewSet` en `gestion/views/mes_views.py` (`/api/mes/corridas/`) con acciones
+  para `iniciar`, `registrar_operacion`, `pausar`, `reanudar`, `finalizar` y `revertir_operacion`.
+- **Frontend:** Componente `frontend/src/components/CorridaContinuaDashboard.tsx` para jefes de planta y operarios,
+  con monitoreo en vivo de turnos, paradas de línea, panel de balance de masa e ingreso rápido de consumos y salidas.
+- **Migración:** `gestion.0010_produccion_continua_desacoplada.py`.
+- **Tests:** `gestion/tests/test_produccion_continua.py`.
+
+##### Fase 4: Modalidad 2 — Producción Contra Stock (Make-to-Stock / MTS)
+
+- **Modelos de Planificación Agregada (`gestion/models/planificacion.py`):**
+  - `PlanProduccion`: Plan maestro de producción periódico con rango de fechas, sede, responsable, metas y estados
+    `BORRADOR`, `APROBADO`, `EN_EJECUCION`, `COMPLETADO`, `CANCELADO`.
+  - `DetallePlanProduccion`: Metas desagregadas por producto, cantidad planificada, avance fabricado acumulado y prioridad.
+- **Servicios:**
+  - `ReposicionService`: Algoritmo de cálculo de necesidad neta industrial:
+    $$\text{Necesidad} = \text{Stock Mínimo} - (\text{Stock Físico} - \text{Stock Comprometido}) - \text{Stock en Proceso}$$
+    Detección automática de quiebres de inventario y generación guiada de planes u órdenes de producción para reposición.
+  - Monitoreo en tiempo real de desviaciones entre avance fabricado y metas del plan.
+- **API REST:** `PlanProduccionViewSet` (`/api/mes/planes/`) con endpoint `/api/mes/planes/calcular_reposicion/`.
+- **Frontend:** Tablero `frontend/src/components/PlanProduccionMTS.tsx` con semáforos de cobertura por producto,
+  indicadores de desvío y herramientas de generación de planes de reabastecimiento.
+- **Migración:** `gestion.0011_plan_produccion_mts.py`.
+- **Tests:** `gestion/tests/test_produccion_stock.py`.
+
+##### Fase 5: Modalidad 3 — Producción Bajo Pedido (Make-to-Order / MTO)
+
+- **Modelos y Campos:**
+  - `OrdenProduccion`: Vínculos `pedido_venta` y `detalle_pedido` (`null=True, blank=True`), amarrando formalmente
+    la OP con el requerimiento del cliente.
+  - `LoteProduccion`: Campo `pedido_venta_reserva`, asignando reserva exclusiva del lote al pedido comercial.
+  - `DetallePedido`: Seguimiento con `cantidad_fabricada` y `estado_fabricacion` (`PENDIENTE`, `EN_PROCESO`, `COMPLETADO`).
+  - `StockBodega`: Campo `stock_comprometido` con CHECK Constraint nativo `chk_stockbodega_comprometido_nonneg`
+    (`stock_comprometido >= 0`) y propiedad `stock_disponible = cantidad - stock_comprometido`.
+- **Servicios y Aislamiento de Despacho Comercial:**
+  - `ReservaService`: Funciones para `crear_orden_desde_pedido`, `reservar_lote_para_pedido`, `liberar_reserva_lote`
+    y `validar_despacho_lote`.
+  - **Barrera Estricta en Despacho:** Modificado `ProcessDespachoAPIView` e integrado en `ValidateLoteAPIView`
+    (`/api/scanning/validate` en `inventory/views/scanning_views.py`). El sistema bloquea con HTTP 400 cualquier
+    intento de escanear o despachar un lote con reserva MTO a un pedido de cliente diferente.
+  - **Reversión Consistente:** `DespachoReversionService` y `EjecucionProduccionService.revertir_operacion` restauran
+    el `stock_comprometido` y los estados de fabricación de manera transparente si una corrida o un despacho son revertidos.
+- **Migraciones:** `gestion.0012_produccion_bajo_pedido_mto.py` e `inventory.0003_stockbodega_stock_comprometido.py`.
+- **Tests:** `gestion/tests/test_produccion_pedido.py`.
+
+##### Fase 6: Capa de Compatibilidad, Migración Histórica Legacy y Optimización SQL Server 2022
+
+- **Capa de Compatibilidad Retroactiva:** `RegistroLoteService.registrar_lote` y `TransformacionAPIView`
+  (`/api/inventory/transformaciones/`) interceptan y sincronizan automáticamente las transformaciones del flujo
+  clásico con el motor MES (`CorridaProduccion`, `OperacionProduccion`, `ConsumoMaterial`, `ProduccionSalida` y
+  `GenealogiaLote`), manteniendo compatibilidad total con terminales móviles y clientes existentes.
+- **Migración Histórica (`migrar_transformaciones_legacy.py`):** Management command para migrar transformaciones
+  preexistentes al modelo MES con balance de masa, DAG genealógico y trazabilidad completa en `AuditLog`.
+- **Optimizaciones DDL T-SQL (`database/V5__optimizacion_indices_mes.sql`):** 10 lotes de índices optimizados
+  para SQL Server 2022 ejecutados e integrados en `database/apply_sql_optimizations.py`:
+  - Índices filtrados en `CorridaProduccion` para corridas activas (`estado IN ('EN_PROCESO', 'PAUSADA')`).
+  - Índices compuestos en `OperacionProduccion` por corrida y orden secuencial.
+  - Índices bidireccionales en `GenealogiaLote` (`lote_padre_id, lote_hijo_id` y `lote_hijo_id, lote_padre_id`)
+    para consultas de genealogía profunda con costo $O(1)$.
+  - Índices filtrados en `LoteProduccion` para lotes con reserva MTO (`pedido_venta_reserva_id IS NOT NULL`).
+  - Índices filtrados en `StockBodega` para registros con stock comprometido (`stock_comprometido > 0`).
+  - Índices en `OrdenProduccion` para enlace MTO (`pedido_venta_id`, `detalle_pedido_id`).
+  - Índices en `DetallePlanProduccion` para consolidación rápida de planes MTS.
+
+##### Verificación y Calidad (Zero Technical Debt)
+
+- **Backend Django + DRF:** 1016/1016 tests pasando (`pytest gestion/ inventory/ internal_api/`).
+- **Microservicios Satélite:**
+  - `scanning_service/tests`: 52/52 tests pasando.
+  - `reporting_excel/tests`: 76/76 tests pasando.
+  - `printing_service/tests`: 85/85 tests pasando.
+- **Frontend React/TypeScript:**
+  - `npx tsc --noEmit`: 0 errores de compilación TypeScript.
+  - `npm test`: 1490/1490 tests pasando.
+- **Base de Datos:** Migraciones y DDL aplicados en SQL Server 2022 con Read Committed Snapshot Isolation (RCSI).
+- **Knowledge Graph:** Actualizado mediante `graphify update .`.
 
 ### 3 de Septiembre de 2026
 
@@ -1882,7 +4965,7 @@ Consolidación arquitectónica completa del motor de base de datos **Microsoft S
    - **Verificación**: `python manage.py check` → 0 errores de sistema.
 
 2. **Re-Ingeniería Total de los 21 Stored Procedures (Esquema 2026)**:
-   - Reescrito y consolidado [database/V3__optimize_stored_procedures_texcore.sql](database/V3__optimize_stored_procedures_texcore.sql) alineando las consultas T-SQL al 100% con los modelos de 2026:
+   - Reescrito y consolidado `database/V3__optimize_stored_procedures_texcore.sql` (eliminado; ver `database/V6`) alineando las consultas T-SQL al 100% con los modelos de 2026:
      - `sp_GetKardexBodega`: Integra `editado`, `has_audit` (`inventory_auditoriamovimiento`) y trazabilidad de proveedor.
      - `sp_GetProductosCatalogo`: Filtro por `sede_id`, `tipo`, `unidad_medida`, `precio_base`.
      - `sp_GetUsuariosSistema`: Left join con `gestion_sede` (`sede_nombre`).
@@ -1920,10 +5003,10 @@ Consolidación arquitectónica completa del motor de base de datos **Microsoft S
    - *Arquitectura Dinámica de Sedes*: Eliminada la creación hardcodeada de Sedes y Áreas predeterminadas. Las Sedes y Áreas reales de la planta son creadas dinámicamente por el Administrador de Sistemas desde la aplicación.
 
 5. **Aclaración de Dominio Textil e Infraestructura de Despliegue**:
-   - **Reglas Textiles Configurables**: Actualizados [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [.agents/rules/testing_standards.md](.agents/rules/testing_standards.md) y [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md) especificando que las equivalencias de empaquetado (ej. Hilos: $1\text{ baño} = 15\text{ fundas} = 225\text{ conos}$; Telas: $1\text{ baño} = 600\text{ m}$) son **ejemplos configurables por sede**.
+   - **Reglas Textiles Configurables**: Actualizados [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [.agents/rules/testing_standards.md](.agents/rules/testing_standards.md) y `docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md` (reemplazado por `GUIA_DESPLIEGUE.md` el 13-oct-2026) especificando que las equivalencias de empaquetado (ej. Hilos: $1\text{ baño} = 15\text{ fundas} = 225\text{ conos}$; Telas: $1\text{ baño} = 600\text{ m}$) son **ejemplos configurables por sede**.
    - **Scripts de Lanzamiento en 1 Clic**: Creados [scripts/deploy_production.sh](scripts/deploy_production.sh) (Bash) y [scripts/deploy_production.ps1](scripts/deploy_production.ps1) (PowerShell).
    - **Plantilla de Secretos**: Creado [.env.prod.example](.env.prod.example) para producción.
-   - **Documentación Maestra**: Creado [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md).
+   - **Documentación Maestra**: Creado `docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md` (reemplazado por `GUIA_DESPLIEGUE.md` el 13-oct-2026).
 
 6. **Verificación de Pruebas Automatizadas**:
    - **Backend Pytest**: `740 passed, 0 failed` in 66.68s (**100% de éxito**).

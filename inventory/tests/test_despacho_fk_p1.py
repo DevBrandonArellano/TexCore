@@ -16,14 +16,12 @@ STT (reversión restaura stock vía FK).
 
 from decimal import Decimal
 
-from django.test import TestCase
 from django.contrib.auth.models import Group
+from django.test import TestCase
 from django.utils import timezone
 
-from gestion.models import CustomUser, Sede, Producto, Bodega, OrdenProduccion, LoteProduccion
-from inventory.models import (
-    HistorialDespacho, DetalleHistorialDespacho, StockBodega, MovimientoInventario
-)
+from gestion.models import Bodega, CustomUser, LoteProduccion, OrdenProduccion, Producto, Sede
+from inventory.models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario, StockBodega
 from inventory.services.despacho_reversion import DespachoReversionService
 
 
@@ -31,30 +29,34 @@ class DespachoReversionFKTestCase(TestCase):
     """La reversión debe usar la FK al movimiento original, no un string."""
 
     def setUp(self):
-        self.sede = Sede.objects.create(nombre='Sede Despacho FK', location='Quito')
-        self.user = CustomUser.objects.create_user(username='despacho_fk', password='test123')
-        grupo, _ = Group.objects.get_or_create(name='despacho')
+        self.sede = Sede.objects.create(nombre="Sede Despacho FK", location="Quito")
+        self.user = CustomUser.objects.create_user(username="despacho_fk", password="test123")
+        grupo, _ = Group.objects.get_or_create(name="despacho")
         self.user.groups.add(grupo)
 
         self.producto = Producto.objects.create(
-            codigo='TELA-FK', descripcion='Tela FK Test', tipo='tela',
-            unidad_medida='kg', precio_base=Decimal('10.00'), sede=self.sede,
+            codigo="TELA-FK",
+            descripcion="Tela FK Test",
+            tipo="tela",
+            unidad_medida="kg",
+            precio_base=Decimal("10.00"),
+            sede=self.sede,
         )
-        self.bodega = Bodega.objects.create(nombre='Bodega PT FK', sede=self.sede)
+        self.bodega = Bodega.objects.create(nombre="Bodega PT FK", sede=self.sede)
 
         self.orden = OrdenProduccion.objects.create(
-            codigo='OP-FK-1',
+            codigo="OP-FK-1",
             producto_salida=self.producto,
-            peso_neto_requerido=Decimal('100.00'),
+            peso_neto_requerido=Decimal("100.00"),
             sede=self.sede,
         )
         ahora = timezone.now()
         self.lote = LoteProduccion.objects.create(
             orden_produccion=self.orden,
-            codigo_lote='LOTE-FK-1',
-            peso_neto_producido=Decimal('80.00'),
+            codigo_lote="LOTE-FK-1",
+            peso_neto_producido=Decimal("80.00"),
             operario=self.user,
-            turno='diurno',
+            turno="diurno",
             hora_inicio=ahora,
             hora_final=ahora,
         )
@@ -62,84 +64,74 @@ class DespachoReversionFKTestCase(TestCase):
     def _crear_despacho_con_movimiento(self, documento_ref=None, con_fk=True):
         """Simula un despacho procesado: movimiento VENTA + historial + detalle."""
         historial = HistorialDespacho.objects.create(
-            usuario=self.user, total_bultos=1, total_peso=Decimal('80.00'),
+            usuario=self.user,
+            total_bultos=1,
+            total_peso=Decimal("80.00"),
         )
         mov = MovimientoInventario.objects.create(
-            tipo_movimiento='VENTA',
+            tipo_movimiento="VENTA",
             producto=self.producto,
             lote=self.lote,
             bodega_origen=self.bodega,
-            cantidad=Decimal('80.00'),
+            cantidad=Decimal("80.00"),
             usuario=self.user,
-            documento_ref=documento_ref if documento_ref is not None
-            else f"Despacho #{historial.id}",
-            saldo_resultante=Decimal('0.00'),
+            documento_ref=documento_ref if documento_ref is not None else f"Despacho #{historial.id}",
+            saldo_resultante=Decimal("0.00"),
         )
         detalle = DetalleHistorialDespacho.objects.create(
             historial=historial,
             lote=self.lote,
             producto=self.producto,
-            peso=Decimal('80.00'),
+            peso=Decimal("80.00"),
             movimiento_venta=mov if con_fk else None,
         )
         return historial, mov, detalle
 
-    def test_detalle_guarda_fk_al_movimiento_venta(self):
+    def test_detalle_despacho_dado_despacho_cuando_guarda_entonces_referencia_su_movimiento_venta(self):
         """EP con FK: el detalle del despacho referencia su movimiento VENTA."""
-        historial, mov, detalle = self._crear_despacho_con_movimiento()
+        _historial, mov, detalle = self._crear_despacho_con_movimiento()
         self.assertEqual(detalle.movimiento_venta_id, mov.id)
 
-    def test_reversion_usa_fk_aunque_documento_ref_cambie(self):
+    def test_revertir_despacho_dado_documento_ref_distinto_cuando_revierte_entonces_usa_la_fk(self):
         """
         STT crítico: documento_ref con formato DISTINTO al esperado — con la
         búsqueda por string la reversión saltaba el lote en silencio; con la
         FK debe restaurar el stock correctamente.
         """
-        historial, mov, detalle = self._crear_despacho_con_movimiento(
-            documento_ref='FORMATO-NUEVO-XYZ',  # rompe el __contains
+        historial, _mov, _detalle = self._crear_despacho_con_movimiento(
+            documento_ref="FORMATO-NUEVO-XYZ",  # rompe el __contains
             con_fk=True,
         )
 
-        resultado = DespachoReversionService.revertir_despacho(
-            historial, self.user, justificacion='Reversión vía FK'
-        )
+        resultado = DespachoReversionService.revertir_despacho(historial, self.user, justificacion="Reversión vía FK")
 
-        self.assertEqual(resultado['lotes_revertidos'], 1,
-                         'Con FK la reversión no depende del formato del string')
-        stock = StockBodega.objects.get(
-            bodega=self.bodega, producto=self.producto, lote=self.lote
-        )
-        self.assertEqual(stock.cantidad, Decimal('80.00'))
+        self.assertEqual(resultado["lotes_revertidos"], 1, "Con FK la reversión no depende del formato del string")
+        stock = StockBodega.objects.get(bodega=self.bodega, producto=self.producto, lote=self.lote)
+        self.assertEqual(stock.cantidad, Decimal("80.00"))
 
-    def test_reversion_fallback_a_string_para_registros_historicos(self):
+    def test_revertir_despacho_dado_detalle_sin_fk_cuando_revierte_entonces_usa_documento_ref(self):
         """EP legado: detalle sin FK (datos pre-migración) usa el string."""
-        historial, mov, detalle = self._crear_despacho_con_movimiento(con_fk=False)
+        historial, _mov, _detalle = self._crear_despacho_con_movimiento(con_fk=False)
 
-        resultado = DespachoReversionService.revertir_despacho(
-            historial, self.user, justificacion='Reversión legado'
-        )
+        resultado = DespachoReversionService.revertir_despacho(historial, self.user, justificacion="Reversión legado")
 
-        self.assertEqual(resultado['lotes_revertidos'], 1)
-        stock = StockBodega.objects.get(
-            bodega=self.bodega, producto=self.producto, lote=self.lote
-        )
-        self.assertEqual(stock.cantidad, Decimal('80.00'))
+        self.assertEqual(resultado["lotes_revertidos"], 1)
+        stock = StockBodega.objects.get(bodega=self.bodega, producto=self.producto, lote=self.lote)
+        self.assertEqual(stock.cantidad, Decimal("80.00"))
 
-    def test_reversion_sin_movimiento_localizable_falla_explicitamente(self):
+    def test_revertir_despacho_dado_movimiento_no_localizable_cuando_revierte_entonces_falla(self):
         """
         EP sin nada: ni FK ni string válido → la reversión debe FALLAR con
         error claro (no saltar el lote en silencio dejando stock inconsistente).
         """
-        historial, mov, detalle = self._crear_despacho_con_movimiento(
-            documento_ref='SIN-RELACION', con_fk=False,
+        historial, _mov, detalle = self._crear_despacho_con_movimiento(
+            documento_ref="SIN-RELACION",
+            con_fk=False,
         )
 
         with self.assertRaises(ValueError):
-            DespachoReversionService.revertir_despacho(
-                historial, self.user, justificacion='Debe fallar'
-            )
+            DespachoReversionService.revertir_despacho(historial, self.user, justificacion="Debe fallar")
 
         # Fail-loud + atomicidad: nada se marcó como devuelto
         detalle.refresh_from_db()
-        self.assertFalse(detalle.es_devolucion,
-                         'La transacción debe revertirse completa si un lote no es localizable')
+        self.assertFalse(detalle.es_devolucion, "La transacción debe revertirse completa si un lote no es localizable")

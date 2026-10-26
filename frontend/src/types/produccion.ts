@@ -174,3 +174,70 @@ export interface Trazabilidad {
   pasos: TrazabilidadPaso[]
   siguiente: Trazabilidad | null
 }
+
+export interface GenealogiaNodoLote {
+  id: number
+  codigo_lote: string
+  producto_id?: number
+  producto_codigo: string
+  producto_descripcion: string
+  producto_tipo: string
+  peso_neto_producido: string
+  clasificacion_calidad?: string
+  orden_produccion_id?: number | null
+  orden_produccion_codigo?: string | null
+}
+
+export interface GenealogiaArista {
+  padre_id: number
+  padre_codigo: string
+  hijo_id: number
+  hijo_codigo: string
+  cantidad_usada: string
+  operacion_id?: number | null
+  numero_secuencia?: number | null
+  corrida_codigo?: string | null
+  maquina?: string | null
+  operario?: string | null
+  fecha?: string | null
+}
+
+export interface GenealogiaMateriaPrima {
+  id: number
+  lote_proveedor: string
+  proveedor_id: number
+  proveedor_nombre: string
+  producto_codigo: string
+  fecha_recepcion: string
+  numero_documento_entrada: string
+  asociado_a_lote_codigo: string
+}
+
+export interface GenealogiaDespachoCliente {
+  lote_id: number
+  lote_codigo: string
+  despacho_id?: number
+  fecha_despacho?: string | null
+  pedido_id?: number
+  pedido_codigo?: string
+  cliente_id?: number
+  cliente_nombre?: string
+  cliente_ruc?: string
+  peso_despachado?: string
+  movimiento_kardex_id?: number
+  documento_ref?: string
+  cantidad_vendida?: string
+}
+
+export interface GenealogiaResponse {
+  nodo_raiz: GenealogiaNodoLote
+  aristas: GenealogiaArista[]
+  ancestros?: GenealogiaNodoLote[]
+  materias_primas_origen?: GenealogiaMateriaPrima[]
+  total_ancestros?: number
+  total_materias_primas?: number
+  descendientes?: GenealogiaNodoLote[]
+  despachos_clientes?: GenealogiaDespachoCliente[]
+  total_descendientes?: number
+  total_clientes_afectados?: number
+}

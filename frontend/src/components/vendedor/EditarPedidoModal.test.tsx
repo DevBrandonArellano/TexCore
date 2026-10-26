@@ -1,3 +1,10 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): pedido null / pedido cargado sin cambios / un cambio pero motivo menor a
+ *   10 caracteres / un cambio y motivo valido / marcar como pagado.
+ * - Análisis de valores límite (BVA): un cambio pero motivo menor a 10 caracteres.
+ * - Caja blanca (CB): ramas de error — error sin detalle.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -5,25 +12,27 @@ import userEvent from '@testing-library/user-event';
 import { EditarPedidoModal } from './EditarPedidoModal';
 import type { PedidoVenta } from '../../lib/types';
 
+import { parcial } from '../../testing/parcial';
+
 // Sin test propio hasta ahora.
 const mockPatch = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { patch: (...args: any[]) => mockPatch(...args) },
+  default: { patch: (...args: unknown[]) => mockPatch(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
-const PEDIDO: PedidoVenta = {
+const PEDIDO: PedidoVenta = parcial({
   id: 7, guia_remision: 'GR-001', fecha_despacho: '2026-01-01',
   valor_retencion: 0, esta_pagado: false,
-} as any;
+});
 
 describe('EditarPedidoModal', () => {
   beforeEach(() => {

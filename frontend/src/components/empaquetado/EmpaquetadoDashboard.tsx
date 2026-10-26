@@ -1,34 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck, History } from 'lucide-react';
+import { PackageSearch, Printer, Loader2, Eye, Scale, TrendingUp, History } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { Progress } from '../ui/progress';
 import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
-import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
+import { toArray } from '../../lib/collections';
+import { OrdenProduccion, LoteProduccion } from '../../lib/types';
 import { ReimprimirModal } from './ReimprimirModal';
 import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
 import { BuscadorLotes } from './BuscadorLotes';
 import { printLabel } from '../../lib/printing';
-import { usePagination } from '../../hooks/usePagination';
+import { usePaginacionIncremental } from '../../hooks/usePaginacionIncremental';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+import { lotesApi } from '../../lib/api/lotesApi';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { Resolver, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '../ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 /** Formatea un Date a "YYYY-MM-DDTHH:mm" en hora local para <input datetime-local>. */
 function toLocalDatetimeInput(d: Date): string {
@@ -37,10 +33,21 @@ function toLocalDatetimeInput(d: Date): string {
         + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Schema for packaging validation
+// Esquema para la validación de empaquetado
+/** Ventana horaria sugerida para un lote nuevo: la última hora hasta ahora. */
+function horarioPorDefecto() {
+    const ahora = Date.now();
+    return {
+        hora_inicio: toLocalDatetimeInput(new Date(ahora - 60 * 60 * 1000)),
+        hora_final: toLocalDatetimeInput(new Date(ahora)),
+    };
+}
+
+const SIN_ORDENES: OrdenProduccion[] = [];
+
 const packagingSchema = z.object({
     orden_produccion: z.string().min(1, "Seleccione una orden"),
-    maquina: z.string().optional(), // No longer strictly required from user
+    maquina: z.string().optional(), // Ya no es obligatorio que lo ingrese el usuario
     codigo_lote: z.string().min(3, "Código de lote requerido"),
     presentacion: z.string().min(1, "Presentación requerida"),
     peso_bruto: z.coerce.number().min(0.01, "Peso bruto debe ser mayor a 0"),
@@ -64,19 +71,44 @@ const packagingSchema = z.object({
 
 type PackagingFormValues = z.infer<typeof packagingSchema>;
 
+/** Web Serial API (Chrome/Edge): no está en las definiciones DOM de TypeScript. Solo lo que usa la balanza. */
+interface PuertoSerial {
+    open(opciones: { baudRate: number }): Promise<void>;
+    readable: ReadableStream<Uint8Array>;
+}
+type NavegadorConSerial = Navigator & { serial: { requestPort(): Promise<PuertoSerial> } };
+
 export function EmpaquetadoDashboard() {
-    const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
-    const [maquinas, setMaquinas] = useState<Maquina[]>([]);
-    const [recentLotes, setRecentLotes] = useState<LoteProduccion[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const cargaInicial = useCargaRemota(
+        () =>
+            Promise.all([
+                apiClient.get<OrdenProduccion[]>('/ordenes-produccion/?estado=en_proceso'),
+                lotesApi.resumenHoy(),
+            ])
+                .then(([ordenesRes, resumen]) => ({ ordenes: toArray<OrdenProduccion>(ordenesRes.data), resumen }))
+                .catch((error: unknown) => {
+                    console.error("Error fetching data", error);
+                    toast.error("Error al cargar datos iniciales");
+                    throw error;
+                }),
+        'empaquetado-inicial',
+    );
+    const ordenes = cargaInicial.datos?.ordenes ?? SIN_ORDENES;
+    const resumenHoy = cargaInicial.datos?.resumen ?? null;
+    const isLoading = cargaInicial.cargando;
+    const { recargar: fetchInitialData } = cargaInicial;
+    const [fichaTarget, setFichaTarget] = useState<LoteProduccion | null>(null);
+    const obtenerHistorial = useCallback(
+        (bloque: number, tamano: number) => lotesApi.listar(bloque, tamano, { ordering: '-hora_final' }),
+        [],
+    );
+    const historial = usePaginacionIncremental<LoteProduccion>({ obtenerBloque: obtenerHistorial });
+    const recargarHistorial = historial.recargar;
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
     const [isScaleConnected, setIsScaleConnected] = useState(false);
-    const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
-    const ITEMS_PER_PAGE = 20;
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
     const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
-    const [confirmToleranciaNew, setConfirmToleranciaNew] = useState(false);
     const [preferredPrinterMode, setPreferredPrinterMode] = useState<string>(() => {
         if (typeof window !== 'undefined' && window.localStorage?.getItem) {
             try {
@@ -94,7 +126,7 @@ export function EmpaquetadoDashboard() {
             try {
                 window.localStorage.setItem('texcore_preferred_printer', mode);
             } catch {
-                /* ignore storage errors in test env */
+                /* ignora errores de almacenamiento en el entorno de pruebas */
             }
         }
         toast.info(`Modo de impresión cambiado a: ${mode === 'zebra' ? 'Zebra ZPL Nativo' : mode === 'pdf' ? 'PDF Universal' : 'Automático'}`);
@@ -103,35 +135,34 @@ export function EmpaquetadoDashboard() {
 
 
     const form = useForm<PackagingFormValues>({
-        resolver: zodResolver(packagingSchema) as any,
+        // z.coerce acepta texto en la entrada y entrega número: se fija el tipo de salida.
+        resolver: zodResolver(packagingSchema) as Resolver<PackagingFormValues>,
         defaultValues: {
             orden_produccion: "",
             maquina: "",
-            codigo_lote: "", // Will be suggested by backend
+            codigo_lote: "", // Lo sugerirá el backend
             presentacion: "Caja",
             peso_bruto: 0,
             tara: 0,
             cantidad_metros: undefined,
             unidades_empaque: 1,
             turno: "T1",
-            hora_inicio: toLocalDatetimeInput(new Date(Date.now() - 60 * 60 * 1000)),
-            hora_final: toLocalDatetimeInput(new Date()),
+            ...horarioPorDefecto(),
             completar_orden: false
         }
     });
 
-    // Watch presentation to auto-suggest tare
-    const presentationWatch = form.watch("presentacion");
-
-    useEffect(() => {
-        fetchInitialData();
-    }, []);
+    // Observa la presentación para sugerir la tara automáticamente
+    const [presentationWatch, pesoBruto, tara] = useWatch({
+        control: form.control,
+        name: ["presentacion", "peso_bruto", "tara"],
+    });
 
     useEffect(() => {
         if (presentationWatch === 'Caja') {
-            form.setValue('tara', 0.5); // Example default tare for Box
+            form.setValue('tara', 0.5); // Tara de ejemplo por defecto para caja
         } else if (presentationWatch === 'Funda') {
-            form.setValue('tara', 0.1); // Example default for Bag
+            form.setValue('tara', 0.1); // Tara de ejemplo por defecto para bolsa
         } else if (presentationWatch === 'Cono') {
             form.setValue('tara', 0.05);
         }
@@ -145,11 +176,10 @@ export function EmpaquetadoDashboard() {
                 return;
             }
 
-            // Request port
-            const selectedPort = await (navigator as any).serial.requestPort();
+            // Solicita el puerto
+            const selectedPort = await (navigator as NavegadorConSerial).serial.requestPort();
             await selectedPort.open({ baudRate: 9600 }); // Configuración común de balanzas
 
-            setPort(selectedPort);
             setIsScaleConnected(true);
             toast.success("Balanza conectada correctamente");
 
@@ -161,9 +191,9 @@ export function EmpaquetadoDashboard() {
         }
     };
 
-    const readFromScale = async (activePort: any) => {
+    const readFromScale = async (activePort: PuertoSerial) => {
         const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable)
+        void activePort.readable.pipeTo(textDecoder.writable)
             .catch((error: unknown) => console.error("Error en pipeTo de la balanza", error));
         const reader = textDecoder.readable.getReader();
 
@@ -180,7 +210,7 @@ export function EmpaquetadoDashboard() {
                     // Supongamos que la balanza envía datos terminados en \r o \n
                     if (buffer.includes('\n') || buffer.includes('\r')) {
                         const lines = buffer.split(/\r?\n/);
-                        buffer = lines.pop() || ""; // keep incomplete part
+                        buffer = lines.pop() || ""; // conserva la parte incompleta
                         
                         for (const line of lines) {
                             const cleanLine = line.trim();
@@ -201,29 +231,9 @@ export function EmpaquetadoDashboard() {
         } catch (error) {
             console.error("Error reading from scale", error);
             setIsScaleConnected(false);
-            setPort(null);
             toast.error("Conexión con la balanza perdida");
         } finally {
             reader.releaseLock();
-        }
-    };
-
-    const fetchInitialData = async () => {
-        try {
-            setIsLoading(true);
-            const [ordenesRes, maquinasRes, lotesRes] = await Promise.all([
-                apiClient.get<OrdenProduccion[]>('/ordenes-produccion/?estado=en_proceso'),
-                apiClient.get<Maquina[]>('/maquinas/'),
-                apiClient.get<LoteProduccion[]>('/lotes-produccion/?ordering=-id&limit=200')
-            ]);
-            setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-            setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-            setRecentLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
-        } catch (error) {
-            console.error("Error fetching data", error);
-            toast.error("Error al cargar datos iniciales");
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -235,7 +245,7 @@ export function EmpaquetadoDashboard() {
 
         setIsSubmitting(true);
         try {
-            // Calculate Net Weight for display/check (Backend validates too)
+            // Peso neto para mostrar/verificar (el backend también valida)
             const peso_neto = Number((data.peso_bruto - data.tara).toFixed(2));
 
             const maquinaId = selectedOrden.maquina_asignada != null
@@ -244,7 +254,7 @@ export function EmpaquetadoDashboard() {
 
             const payload = {
                 ...data,
-                // Inherit machine from order; omit key when unassigned so backend skips lookup
+                // Hereda la máquina de la orden; sin asignar se omite la clave
                 ...(maquinaId !== undefined ? { maquina: maquinaId } : {}),
                 peso_neto_producido: peso_neto,
                 hora_inicio: new Date(data.hora_inicio).toISOString(),
@@ -255,10 +265,10 @@ export function EmpaquetadoDashboard() {
 
             toast.success(`Lote ${res.data.codigo_lote} registrado correctamente. Peso Neto: ${peso_neto}kg`);
 
-            // Auto-trigger Label Print?
+            // ¿Disparar la impresión de la etiqueta automáticamente?
             handlePrintLabel(res.data.id);
 
-            // Reset and refresh (keep connection and specific states)
+            // Reinicia y refresca (conserva conexión y estados específicos)
             form.reset({
                 orden_produccion: data.orden_produccion, // Mantener la misma orden seleccionada ayuda a la rapidez
                 maquina: data.maquina, // Mantener máquina
@@ -266,18 +276,18 @@ export function EmpaquetadoDashboard() {
                 presentacion: data.presentacion,
                 peso_bruto: 0, // Reset pesos
                 cantidad_metros: undefined,
-                tara: data.tara, // Maintain tare assuming same packaging
+                tara: data.tara, // Mantiene la tara asumiendo el mismo empaque
                 unidades_empaque: data.unidades_empaque,
                 turno: data.turno,
-                hora_inicio: toLocalDatetimeInput(new Date(Date.now() - 60 * 60 * 1000)),
-                hora_final: toLocalDatetimeInput(new Date()),
+                ...horarioPorDefecto(),
                 completar_orden: false
             });
             fetchInitialData();
+            recargarHistorial();
 
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error registering packaging", error);
-            const msg = error.response?.data?.detail || "Error al registrar el empaque.";
+            const msg = mensajeDeLaApi(error, "Error al registrar el empaque.");
             toast.error(msg);
         } finally {
             setIsSubmitting(false);
@@ -301,28 +311,17 @@ export function EmpaquetadoDashboard() {
         }
     };
 
-    const handleReimpreso = async () => {
-        // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
-    };
-
-    const {
-        currentPage: safeRecentPage,
-        setCurrentPage: setCurrentRecentPage,
-        totalPages: totalRecentPages,
-        paginatedItems: paginatedRecentLotes,
-    } = usePagination(recentLotes, ITEMS_PER_PAGE);
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const lotesHoy = recentLotes.filter(l => l.hora_final && l.hora_final.startsWith(todayStr));
-    const bultosHoy = lotesHoy.length;
-    const pesoTotalHoy = lotesHoy.reduce((s, l) => s + Number(l.peso_neto_producido || 0), 0);
-    const promedioPesoHoy = bultosHoy > 0 ? (pesoTotalHoy / bultosHoy).toFixed(1) : '0';
+    // Totales del día calculados por el servidor con la fecha local.
+    const bultosHoy = resumenHoy?.bultos ?? 0;
+    const pesoTotalHoy = Number(resumenHoy?.peso_total_kg ?? 0);
+    const promedioPesoHoy = Number(resumenHoy?.peso_promedio_kg ?? 0).toFixed(1);
 
     return (
         <div className="space-y-6 p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-xs p-6 rounded-3xl border border-white/20 shadow-xs">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight text-primary">
                         Estación de Empaque
@@ -357,9 +356,9 @@ export function EmpaquetadoDashboard() {
                 </div>
             </div>
 
-            {/* Operator KPIs Section */}
+            {/* Sección de KPIs del operario */}
             <div className="grid gap-4 md:grid-cols-3">
-                <Card className="bg-gradient-to-br from-blue-50/50 to-white border-blue-100">
+                <Card className="bg-linear-to-br from-blue-50/50 to-white border-blue-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Bultos Empacados Hoy</p>
@@ -370,7 +369,7 @@ export function EmpaquetadoDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-emerald-50/50 to-white border-emerald-100">
+                <Card className="bg-linear-to-br from-emerald-50/50 to-white border-emerald-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Peso Total del Turno</p>
@@ -381,7 +380,7 @@ export function EmpaquetadoDashboard() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100">
+                <Card className="bg-linear-to-br from-indigo-50/50 to-white border-indigo-100">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Promedio por Bulto</p>
@@ -396,7 +395,7 @@ export function EmpaquetadoDashboard() {
 
 
             <div className="grid gap-6 md:grid-cols-2">
-                {/* Registration Form */}
+                {/* Formulario de registro */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Registrar Nuevo Bulto/Caja</CardTitle>
@@ -409,15 +408,15 @@ export function EmpaquetadoDashboard() {
                                 <FormField
                                     control={form.control}
                                     name="orden_produccion"
-                                    render={({ field }: { field: any }) => (
+                                    render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Orden de Producción</FormLabel>
                                             <Select
-                                                onValueChange={(val: any) => {
+                                                onValueChange={(val) => {
                                                     field.onChange(val);
                                                     const ord = ordenes.find(o => o.id.toString() === val);
                                                     setSelectedOrden(ord || null);
-                                                    // Leave empty so backend generates the correct sequential sequence
+                                                    // Déjalo vacío para que el backend genere la secuencia correcta
                                                     form.setValue('codigo_lote', "");
                                                 }}
                                                 defaultValue={field.value}
@@ -456,7 +455,7 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="codigo_lote"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Código Lote/Bulto</FormLabel>
                                                 <FormControl>
@@ -472,7 +471,7 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="presentacion"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Presentación</FormLabel>
                                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -495,11 +494,11 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="unidades_empaque"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Unidades</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} />
+                                                    <Input type="number" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -508,7 +507,7 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="turno"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Turno</FormLabel>
                                                 <FormControl>
@@ -535,11 +534,11 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="peso_bruto"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Peso Bruto (Kg)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} className={`text-lg font-bold ${isScaleConnected ? 'bg-green-50 border-green-500' : ''}`} />
+                                                    <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(Number(e.target.value))} className={`text-lg font-bold ${isScaleConnected ? 'bg-green-50 border-green-500' : ''}`} />
                                                 </FormControl>
                                                 <FormMessage />
                                                 {isScaleConnected && <span className="text-xs text-green-600 font-medium">Auto-actualizando desde balanza...</span>}
@@ -549,11 +548,11 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="tara"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Tara (Kg) - Manual</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} />
+                                                    <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(Number(e.target.value))} />
                                                 </FormControl>
                                                 <FormMessage />
                                                 <span className="text-xs text-muted-foreground">Puede modificar la tara según la presentación</span>
@@ -566,7 +565,7 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="hora_inicio"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Hora de Inicio</FormLabel>
                                                 <FormControl>
@@ -579,7 +578,7 @@ export function EmpaquetadoDashboard() {
                                     <FormField
                                         control={form.control}
                                         name="hora_final"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Hora Final</FormLabel>
                                                 <FormControl>
@@ -595,11 +594,11 @@ export function EmpaquetadoDashboard() {
                                    <FormField
                                         control={form.control}
                                         name="cantidad_metros"
-                                        render={({ field }: { field: any }) => (
+                                        render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Cantidad de Metros (Opcional)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} value={field.value || ''} placeholder="Metros reenrollados" />
+                                                    <Input type="number" step="0.0001" {...field} onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} value={field.value || ''} placeholder="Metros reenrollados (hasta 4 decimales)" />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -607,12 +606,12 @@ export function EmpaquetadoDashboard() {
                                     />
                                 )}
 
-                                {/* Calculated Net Weight Display */}
-                                <div className="p-6 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
+                                {/* Visualización del peso neto calculado */}
+                                <div className="p-6 bg-linear-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
                                     <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Peso Neto Calculado</span>
                                     <div className="flex items-baseline space-x-2">
-                                        <span className="text-5xl font-black tabular-nums text-primary drop-shadow-sm">
-                                            {(form.watch('peso_bruto') - form.watch('tara')).toFixed(2)}
+                                        <span className="text-5xl font-black tabular-nums text-primary drop-shadow-xs">
+                                            {(pesoBruto - tara).toFixed(2)}
                                         </span>
                                         <span className="text-xl font-bold text-primary/60 italic">kg</span>
                                     </div>
@@ -650,7 +649,7 @@ export function EmpaquetadoDashboard() {
                     </CardContent>
                 </Card>
 
-                {/* Recent List */}
+                {/* Lista de recientes */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Historial Reciente</CardTitle>
@@ -666,7 +665,7 @@ export function EmpaquetadoDashboard() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedRecentLotes.map(lote => (
+                                {historial.paginatedItems.map(lote => (
                                     <TableRow key={lote.id}>
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
@@ -681,6 +680,14 @@ export function EmpaquetadoDashboard() {
                                                 </Button>
                                                 <Button
                                                     variant="ghost" size="sm"
+                                                    onClick={() => setFichaTarget(lote)}
+                                                    title="Ver ficha del lote"
+                                                    aria-label="Ver ficha"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost" size="sm"
                                                     onClick={() => setHistorialTarget(lote)}
                                                     title="Ver historial de etiquetas"
                                                 >
@@ -690,60 +697,21 @@ export function EmpaquetadoDashboard() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {recentLotes.length === 0 && (
+                                {historial.count === 0 && !historial.cargando && (
                                     <TableRow>
                                         <TableCell colSpan={3} className="text-center text-muted-foreground">No hay registros recientes.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
-                        {recentLotes.length > 0 && (
-                            <div className="flex items-center justify-between mt-4">
-                                <span className="text-sm text-muted-foreground">
-                                    Página {safeRecentPage} de {totalRecentPages}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => p - 1)}
-                                        disabled={safeRecentPage === 1}
-                                    >
-                                        <ChevronLeft className="w-4 h-4 mr-1" />
-                                        Anterior
-                                    </Button>
-                                    <span className="flex items-center gap-1 text-sm">
-                                        <span className="text-muted-foreground">Ir a</span>
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            max={totalRecentPages}
-                                            defaultValue={safeRecentPage}
-                                            key={safeRecentPage}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                                    if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
-                                                }
-                                            }}
-                                            onBlur={(e) => {
-                                                const v = parseInt(e.target.value, 10);
-                                                if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
-                                            }}
-                                            className="w-14 h-8 text-center py-0 px-1"
-                                        />
-                                    </span>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => p + 1)}
-                                        disabled={safeRecentPage === totalRecentPages}
-                                    >
-                                        Siguiente
-                                        <ChevronRight className="w-4 h-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
+                        {historial.count > 0 && (
+                            <ControlesPaginacion
+                                currentPage={historial.currentPage}
+                                totalPages={historial.totalPages}
+                                setCurrentPage={historial.setCurrentPage}
+                                total={historial.count}
+                                cargando={historial.cargando}
+                            />
                         )}
                     </CardContent>
                 </Card>
@@ -754,8 +722,8 @@ export function EmpaquetadoDashboard() {
                 onOpenChange={(open) => { if (!open) setReimprimirTarget(null); }}
                 loteId={reimprimirTarget?.id ?? null}
                 codigoLote={reimprimirTarget?.codigo_lote}
-                onReimpreso={handleReimpreso}
             />
+            <FichaLoteDialog lote={fichaTarget} onClose={() => setFichaTarget(null)} />
             <HistorialEtiquetasModal
                 open={historialTarget !== null}
                 onOpenChange={(open) => { if (!open) setHistorialTarget(null); }}

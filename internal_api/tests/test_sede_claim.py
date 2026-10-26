@@ -10,6 +10,7 @@ Cubre:
 
 Técnicas ISTQB: EP (con/sin claim; admin/no-admin; sede propia/ajena) + BVA.
 """
+
 from types import SimpleNamespace
 
 from django.test import TestCase
@@ -22,7 +23,7 @@ def _fake_request(user, sede_id=None):
     """Request mínimo: resolve_sede_scope solo usa .user y .query_params.get."""
     params = {}
     if sede_id is not None:
-        params['sede_id'] = str(sede_id)
+        params["sede_id"] = str(sede_id)
     return SimpleNamespace(user=user, query_params=params)
 
 
@@ -34,8 +35,10 @@ class ServiceTokenSedeClaimTestCase(TestCase):
 
     def test_token_dado_sede_y_admin_cuando_valida_entonces_poblados_en_principal(self):
         token = JWTServiceAuthentication.generate_token(
-            service_name="backend-proxy", scopes=["reports:read"],
-            sede_id=7, is_admin=False,
+            service_name="backend-proxy",
+            scopes=["reports:read"],
+            sede_id=7,
+            is_admin=False,
         )
         principal, _ = self.auth._validate_token(token)
         self.assertEqual(principal.sede_id, 7)
@@ -43,8 +46,10 @@ class ServiceTokenSedeClaimTestCase(TestCase):
 
     def test_token_dado_admin_cuando_valida_entonces_is_admin_true(self):
         token = JWTServiceAuthentication.generate_token(
-            service_name="backend-proxy", scopes=["reports:read"],
-            sede_id=None, is_admin=True,
+            service_name="backend-proxy",
+            scopes=["reports:read"],
+            sede_id=None,
+            is_admin=True,
         )
         principal, _ = self.auth._validate_token(token)
         self.assertTrue(principal.is_admin)
@@ -54,7 +59,8 @@ class ServiceTokenSedeClaimTestCase(TestCase):
         # Retrocompatibilidad: tokens servicio-a-servicio clásicos (reporting_excel)
         # sin claim de sede → sede_id None, is_admin False. No deben romperse.
         token = JWTServiceAuthentication.generate_token(
-            service_name="reporting_excel", scopes=["reports:read"],
+            service_name="reporting_excel",
+            scopes=["reports:read"],
         )
         principal, _ = self.auth._validate_token(token)
         self.assertIsNone(principal.sede_id)
@@ -72,7 +78,7 @@ class ResolveSedeScopeTestCase(TestCase):
 
     def test_scope_dado_claim_no_admin_cuando_query_ajena_entonces_403(self):
         user = ServicePrincipal("backend-proxy", ["reports:read"], sede_id=3, is_admin=False)
-        sede_id, error = resolve_sede_scope(_fake_request(user, sede_id=9))
+        _sede_id, error = resolve_sede_scope(_fake_request(user, sede_id=9))
         self.assertIsNotNone(error)
         self.assertEqual(error.status_code, 403)
 

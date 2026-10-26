@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): motivo no seleccionado / peso fuera de tolerancia sin confirmar / usuario
+ *   no supervisor sin credenciales / sin cambios de peso ni calidad / supervisor con cambio de peso.
+ * - Caja blanca (CB): ramas de error — error de la API / error de red sin payload estructurado.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -22,35 +28,35 @@ vi.mock('../../lib/auth', () => ({
 
 const mockPost = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { post: (...args: any[]) => mockPost(...args) },
+  default: { post: (...args: unknown[]) => mockPost(...args) },
 }));
 
 const mockPrintLabel = vi.fn();
 vi.mock('../../lib/printing', () => ({
-  printLabel: (...args: any[]) => mockPrintLabel(...args),
+  printLabel: (...args: unknown[]) => mockPrintLabel(...args),
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 // Shim de Radix Select — mismo patrón que HistorialEtiquetasModal.test.tsx.
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button type="button" onClick={() => onValueChange(value)}>

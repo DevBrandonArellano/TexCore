@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Bodega, Sede, User } from '../../lib/types';
-import { Warehouse, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Bodega, PayloadBodega, Sede, User } from '../../lib/types';
+import { Warehouse, Pencil, Trash2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -14,14 +14,15 @@ import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageBodegasProps {
   bodegas: Bodega[];
   sedes: Sede[];
   users: User[];
   selectedSedeId?: string;
-  onBodegaCreate: (bodegaData: any) => Promise<boolean>;
-  onBodegaUpdate: (bodegaId: number, bodegaData: any) => Promise<boolean>;
+  onBodegaCreate: (bodegaData: PayloadBodega) => Promise<boolean>;
+  onBodegaUpdate: (bodegaId: number, bodegaData: PayloadBodega) => Promise<boolean>;
   onBodegaDelete: (bodegaId: number) => void;
   loading: boolean;
 }
@@ -52,16 +53,13 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
   };
 
-  useEffect(() => {
-    if (!editingBodega && isOpen && !formData.sede && sedes.length > 0) {
-      const auto = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId))
-        ? String(selectedSedeId)
-        : String(sedes[0].id);
-      setFormData(prev => ({ ...prev, sede: auto }));
-    }
-  }, [editingBodega, isOpen, formData.sede, selectedSedeId, sedes]);
+  // Respaldo al crear: si la sede quedó vacía se asigna durante el render
+  // (la condición deja de cumplirse en cuanto queda asignada).
+  if (!editingBodega && isOpen && !formData.sede && sedes.length > 0) {
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
+  }
 
-  // Filtrar usuarios based on selected sede
+  // Filtra usuarios según la sede seleccionada
   const availableUsers = useMemo(() => {
     if (!formData.sede) return [];
     const sedeId = parseInt(formData.sede, 10);
@@ -128,12 +126,9 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
       _justificacion_auditoria: formData._justificacion_auditoria,
     };
 
-    let success = false;
-    if (editingBodega) {
-      success = await onBodegaUpdate(editingBodega.id, bodegaDataToSend);
-    } else {
-      success = await onBodegaCreate(bodegaDataToSend);
-    }
+    const success = editingBodega
+      ? await onBodegaUpdate(editingBodega.id, bodegaDataToSend)
+      : await onBodegaCreate(bodegaDataToSend);
 
     if (success) {
       setIsOpen(false);
@@ -343,52 +338,12 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4"
+        />
       </CardContent>
     </Card>
   );

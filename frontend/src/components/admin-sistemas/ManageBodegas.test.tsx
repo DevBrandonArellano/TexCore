@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin bodegas / loading / bodegas existentes / busqueda por nombre /
+ *   busqueda por sede.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -5,18 +10,20 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ManageBodegas } from './ManageBodegas';
 
+import { Bodega, Sede, User } from '../../lib/types';
+
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
-const SEDE_NORTE = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
-const SEDE_SUR = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
+const SEDE_NORTE: Sede = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
+const SEDE_SUR: Sede = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
 
-const USER_NORTE = {
+const USER_NORTE: User = {
   id: 1,
   username: 'jdoe',
   first_name: 'Juan',
@@ -29,7 +36,7 @@ const USER_NORTE = {
   bodegas_asignadas: [],
 };
 
-const USER_SUR = {
+const USER_SUR: User = {
   id: 2,
   username: 'msmith',
   first_name: 'Maria',
@@ -42,19 +49,10 @@ const USER_SUR = {
   bodegas_asignadas: [],
 };
 
-const BODEGA_CENTRAL = { id: 1, nombre: 'Bodega Central', sede: 1, usuarios_asignados: [1] };
-const BODEGA_SECUNDARIA = { id: 2, nombre: 'Bodega Secundaria', sede: 2, usuarios_asignados: [] };
+const BODEGA_CENTRAL: Bodega = { id: 1, nombre: 'Bodega Central', sede: 1, usuarios_asignados: [1] };
+const BODEGA_SECUNDARIA: Bodega = { id: 2, nombre: 'Bodega Secundaria', sede: 2, usuarios_asignados: [] };
 
-function renderComponent(props: Partial<{
-  bodegas: any[];
-  sedes: any[];
-  users: any[];
-  selectedSedeId?: string;
-  onBodegaCreate: (data: any) => Promise<boolean>;
-  onBodegaUpdate: (id: number, data: any) => Promise<boolean>;
-  onBodegaDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageBodegas>> = {}) {
   const defaults = {
     bodegas: [],
     sedes: [SEDE_NORTE, SEDE_SUR],
@@ -338,5 +336,50 @@ describe('ManageBodegas', () => {
 
     await waitFor(() => expect(screen.queryByText('Completa el formulario para crear una nueva bodega')).not.toBeInTheDocument());
     expect(onBodegaCreate).not.toHaveBeenCalled();
+  });
+
+  it('dado un selectedSedeId que no corresponde a ninguna sede cuando abre el formulario entonces usa la primera sede', async () => {
+    renderComponent({ selectedSedeId: '999' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva Bodega' }));
+
+    expect(document.getElementById('sede')).toHaveTextContent('Sede Norte');
+  });
+
+  it('dado una bodega con sede no listada cuando edita entonces muestra el id de sede como respaldo', async () => {
+    const bodegaHuerfana = { id: 3, nombre: 'Bodega Huerfana', sede: 999, usuarios_asignados: [] };
+    renderComponent({ bodegas: [bodegaHuerfana] });
+
+    const row = getRowFor('Bodega Huerfana');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    expect(document.getElementById('sede')).toHaveTextContent('999');
+  });
+
+  it('dado un termino de busqueda cuando lo borra por completo entonces vuelve a mostrar todas las bodegas', async () => {
+    renderComponent({ bodegas: [BODEGA_CENTRAL, BODEGA_SECUNDARIA] });
+
+    const input = screen.getByPlaceholderText('Buscar por nombre o sede...');
+    await userEvent.type(input, 'Central');
+    expect(screen.queryByText('Bodega Secundaria')).not.toBeInTheDocument();
+
+    await userEvent.clear(input);
+
+    expect(screen.getByText('Bodega Central')).toBeInTheDocument();
+    expect(screen.getByText('Bodega Secundaria')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 bodegas cuando presiona Enter con una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchas = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, nombre: `Bodega ${String(i + 1).padStart(3, '0')}`, sede: 1, usuarios_asignados: [],
+    }));
+    renderComponent({ bodegas: muchas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '0{Enter}');
+
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
 });

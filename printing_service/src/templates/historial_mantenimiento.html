@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Historial de mantenimiento — {{ filtros.fecha_desde }} a {{ filtros.fecha_hasta }}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.2cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                font-size: 7pt;
+                color: #94a3b8;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 8.5pt;
+            color: #1e293b;
+            line-height: 1.35;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid #0f766e;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+        .header-left h1 { font-size: 15pt; font-weight: bold; color: #0f766e; text-transform: uppercase; letter-spacing: 0.5pt; }
+        .header-left p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+        .header-right { text-align: right; }
+        .header-right .doc-title { font-size: 11pt; font-weight: bold; color: #334155; text-transform: uppercase; }
+        .header-right p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+
+        h2 {
+            font-size: 10pt;
+            color: #0f766e;
+            text-transform: uppercase;
+            letter-spacing: 0.4pt;
+            margin: 14px 0 6px;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 3px;
+        }
+
+        .totales {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+        .total-box {
+            border: 1px solid #cbd5e1;
+            border-radius: 3px;
+            padding: 5px 9px;
+            background: #f8fafc;
+        }
+        .total-box .etiqueta { font-size: 7pt; color: #64748b; text-transform: uppercase; }
+        .total-box .valor { font-size: 12pt; font-weight: bold; color: #0f766e; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th {
+            background: #0f766e;
+            color: #ffffff;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            letter-spacing: 0.3pt;
+            text-align: left;
+            padding: 5px 6px;
+        }
+        td { padding: 4px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+        tbody tr:nth-child(even) td { background: #f8fafc; }
+        .num { text-align: right; }
+        .centro { text-align: center; }
+
+        .chip {
+            display: inline-block;
+            font-size: 7pt;
+            padding: 1px 5px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+        }
+        .chip-curso { border-color: #f59e0b; color: #b45309; background: #fffbeb; font-weight: bold; }
+        .chip-plan { border-color: #0f766e; color: #0f766e; background: #f0fdfa; }
+        .chip-auto { border-color: #94a3b8; color: #64748b; }
+
+        .vacio {
+            border: 1px dashed #cbd5e1;
+            border-radius: 3px;
+            padding: 14px;
+            text-align: center;
+            color: #64748b;
+            font-size: 9pt;
+            margin-top: 6px;
+        }
+
+        .pie {
+            margin-top: 14px;
+            padding-top: 6px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 7.5pt;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>{{ empresa_nombre }}</h1>
+            <p>{{ sede_nombre }}{% if area_nombre %} · {{ area_nombre }}{% endif %}</p>
+        </div>
+        <div class="header-right">
+            <div class="doc-title">Historial de mantenimiento y paros</div>
+            <p>Del {{ filtros.fecha_desde_texto or filtros.fecha_desde }} al {{ filtros.fecha_hasta_texto or filtros.fecha_hasta }}</p>
+            <p>Generado: {{ generado_en }}</p>
+        </div>
+    </div>
+
+    <div class="totales">
+        <div class="total-box">
+            <div class="etiqueta">Máquinas con paros</div>
+            <div class="valor">{{ totales.maquinas }}</div>
+        </div>
+        <div class="total-box">
+            <div class="etiqueta">Paros</div>
+            <div class="valor">{{ totales.paros }}</div>
+        </div>
+        <div class="total-box">
+            <div class="etiqueta">Horas detenidas</div>
+            <div class="valor">{{ "%.2f"|format(totales.horas_total) }}</div>
+        </div>
+        <div class="total-box">
+            <div class="etiqueta">Horas planificadas</div>
+            <div class="valor">{{ "%.2f"|format(totales.horas_planificadas) }}</div>
+        </div>
+        <div class="total-box">
+            <div class="etiqueta">En curso</div>
+            <div class="valor">{{ totales.paros_en_curso }}</div>
+        </div>
+    </div>
+
+    {% if resumen %}
+    <h2>Resumen por máquina</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Máquina</th>
+                <th>Área</th>
+                <th class="num">Paros</th>
+                <th class="num">Horas detenidas</th>
+                <th class="num">Horas planificadas</th>
+                <th class="centro">En curso</th>
+                <th>Último mantenimiento</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in resumen %}
+            <tr>
+                <td>{{ fila.maquina_nombre }}</td>
+                <td>{{ fila.area_nombre or '—' }}</td>
+                <td class="num">{{ fila.paros }}</td>
+                <td class="num">{{ "%.2f"|format(fila.horas_total) }}</td>
+                <td class="num">{{ "%.2f"|format(fila.horas_planificadas) }}</td>
+                <td class="centro">{% if fila.paros_en_curso %}<span class="chip chip-curso">{{ fila.paros_en_curso }}</span>{% else %}—{% endif %}</td>
+                <td>{{ fila.ultimo_mantenimiento or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Detalle de paros</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Máquina</th>
+                <th>Inicio</th>
+                <th>Fin</th>
+                <th class="num">Horas</th>
+                <th>Categoría</th>
+                <th class="centro">Planificado</th>
+                <th>Registró</th>
+                <th>Descripción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for paro in detalle %}
+            <tr>
+                <td>{{ paro.maquina_nombre }}</td>
+                <td>{{ paro.inicio }}</td>
+                <td>{% if paro.en_curso %}<span class="chip chip-curso">En curso</span>{% else %}{{ paro.fin }}{% endif %}</td>
+                <td class="num">{% if paro.horas is not none %}{{ "%.2f"|format(paro.horas) }}{% else %}—{% endif %}</td>
+                <td>
+                    {{ paro.categoria_display }}
+                    {% if paro.origen == 'estado' %}<span class="chip chip-auto">automático</span>{% endif %}
+                </td>
+                <td class="centro">{% if paro.planificado %}<span class="chip chip-plan">Sí</span>{% else %}No{% endif %}</td>
+                <td>{{ paro.usuario_nombre or '—' }}</td>
+                <td>{{ paro.descripcion or '—' }}{% if paro.turno %} · Turno {{ paro.turno }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="vacio">Sin paros registrados en el rango consultado.</div>
+    {% endif %}
+
+    <div class="pie">
+        <span>
+            Filtros: categoría {{ filtros.categoria }} · {{ filtros.planificado }} ·
+            del {{ filtros.fecha_desde_texto or filtros.fecha_desde }} al {{ filtros.fecha_hasta_texto or filtros.fecha_hasta }}
+        </span>
+        <span>{% if impreso_por %}Impreso por {{ impreso_por }}{% endif %}</span>
+    </div>
+</body>
+</html>

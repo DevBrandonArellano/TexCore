@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import {
     Dialog,
@@ -13,10 +13,12 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { mensajeDeLaApi } from '../../lib/apiError';
+import { Movimiento } from '../../lib/types';
 
 interface EditarMovimientoDialogProps {
-    movimiento: any | null; // Usar tipo any temporalmente para flexibilidad, idealmente usar MovimientoInventario
+    movimiento: Movimiento | null;
     open: boolean;
     onClose: () => void;
     onSuccess: () => void;
@@ -28,13 +30,16 @@ export function EditarMovimientoDialog({ movimiento, open, onClose, onSuccess }:
     const [razonCambio, setRazonCambio] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
+    // Al recibir otro movimiento se reinicia el formulario durante el render (sin efecto que pinte primero los valores viejos).
+    const [movimientoVisto, setMovimientoVisto] = useState<Movimiento | null>(null);
+    if (movimiento !== movimientoVisto) {
+        setMovimientoVisto(movimiento);
         if (movimiento) {
             setCantidad(movimiento.entrada || movimiento.cantidad || '');
             setDocumentoRef(movimiento.documento_ref || '');
             setRazonCambio('');
         }
-    }, [movimiento]);
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,9 +60,9 @@ export function EditarMovimientoDialog({ movimiento, open, onClose, onSuccess }:
             toast.success("Movimiento actualizado con éxito");
             onSuccess();
             onClose();
-        } catch (error: any) {
+        } catch (error) {
             console.error('Error al actualizar:', error);
-            const errorMsg = error.response?.data?.error || error.response?.data?.detail || "Error al actualizar el movimiento";
+            const errorMsg = mensajeDeLaApi(error, "Error al actualizar el movimiento");
             toast.error(errorMsg);
         } finally {
             setIsSubmitting(false);

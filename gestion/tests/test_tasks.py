@@ -10,6 +10,7 @@ Técnicas ISTQB aplicadas:
   error de conexión (retry con excepción), y rama de excepción genérica.
 - Partición de equivalencia (EP): sede_id válido vs. servicio que lanza excepción.
 """
+
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -19,11 +20,14 @@ from gestion.tasks import async_export_report
 
 
 class AsyncExportReportTestCase(TestCase):
-    @patch('internal_api.services.report_dispatch.resolve_report')
-    @patch('gestion.tasks.httpx.Client')
-    @patch('gestion.tasks.JWTServiceAuthentication.generate_token', return_value='fake-token')
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    @patch("gestion.tasks.httpx.Client")
+    @patch("gestion.tasks.JWTServiceAuthentication.generate_token", return_value="fake-token")
     def test_export_dado_respuesta_200_cuando_ejecuta_entonces_success(
-        self, mock_token, mock_client_cls, mock_resolve,
+        self,
+        mock_token,
+        mock_client_cls,
+        mock_resolve,
     ):
         mock_resolve.return_value = ([{"col": 1}], "kardex_test")
         mock_response = MagicMock(status_code=200)
@@ -32,17 +36,20 @@ class AsyncExportReportTestCase(TestCase):
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
         task = async_export_report
-        resultado = task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=7)
+        resultado = task.run(report_path="export/kardex", params={"bodega_id": 1}, user_id=7)
 
-        self.assertEqual(resultado['status'], 'SUCCESS')
-        self.assertEqual(resultado['report_path'], 'export/kardex')
-        self.assertEqual(resultado['user_id'], 7)
+        self.assertEqual(resultado["status"], "SUCCESS")
+        self.assertEqual(resultado["report_path"], "export/kardex")
+        self.assertEqual(resultado["user_id"], 7)
 
-    @patch('internal_api.services.report_dispatch.resolve_report')
-    @patch('gestion.tasks.httpx.Client')
-    @patch('gestion.tasks.JWTServiceAuthentication.generate_token', return_value='fake-token')
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    @patch("gestion.tasks.httpx.Client")
+    @patch("gestion.tasks.JWTServiceAuthentication.generate_token", return_value="fake-token")
     def test_export_dado_respuesta_error_http_cuando_ejecuta_entonces_reintenta(
-        self, mock_token, mock_client_cls, mock_resolve,
+        self,
+        mock_token,
+        mock_client_cls,
+        mock_resolve,
     ):
         # Caja blanca: rama status_code != 200 -> self.retry(countdown=60)
         mock_resolve.return_value = ([], "kardex_test")
@@ -52,26 +59,29 @@ class AsyncExportReportTestCase(TestCase):
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
         task = async_export_report
-        with patch.object(task, 'retry', side_effect=Exception('retry-called')) as mock_retry:
-            with self.assertRaises(Exception):
-                task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=1)
+        with patch.object(task, "retry", side_effect=RuntimeError("retry-called")) as mock_retry:
+            with self.assertRaises(RuntimeError):
+                task.run(report_path="export/kardex", params={"bodega_id": 1}, user_id=1)
             mock_retry.assert_called_once_with(countdown=60)
 
-    @patch('internal_api.services.report_dispatch.resolve_report')
-    @patch('gestion.tasks.httpx.Client')
-    @patch('gestion.tasks.JWTServiceAuthentication.generate_token', return_value='fake-token')
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    @patch("gestion.tasks.httpx.Client")
+    @patch("gestion.tasks.JWTServiceAuthentication.generate_token", return_value="fake-token")
     def test_export_dado_error_de_conexion_cuando_ejecuta_entonces_reintenta_con_excepcion(
-        self, mock_token, mock_client_cls, mock_resolve,
+        self,
+        mock_token,
+        mock_client_cls,
+        mock_resolve,
     ):
         # Caja blanca: rama httpx.RequestError -> self.retry(exc=exc, countdown=60)
         mock_resolve.return_value = ([], "kardex_test")
         mock_client = MagicMock()
-        mock_client.post.side_effect = httpx.ConnectError('no se pudo conectar')
+        mock_client.post.side_effect = httpx.ConnectError("no se pudo conectar")
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
         task = async_export_report
-        with patch.object(task, 'retry', side_effect=Exception('retry-called')) as mock_retry:
-            with self.assertRaises(Exception):
-                task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=1)
-            self.assertEqual(mock_retry.call_args.kwargs['countdown'], 60)
-            self.assertIsInstance(mock_retry.call_args.kwargs['exc'], httpx.ConnectError)
+        with patch.object(task, "retry", side_effect=RuntimeError("retry-called")) as mock_retry:
+            with self.assertRaises(RuntimeError):
+                task.run(report_path="export/kardex", params={"bodega_id": 1}, user_id=1)
+            self.assertEqual(mock_retry.call_args.kwargs["countdown"], 60)
+            self.assertIsInstance(mock_retry.call_args.kwargs["exc"], httpx.ConnectError)

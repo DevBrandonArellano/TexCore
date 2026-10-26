@@ -1,25 +1,11 @@
 """Helpers y mixins compartidos por los módulos de vistas de gestion/."""
-from rest_framework.exceptions import ValidationError
 
+# El parseo de parámetros vive en `gestion/params.py`, que no depende de las vistas: así lo
+# pueden usar también los servicios sin cerrar un círculo de imports. Se reexporta aquí para
+# que los módulos de vistas lo sigan importando de un solo sitio.
+from gestion.params import parse_date_param, parse_int_param, parse_rango_fechas
 
-def parse_int_param(value, field_name):
-    """
-    Valida un query param usado como ID entero positivo (OWASP A03).
-
-    Retorna int, o None si el valor viene vacío/ausente. Lanza
-    ValidationError (→ HTTP 400 controlado) si el valor no es un entero
-    válido, evitando un 500 no controlado al pasar '?area=abc' a un
-    queryset `.filter(id=...)`.
-    """
-    if value in (None, ''):
-        return None
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        raise ValidationError({field_name: f"'{value}' no es un identificador válido."})
-    if parsed <= 0:
-        raise ValidationError({field_name: "El identificador debe ser un entero positivo."})
-    return parsed
+__all__ = ["parse_date_param", "parse_int_param", "parse_rango_fechas"]
 
 
 class SedeAutoAssignMixin:
@@ -40,8 +26,8 @@ class SedeAutoAssignMixin:
     def perform_create(self, serializer):
         user = self.request.user
         save_kwargs = self.get_perform_create_extra_kwargs(serializer)
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            save_kwargs['sede'] = user.sede
+        if not serializer.validated_data.get("sede") and hasattr(user, "sede") and user.sede:
+            save_kwargs["sede"] = user.sede
         serializer.save(**save_kwargs)
 
 
@@ -56,10 +42,13 @@ class AuditedDestroyMixin:
     """
 
     def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-            self.request.headers.get('X-Justificacion-Auditoria') or \
-            self.request.data.get('_justificacion_auditoria')
+        from gestion.middleware import clear_cascade_justification, set_cascade_justification
+
+        justificacion = (
+            self.request.query_params.get("_justificacion_auditoria")
+            or self.request.headers.get("X-Justificacion-Auditoria")
+            or self.request.data.get("_justificacion_auditoria")
+        )
         if not justificacion:
             justificacion = "Eliminación desde panel de administración"
         instance._justificacion_auditoria = justificacion

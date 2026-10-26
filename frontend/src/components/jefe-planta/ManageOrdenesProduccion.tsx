@@ -6,7 +6,7 @@ import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } from '../../lib/types';
-import { Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, ClipboardList } from 'lucide-react';
+import { Pencil, Trash2, MoreHorizontal, PlusCircle, ClipboardList } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
@@ -18,15 +18,10 @@ import { RequisitosMaterialesDialog } from './RequisitosMaterialesDialog';
 import { RegistrarLoteDialog } from './RegistrarLoteDialog';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
 import { OrdenFormDialog } from './OrdenFormDialog';
-import {
-  type OrdenFormData,
-  EMPTY_ORDEN_FORM_DATA,
-  getOrdenVencimientoStatus,
-  estadoBadge,
-  prioridadBadge,
-  buildOrdenPayload,
-  validateOrdenForm,
-} from './ordenUtils';
+import { JustificacionDialog } from '../shared/JustificacionDialog';
+import { EMPTY_ORDEN_FORM_DATA, OrdenPayload, buildOrdenPayload, estadoBadge, getOrdenVencimientoStatus, prioridadBadge, type OrdenFormData, validateOrdenForm } from './ordenUtils';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { toArray } from '../../lib/collections';
 
 // RFC 5424 — logger del módulo (relay a /api/logs/ para WARNING+).
 const logger = createLogger('ManageOrdenesProduccion');
@@ -39,10 +34,11 @@ interface ManageOrdenesProduccionProps {
   maquinas: Maquina[];
   areas: Area[];
   bodegas: Bodega[];
-  onOrdenCreate: (data: any) => Promise<boolean>;
-  onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
+  onOrdenCreate: (data: OrdenPayload) => Promise<boolean>;
+  onOrdenUpdate: (id: number, data: OrdenPayload) => Promise<boolean>;
   onOrderStatusChange?: (id: number, newStatus: string) => Promise<boolean>;
-  onOrdenDelete: (id: number) => void;
+  /** Devuelve `true` si la orden se eliminó. */
+  onOrdenDelete: (id: number, justificacion: string) => Promise<boolean>;
   loading: boolean;
   onDataRefresh: () => void;
 }
@@ -65,19 +61,22 @@ export function ManageOrdenesProduccion({
   onDataRefresh
 }: ManageOrdenesProduccionProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [areas, setAreas] = useState<Area[]>(areasProp);
-
-  // Sincronizar con actualizaciones del prop padre (ej. refresh del dashboard)
-  useEffect(() => {
-    if (!isOpen) setAreas(areasProp);
-  }, [areasProp]);
+  // Cerrado, el formulario usa las áreas del prop padre (siguen sus recargas).
+  // Al abrirse se fijan las del prop y luego se reemplazan por la lista completa
+  // del backend; mientras está abierto no se pisan con un refresh del padre.
+  const [areasDialogo, setAreasDialogo] = useState<Area[] | null>(null);
+  const [abiertoPrevio, setAbiertoPrevio] = useState(isOpen);
+  if (isOpen !== abiertoPrevio) {
+    setAbiertoPrevio(isOpen);
+    setAreasDialogo(isOpen ? areasProp : null);
+  }
+  const areas = isOpen && areasDialogo ? areasDialogo : areasProp;
 
   // Cargar todas las áreas al abrir el formulario (sin paginación en el backend)
   useEffect(() => {
     if (isOpen) {
       apiClient.get('/areas/').then(r => {
-        const data = Array.isArray(r.data) ? r.data : (r.data as any).results ?? [];
-        setAreas(data);
+        setAreasDialogo(toArray<Area>(r.data));
       }).catch(() => {
         // Si falla, se conservan las áreas del prop (degradación elegante);
         // se deja rastro para diagnóstico sin interrumpir al usuario.
@@ -94,6 +93,7 @@ export function ManageOrdenesProduccion({
   const searchTerm = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || 'all';
   const machineFilter = searchParams.get('maquina') || 'all';
+  const modalidadFilter = searchParams.get('modalidad') || 'all';
   // Saneo del parámetro de URL: NaN o valores < 1 → página 1. Evita que
   // ?page=NaN/-5 deje ambos botones de paginación habilitados y desincronice
   // el estado. El límite superior lo cubre el botón "Siguiente" (currentPage >= totalPages).
@@ -103,6 +103,7 @@ export function ManageOrdenesProduccion({
   const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);
   const [selectedOrdenForRequisitos, setSelectedOrdenForRequisitos] = useState<OrdenProduccion | null>(null);
   const [selectedOrdenForDetail, setSelectedOrdenForDetail] = useState<OrdenProduccion | null>(null);
+  const [ordenAEliminar, setOrdenAEliminar] = useState<OrdenProduccion | null>(null);
 
   const handleOpenLotDialog = (orden: OrdenProduccion) => {
     setSelectedOrdenForLot(orden);
@@ -119,9 +120,13 @@ export function ManageOrdenesProduccion({
       const matchesSearch = o.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || o.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || o.estado === statusFilter;
       const matchesMachine = machineFilter === 'all' || o.maquina_asignada?.toString() === machineFilter;
-      return matchesSearch && matchesStatus && matchesMachine;
+      const matchesModalidad =
+        modalidadFilter === 'all' ||
+        (modalidadFilter === 'mto' && Boolean(o.pedido_venta)) ||
+        (modalidadFilter === 'mts' && !o.pedido_venta);
+      return matchesSearch && matchesStatus && matchesMachine && matchesModalidad;
     });
-  }, [ordenes, searchTerm, statusFilter, machineFilter]);
+  }, [ordenes, searchTerm, statusFilter, machineFilter, modalidadFilter]);
 
   const { totalPages, paginatedItems: paginatedOrdenes, setCurrentPage } = usePagination(filteredOrdenes, ITEMS_PER_PAGE, {
     page: currentPage,
@@ -137,7 +142,7 @@ export function ManageOrdenesProduccion({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    const newErrors = validateOrdenForm(formData, !!editingOrden);
+    const newErrors = validateOrdenForm(formData, !!editingOrden, !!editingOrden?.inventario_descontado);
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
       toast.error('Por favor completa todos los campos requeridos');
@@ -147,13 +152,10 @@ export function ManageOrdenesProduccion({
     const dataToSend = buildOrdenPayload(formData);
 
     setIsSubmitting(true);
-    let success = false;
     try {
-      if (editingOrden) {
-        success = await onOrdenUpdate(editingOrden.id, dataToSend);
-      } else {
-        success = await onOrdenCreate(dataToSend);
-      }
+      const success = editingOrden
+        ? await onOrdenUpdate(editingOrden.id, dataToSend)
+        : await onOrdenCreate(dataToSend);
 
       if (success) {
         setIsOpen(false);
@@ -166,13 +168,12 @@ export function ManageOrdenesProduccion({
 
   const handleEdit = (orden: OrdenProduccion) => {
     setEditingOrden(orden);
-    const ordenAny = orden as any;
     setFormData({
       codigo: orden.codigo,
-      producto_entrada: (ordenAny.producto_entrada ?? ordenAny.producto ?? '').toString(),
-      bodega_entrada: (ordenAny.bodega_entrada ?? '').toString(),
-      producto_salida: (ordenAny.producto_salida ?? '').toString(),
-      bodega_salida: (ordenAny.bodega_salida ?? '').toString(),
+      producto_entrada: (orden.producto_entrada ?? orden.producto ?? '').toString(),
+      bodega_entrada: (orden.bodega_entrada ?? '').toString(),
+      producto_salida: (orden.producto_salida ?? '').toString(),
+      bodega_salida: (orden.bodega_salida ?? '').toString(),
       formula_color: orden.formula_color?.toString() || '',
       peso_neto_requerido: orden.peso_neto_requerido.toString(),
       sede: orden.sede?.toString() || '',
@@ -184,7 +185,7 @@ export function ManageOrdenesProduccion({
       maquina_asignada: orden.maquina_asignada?.toString() || '',
       observaciones: orden.observaciones || '',
       prioridad: orden.prioridad || 'normal',
-      justificacion: orden.justificacion || ''
+      justificacion: ''
     });
     setIsOpen(true);
   };
@@ -193,14 +194,13 @@ export function ManageOrdenesProduccion({
     if (onOrderStatusChange) {
       await onOrderStatusChange(id, newStatus);
     } else {
-      // Fallback if not provided, though it should be
       toast.error('La función de cambio de estado no está implementada.');
     }
   };
 
   return (
     <Card className="flex flex-col h-full min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Órdenes de Producción</CardTitle>
@@ -215,6 +215,7 @@ export function ManageOrdenesProduccion({
             setFormData={setFormData}
             errors={errors}
             productos={productos}
+            formulas={formulas}
             bodegas={bodegas}
             areas={areas}
             loading={loading}
@@ -279,12 +280,32 @@ export function ManageOrdenesProduccion({
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={modalidadFilter}
+            onValueChange={(val) => {
+              setSearchParams(prev => {
+                if (val === 'all') prev.delete('modalidad');
+                else prev.set('modalidad', val);
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Modalidad..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las modalidades</SelectItem>
+              <SelectItem value="mto">Bajo Pedido (MTO)</SelectItem>
+              <SelectItem value="mts">Contra Stock (MTS)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Producto & Fórmula</TableHead>
@@ -320,7 +341,18 @@ export function ManageOrdenesProduccion({
                   onClick={() => setSelectedOrdenForDetail(orden)}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
                 >
-                  <TableCell className="font-mono">{orden.codigo}</TableCell>
+                  <TableCell className="font-mono">
+                    <div className="font-bold">{orden.codigo}</div>
+                    {orden.pedido_venta ? (
+                      <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] px-1.5 py-0 mt-0.5">
+                        MTO #{orden.pedido_venta}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-slate-500 text-[10px] px-1.5 py-0 mt-0.5">
+                        MTS Stock
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{orden.producto_nombre}</span>
@@ -400,7 +432,7 @@ export function ManageOrdenesProduccion({
                           Marcar como Finalizada
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onOrdenDelete(orden.id)} className="text-destructive">
+                        <DropdownMenuItem onClick={() => setOrdenAEliminar(orden)} className="text-destructive">
                           <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -412,44 +444,13 @@ export function ManageOrdenesProduccion({
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1 || loading}>
-              <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={totalPages}
-                defaultValue={currentPage}
-                key={currentPage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= totalPages) {
-                      setCurrentPage(v);
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= totalPages) {
-                    setCurrentPage(v);
-                  }
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || loading}>
-              Siguiente <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={currentPage}
+          totalPages={totalPages}
+          setCurrentPage={setCurrentPage}
+          cargando={loading}
+          className="mt-4 shrink-0"
+        />
       </CardContent>
       <RegistrarLoteDialog
         open={isLotDialogOpen}
@@ -468,7 +469,10 @@ export function ManageOrdenesProduccion({
         onOpenChange={(open) => { if (!open) setSelectedOrdenForDetail(null); }}
         orden={selectedOrdenForDetail}
         onEdit={(o) => { setSelectedOrdenForDetail(null); handleEdit(o); }}
-        onDelete={(id) => { setSelectedOrdenForDetail(null); onOrdenDelete(id); }}
+        onDelete={(id) => {
+          setOrdenAEliminar(ordenes.find(o => o.id === id) ?? null);
+          setSelectedOrdenForDetail(null);
+        }}
         onStatusChange={handleStatusChange}
         onOpenLotDialog={(o) => { setSelectedOrdenForDetail(null); handleOpenLotDialog(o); }}
         onOpenRequisitosDialog={handleOpenRequisitosDialog}
@@ -476,6 +480,15 @@ export function ManageOrdenesProduccion({
         areas={areas}
         bodegas={bodegas}
         formulas={formulas}
+        onDataRefresh={onDataRefresh}
+      />
+      <JustificacionDialog
+        open={ordenAEliminar !== null}
+        titulo={`Eliminar orden ${ordenAEliminar?.codigo ?? ''}`}
+        descripcion="La orden se elimina y, si ya tenía químicos descontados, se revierten. La justificación queda en la auditoría."
+        textoConfirmar="Eliminar orden"
+        onConfirmar={(justificacion) => (ordenAEliminar ? onOrdenDelete(ordenAEliminar.id, justificacion) : Promise.resolve(false))}
+        onClose={() => setOrdenAEliminar(null)}
       />
     </Card>
   );

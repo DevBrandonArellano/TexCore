@@ -6,7 +6,10 @@ ISO 27001 A.12.4: persistencia de eventos de auditoría de seguridad.
 COBIT MEA01: soporte de monitoreo y evaluación del desempeño del servicio.
 RFC 5424: operaciones internas registradas con SD-ELEMENT estructurado.
 """
+
+import asyncio
 import os
+import pathlib
 import stat
 
 from sqlalchemy import text
@@ -16,8 +19,8 @@ from sqlalchemy.orm import DeclarativeBase
 DB_PATH = os.getenv("AUDIT_DB_PATH", "/data/logs.db")
 
 _CONNECT_ARGS = {
-    "timeout": 10,             # máximo 10s de espera por lock (SQLite default: 5s)
-    "check_same_thread": False, # requerido para acceso async multi-hilo
+    "timeout": 10,  # máximo 10s de espera por lock (SQLite default: 5s)
+    "check_same_thread": False,  # requerido para acceso async multi-hilo
 }
 
 
@@ -49,11 +52,11 @@ async def _apply_pragmas(conn) -> None:
     Aplica PRAGMAs de seguridad y rendimiento.
     WAL garantiza < 500 ms en inserts concurrentes sin bloquear lecturas.
     """
-    await conn.execute(text("PRAGMA journal_mode=WAL"))    # lecturas no bloquean escrituras
+    await conn.execute(text("PRAGMA journal_mode=WAL"))  # lecturas no bloquean escrituras
     await conn.execute(text("PRAGMA synchronous=NORMAL"))  # balance velocidad/durabilidad con WAL
-    await conn.execute(text("PRAGMA foreign_keys=ON"))     # integridad referencial
-    await conn.execute(text("PRAGMA cache_size=-4000"))    # 4 MB de caché en memoria
-    await conn.execute(text("PRAGMA temp_store=MEMORY"))   # tablas temporales en RAM
+    await conn.execute(text("PRAGMA foreign_keys=ON"))  # integridad referencial
+    await conn.execute(text("PRAGMA cache_size=-4000"))  # 4 MB de caché en memoria
+    await conn.execute(text("PRAGMA temp_store=MEMORY"))  # tablas temporales en RAM
 
 
 async def init_db() -> None:
@@ -64,8 +67,13 @@ async def init_db() -> None:
     async with _engine.begin() as conn:
         await _apply_pragmas(conn)
         await conn.run_sync(Base.metadata.create_all)
-    if os.path.exists(DB_PATH):
-        os.chmod(DB_PATH, stat.S_IRUSR | stat.S_IWUSR)
+    await asyncio.to_thread(_restringir_permisos, DB_PATH)
+
+
+def _restringir_permisos(ruta: str) -> None:
+    """chmod 0o600 del archivo SQLite. Es E/S bloqueante: se ejecuta fuera del event loop."""
+    if pathlib.Path(ruta).exists():
+        pathlib.Path(ruta).chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:

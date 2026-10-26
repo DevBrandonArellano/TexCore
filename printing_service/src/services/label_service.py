@@ -10,6 +10,7 @@ diferencia de ZPL, donde el propio printer Zebra interpreta ^BCN/^BQN y
 dibuja el símbolo a partir del texto, aquí hay que rasterizar la imagen
 nosotros mismos y embeberla en base64.
 """
+
 import base64
 import io
 import logging
@@ -58,9 +59,7 @@ class LabelService:
         try:
             barcode_image = cls.generar_codigo_barras(request.lote_codigo)
         except Exception:
-            logger.exception(
-                "Fallo al generar código de barras para lote %s", request.lote_codigo
-            )
+            logger.exception("Fallo al generar código de barras para lote %s", request.lote_codigo)
             barcode_image = None
 
         try:

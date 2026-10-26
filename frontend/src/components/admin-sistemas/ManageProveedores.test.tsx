@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin proveedores / proveedores existentes / nuevo proveedor / datos validos
+ *   / editar un proveedor existente.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -9,20 +14,14 @@ import { Proveedor } from '../../lib/types';
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
 
 const PROVEEDOR_1: Proveedor = { id: 1, nombre: 'Textiles del Norte', sede: 3 };
 
-function renderComponent(props: Partial<{
-  proveedores: Proveedor[];
-  onProveedorCreate: (data: any) => Promise<boolean>;
-  onProveedorUpdate: (id: number, data: any) => Promise<boolean>;
-  onProveedorDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageProveedores>> = {}) {
   const defaultProps = {
     proveedores: [] as Proveedor[],
     onProveedorCreate: vi.fn().mockResolvedValue(true),
@@ -154,7 +153,7 @@ describe('ManageProveedores', () => {
     expect(screen.getByText('Algodones Pacifico')).toBeInTheDocument();
   });
 
-  it('dado loading en true entonces muestra filas de esqueleto en vez de datos', () => {
+  it('dado loading en true cuando renderiza entonces muestra filas de esqueleto en vez de datos', () => {
     renderComponent({ proveedores: [PROVEEDOR_1], loading: true });
     expect(screen.queryByText('Textiles del Norte')).not.toBeInTheDocument();
     const rows = screen.getAllByRole('row');

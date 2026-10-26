@@ -1,67 +1,77 @@
 # Grafo de Conocimiento y Navegación del Código (Graphify)
 
-TexCore utiliza **Graphify** para construir un grafo de conocimiento local e interactivo que mapea todas las clases, funciones, modelos, relaciones y dependencias dentro de la base de código. Este grafo sirve tanto para desarrolladores como para que los agentes de IA (como Claude o Antigravity) entiendan la arquitectura del proyecto sin necesidad de realizar lecturas completas y costosas de archivos.
+TexCore usa **Graphify** para construir un grafo de conocimiento local con las clases, funciones, modelos, relaciones y dependencias del código. El grafo sirve a los desarrolladores y a los agentes de IA (Claude, Antigravity) para entender la arquitectura sin leer archivos completos.
 
 ---
 
-## 1. Estructura de Salida (`graphify-out/`)
+## 1. Estructura de salida (`graphify-out/`)
 
-El análisis de Graphify genera y mantiene los siguientes archivos dentro del directorio `graphify-out/` (excluido en `.gitignore`):
+El grafo **se versiona en el repositorio**, así que cualquier clon lo trae listo para consultar:
 
-* **`graph.json`**: El modelo de datos completo del grafo (nodos, aristas y pertenencia a comunidades).
-* **`graph.html`**: Visualización interactiva en 3D/2D del grafo completo. Se puede abrir directamente en cualquier navegador web.
-* **`GRAPH_REPORT.md`**: Reporte técnico detallado con métricas de cohesión, comunidades de código, acoplamiento, nodos principales (God Nodes) y dependencias sorprendentes.
-* **`AGENTS.md`**: Reglas de contexto de Graphify para que herramientas y agentes externos consuman el grafo prioritariamente antes de realizar búsquedas directas.
+| Archivo | Contenido |
+|---|---|
+| `graph.json` | Modelo de datos del grafo: nodos, aristas y comunidades |
+| `GRAPH_REPORT.md` | Reporte con comunidades de código, acoplamiento, nodos principales (*god nodes*) y dependencias inesperadas |
+| `AGENTS.md` | Reglas para que los agentes consulten el grafo antes de buscar en el código |
+| `manifest.json` | Archivos analizados y su huella, para las actualizaciones incrementales |
+| `converted/` | Documentos no textuales (por ejemplo, el backlog en Excel) convertidos a Markdown para incluirlos en el grafo |
 
----
-
-## 2. Configuración de Exclusiones (`.graphifyignore`)
-
-Para optimizar el rendimiento de la extracción y evitar la saturación del grafo con dependencias externas o archivos no ejecutables, se configuró el archivo [.graphifyignore](../../.graphifyignore) en la raíz del proyecto. Este archivo excluye:
-
-* Dependencias externas (`node_modules/`, `bower_components/`).
-* Carpetas de compilación y empaquetado (`dist/`, `build/`, `.next/`, `out/`, `target/`).
-* Entornos virtuales de Python (`venv/`, `.venv/`, `env/`, `.env/`).
-* Directorios y cachés de herramientas (`.git/`, `.agent/`, `.claude/`, `.gemini/`, `.omc/`, `.pytest_cache/`, `logs/`, `__pycache__/`).
-* Archivos multimedia y binarios pesados (`*.png`, `*.jpg`, `*.zip`, `*.pdf`, etc.).
+`.gitignore` excluye solo los artefactos de trabajo: `graphify-out/cache/`, las carpetas por fecha `graphify-out/20*/`, `.graphify_analysis.json` y `.graphify_labels.json`.
 
 ---
 
-## 3. Automatización y Ciclo de Vida del Grafo
+## 2. Exclusiones (`.graphifyignore`)
 
-Para garantizar que el grafo de conocimiento nunca quede desactualizado, se han establecido tres mecanismos de actualización:
+[.graphifyignore](../../.graphifyignore), en la raíz, deja fuera del análisis:
 
-### A. Git Hooks (Automático en Commits y Ramas)
-Se instalaron hooks mediante el comando `graphify hook install`.
-* Cada vez que se realiza un commit (`post-commit`) o se cambia de rama (`post-checkout`), el grafo y el reporte se regeneran automáticamente en segundo plano de manera incremental.
+* dependencias externas (`node_modules/`, `bower_components/`);
+* carpetas de compilación (`dist/`, `build/`, `.next/`, `out/`, `target/`);
+* entornos virtuales de Python (`venv/`, `.venv/`, `env/`);
+* directorios y cachés de herramientas (`.git/`, `.agent/`, `.claude/`, `.gemini/`, `.omc/`, `.pytest_cache/`, `logs/`, `__pycache__/`);
+* binarios y multimedia (`*.png`, `*.jpg`, `*.zip`, `*.pdf`, etc.).
 
-### B. Reglas del Agente (Automático en Edición)
-Se configuró la integración nativa con el agente a través del archivo de reglas [.agents/rules/graphify.md](../../.agents/rules/graphify.md).
-* Cada vez que el asistente de IA realiza un cambio de código en la sesión, ejecutará de forma proactiva `graphify update .` antes de finalizar para mantener el grafo alineado.
+---
 
-### C. Escucha en Tiempo Real (Manual)
-Durante sesiones de desarrollo activas, puedes dejar corriendo el observador de cambios:
-```powershell
+## 3. Cómo se mantiene actualizado
+
+### A. Después de cada cambio de código (obligatorio)
+
+`CLAUDE.md` (§1) y [.agents/rules/graphify.md](../../.agents/rules/graphify.md) exigen ejecutar, al terminar de modificar código:
+
+```bash
+graphify update .
+```
+
+Reextrae solo el AST de los archivos cambiados (sin costo de API) y reescribe `graph.json` y `GRAPH_REPORT.md`, que se versionan junto con el cambio.
+
+### B. Hook `post-commit` (opcional, por desarrollador)
+
+Los hooks de Git no se versionan. Quien quiera la actualización automática puede crear `.git/hooks/post-commit` (ejecutable):
+
+```bash
+#!/bin/bash
+# Actualiza el grafo de conocimiento después de cada commit
+graphify . --code-only --quiet 2>/dev/null || true
+```
+
+### C. Observador en tiempo real (manual)
+
+```bash
 graphify watch .
 ```
-Esto escuchará el sistema de archivos y actualizará el grafo en tiempo real al guardar cambios.
+
+Reconstruye el grafo al guardar cambios mientras dure la sesión.
 
 ---
 
-## 4. Comandos de Utilidad
+## 4. Consultas
 
-* **Visualizar Grafo Interactivo:** Abre directamente `graphify-out/graph.html` en un navegador web.
-* **Generar Árbol de Directorios en D3:**
-  ```powershell
-  graphify tree --output graphify-out/GRAPH_TREE.html
-  ```
-  Esto genera una representación jerárquica colapsable que facilita la navegación en repositorios grandes.
-* **Consultas directas al Grafo:**
-  * Encontrar el camino más corto entre dos módulos:
-    ```powershell
-    graphify path "ModuloA" "ModuloB"
-    ```
-  * Obtener un resumen de un módulo y sus vecinos:
-    ```powershell
-    graphify explain "ClasePrincipal"
-    ```
+| Necesidad | Comando |
+|---|---|
+| Pregunta sobre el código (recorrido acotado del grafo) | `graphify query "¿cómo se calcula el MRP por sede?"` |
+| Camino más corto entre dos conceptos | `graphify path "MRPEngine" "ReposicionService"` |
+| Resumen de un nodo y sus vecinos | `graphify explain "DescargaQuimicosService"` |
+| Qué se ve afectado si cambia algo | `graphify affected "MovimientoInventario"` |
+| Árbol HTML navegable del grafo | `graphify tree` |
+
+Para una revisión general de la arquitectura, `GRAPH_REPORT.md`; para el resto, primero `query`, `path` o `explain`, y solo después la lectura de archivos.

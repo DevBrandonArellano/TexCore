@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { AlertCircle, CheckCircle2, Clock, Zap, Package, ArrowDown } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Zap, ArrowDown } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 
@@ -28,39 +28,45 @@ interface OrdenProduccion {
 export function FlujoProduccion() {
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [etapasPorArea, setEtapasPorArea] = useState<Map<number, Etapa[]>>(new Map());
+
+  // Carga única al montar: el efecto solo toca el estado cuando llega la respuesta.
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchData();
+    let vigente = true;
+    const cargar = async () => {
+      try {
+        const [ordenesRes, etapasRes] = await Promise.all([
+          apiClient.get('/ordenes-produccion/'),
+          apiClient.get('/etapas-produccion/')
+        ]);
+        if (!vigente) return;
+
+        const allOrdenes = ordenesRes.data.results || ordenesRes.data;
+        setOrdenes(allOrdenes.slice(0, 10)); // Últimas 10 órdenes
+
+        const allEtapas = etapasRes.data.results || etapasRes.data;
+        const etapaMap = new Map<number, Etapa[]>();
+        allEtapas.forEach((etapa: Etapa) => {
+          if (!etapaMap.has(etapa.area)) {
+            etapaMap.set(etapa.area, []);
+          }
+          etapaMap.get(etapa.area)!.push(etapa);
+        });
+        setEtapasPorArea(etapaMap);
+      } catch (error) {
+        if (!vigente) return;
+        toast.error('Error al cargar flujo de producción');
+        console.error(error);
+      } finally {
+        if (vigente) setLoading(false);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
   }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [ordenesRes, etapasRes] = await Promise.all([
-        apiClient.get('/ordenes-produccion/'),
-        apiClient.get('/etapas-produccion/')
-      ]);
-
-      const allOrdenes = ordenesRes.data.results || ordenesRes.data;
-      setOrdenes(allOrdenes.slice(0, 10)); // Últimas 10 órdenes
-
-      const allEtapas = etapasRes.data.results || etapasRes.data;
-      const etapaMap = new Map<number, Etapa[]>();
-      allEtapas.forEach((etapa: Etapa) => {
-        if (!etapaMap.has(etapa.area)) {
-          etapaMap.set(etapa.area, []);
-        }
-        etapaMap.get(etapa.area)!.push(etapa);
-      });
-      setEtapasPorArea(etapaMap);
-    } catch (error) {
-      toast.error('Error al cargar flujo de producción');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
@@ -120,7 +126,7 @@ export function FlujoProduccion() {
                   {/* Progreso de Peso */}
                   <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-full transition-all"
+                      className="bg-linear-to-r from-blue-500 to-purple-600 h-full transition-all"
                       style={{
                         width: `${Math.min(
                           ((orden.lotes?.reduce((sum, l) => sum + l.peso_neto_producido, 0) || 0) /
@@ -145,7 +151,7 @@ export function FlujoProduccion() {
                           <div key={etapa.id} className="relative">
                             <div className="absolute -left-9 top-1 w-4 h-4 bg-white border-2 border-purple-400 rounded-full" />
 
-                            <div className="bg-gradient-to-r from-purple-50 to-transparent border border-purple-200 rounded p-3">
+                            <div className="bg-linear-to-r from-purple-50 to-transparent border border-purple-200 rounded p-3">
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-semibold text-gray-900">
                                   {etapa.orden}. {etapa.nombre}

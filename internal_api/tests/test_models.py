@@ -1,6 +1,12 @@
-"""Tests TDD para ServiceCredential. EP + STT."""
-from django.test import TestCase
+"""Tests TDD para ServiceCredential. EP + STT.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): datos validos / secreto incorrecto / activo.
+"""
+
 from django.contrib.auth.hashers import check_password
+from django.test import TestCase
+
 from internal_api.models import ServiceCredential
 
 

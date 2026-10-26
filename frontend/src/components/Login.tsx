@@ -46,8 +46,7 @@ export function Login() {
     if (!success) {
       setError('Usuario o contraseña incorrectos');
     }
-    // If login is successful, the component will unmount, so no need to set loading to false.
-    // If it fails, we set it to false to allow another attempt.
+    // Si el login funciona el componente se desmonta; si falla se permite reintentar
     setIsLoading(false);
   };
 
@@ -63,14 +62,14 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-xl mb-4">
             <Package className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-primary mb-2">TexCore</h1>
-          <p className="text-muted-foreground">Sistema de Gestión de Inventarios</p>
+          <p className="text-muted-foreground">Sistema de Gestión de Producción en la Industria Textil</p>
         </div>
 
         <Card>

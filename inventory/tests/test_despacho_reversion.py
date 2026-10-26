@@ -9,22 +9,39 @@ Valida:
 3. DescargaQuimicoOP se marcan como revertidas
 4. PedidoVenta vuelve a estado 'pendiente'
 5. MovimientoInventario DEVOLUCION se crean
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): despacho realizado / sin justificacion / pedido despachado / fallo intermedio
+  / op con quimicos descargados.
+- Análisis de valores límite (BVA): justificacion vacia.
 """
 
-from django.test import TestCase, TransactionTestCase
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
-from rest_framework import status
 from decimal import Decimal
-from datetime import datetime
+from unittest.mock import patch
+
+from django.contrib.auth.models import Group
+from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import (
-    CustomUser, Bodega, Producto, LoteProduccion, OrdenProduccion, DescargaQuimicoOP,
-    PedidoVenta, Sede, Cliente
+    Bodega,
+    Cliente,
+    CustomUser,
+    DescargaQuimicoOP,
+    LoteProduccion,
+    OrdenProduccion,
+    PedidoVenta,
+    Producto,
+    Sede,
 )
 from inventory.models import (
-    StockBodega, MovimientoInventario,
-    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
 )
 from inventory.services.despacho_reversion import DespachoReversionService
 
@@ -39,100 +56,76 @@ class DespachReversionTestCase(TransactionTestCase):
         """Configura datos de prueba comunes"""
         # Crear usuarios
         self.usuario = CustomUser.objects.create_user(
-            username='despacho_user',
-            email='despacho@test.com',
-            password='test123'
+            username="despacho_user", email="despacho@test.com", password="test123"
         )
 
-        self.jefe = CustomUser.objects.create_user(
-            username='jefe_user',
-            email='jefe@test.com',
-            password='test123'
-        )
+        self.jefe = CustomUser.objects.create_user(username="jefe_user", email="jefe@test.com", password="test123")
 
         # Asignar roles
-        despacho_group, _ = Group.objects.get_or_create(name='despacho')
-        jefe_group, _ = Group.objects.get_or_create(name='jefe_planta')
+        despacho_group, _ = Group.objects.get_or_create(name="despacho")
+        jefe_group, _ = Group.objects.get_or_create(name="jefe_planta")
         self.usuario.groups.add(despacho_group)
         self.jefe.groups.add(jefe_group)
 
         # Crear sede
-        self.sede = Sede.objects.create(
-            nombre='Sede Test',
-            location='Lima'
-        )
+        self.sede = Sede.objects.create(nombre="Sede Test", location="Lima")
         self.usuario.sede = self.sede
         self.usuario.save()
 
         # Crear bodegas
-        self.bodega_produccion = Bodega.objects.create(
-            nombre='Bodega Producción',
-            sede=self.sede
-        )
+        self.bodega_produccion = Bodega.objects.create(nombre="Bodega Producción", sede=self.sede)
 
-        self.bodega_despacho = Bodega.objects.create(
-            nombre='Bodega Despacho',
-            sede=self.sede
-        )
+        self.bodega_despacho = Bodega.objects.create(nombre="Bodega Despacho", sede=self.sede)
 
         # Crear productos
         self.producto_quimico = Producto.objects.create(
-            codigo='SODA-001',
-            descripcion='Soda Cáustica',
-            tipo='quimico',
-            stock_minimo=Decimal('5.00'),
-            unidad_medida='kg'
+            codigo="SODA-001",
+            descripcion="Soda Cáustica",
+            tipo="quimico",
+            stock_minimo=Decimal("5.00"),
+            unidad_medida="kg",
         )
 
         self.producto_final = Producto.objects.create(
-            codigo='TELA-AZUL-001',
-            descripcion='Tela Azul',
-            tipo='tela',  # 'producto_final' is not in choices, 'tela' is.
-            stock_minimo=Decimal('0.00'),
-            unidad_medida='kg'
+            codigo="TELA-AZUL-001",
+            descripcion="Tela Azul",
+            tipo="tela",  # 'producto_final' no está en las opciones, 'tela' sí.
+            stock_minimo=Decimal("0.00"),
+            unidad_medida="kg",
         )
 
         # Crear lotes de producción
         self.lote = LoteProduccion.objects.create(
-            codigo_lote='LOTE-TEST-001',
-            peso_neto_producido=Decimal('50.00'),
+            codigo_lote="LOTE-TEST-001",
+            peso_neto_producido=Decimal("50.00"),
             operario=self.usuario,
-            turno='DIURNO',
-            hora_inicio=datetime.now(),
-            hora_final=datetime.now()
+            turno="DIURNO",
+            hora_inicio=timezone.now(),
+            hora_final=timezone.now(),
         )
 
         # Crear stock inicial
         self.stock_quimico = StockBodega.objects.create(
-            bodega=self.bodega_despacho,
-            producto=self.producto_quimico,
-            cantidad=Decimal('100.00')
+            bodega=self.bodega_despacho, producto=self.producto_quimico, cantidad=Decimal("100.00")
         )
 
         self.stock_final = StockBodega.objects.create(
-            bodega=self.bodega_despacho,
-            producto=self.producto_final,
-            lote=self.lote,
-            cantidad=Decimal('50.00')
+            bodega=self.bodega_despacho, producto=self.producto_final, lote=self.lote, cantidad=Decimal("50.00")
         )
 
         # Crear cliente y pedido
         self.cliente = Cliente.objects.create(
-            ruc_cedula='1234567890',
-            nombre_razon_social='Cliente Test',
-            direccion_envio='Direccion Test',
-            nivel_precio='normal'
+            ruc_cedula="1234567890",
+            nombre_razon_social="Cliente Test",
+            direccion_envio="Direccion Test",
+            nivel_precio="normal",
         )
 
-        self.pedido = PedidoVenta.objects.create(
-            cliente=self.cliente,
-            guia_remision='GR-001',
-            estado='pendiente'
-        )
+        self.pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="GR-001", estado="pendiente")
 
         self.client = APIClient()
 
-    def test_revertir_despacho_restaura_stock(self):
+    def test_revertir_despacho_dado_despacho_realizado_cuando_revierte_entonces_restaura_stock(self):
         """
         Caso 1: Revertir despacho restaura stock correctamente
 
@@ -142,72 +135,63 @@ class DespachReversionTestCase(TransactionTestCase):
         - MovimientoInventario DEVOLUCION creado
         """
         # 1. Crear despacho
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=1,
-            total_peso=Decimal('50.00')
-        )
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=1, total_peso=Decimal("50.00"))
 
         DetalleHistorialDespachoPedido.objects.create(
-            historial=historial,
-            pedido=self.pedido,
-            cantidad_despachada=Decimal('50.00')
+            historial=historial, pedido=self.pedido, cantidad_despachada=Decimal("50.00")
         )
 
         DetalleHistorialDespacho.objects.create(
             historial=historial,
             lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00'),
+            peso=Decimal("50.00"),
             pedido=self.pedido,
         )
 
         # Simular reducción de stock (como lo hace process-despacho)
-        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final.cantidad = Decimal("0.00")
         self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
         self.stock_final.save()
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='VENTA',
+            tipo_movimiento="VENTA",
             producto=self.producto_final,
-            cantidad=Decimal('50.00'),
+            cantidad=Decimal("50.00"),
             bodega_origen=self.bodega_despacho,
             lote=self.lote,
             usuario=self.usuario,
             documento_ref=f"Despacho #{historial.id}",
-            saldo_resultante=Decimal('0.00')
+            saldo_resultante=Decimal("0.00"),
         )
 
         # Verificar stock = 0
         self.stock_final.refresh_from_db()
-        self.assertEqual(self.stock_final.cantidad, Decimal('0.00'))
+        self.assertEqual(self.stock_final.cantidad, Decimal("0.00"))
 
         # 2. Revertir despacho
         resultado = DespachoReversionService.revertir_despacho(
-            historial,
-            self.jefe,
-            justificacion="Error en selección de lotes"
+            historial, self.jefe, justificacion="Error en selección de lotes"
         )
 
         # 3. Verificar resultado
-        self.assertEqual(resultado['despacho_id'], historial.id)
-        self.assertEqual(resultado['movimientos_creados'], 1)
-        self.assertEqual(resultado['lotes_revertidos'], 1)
+        self.assertEqual(resultado["despacho_id"], historial.id)
+        self.assertEqual(resultado["movimientos_creados"], 1)
+        self.assertEqual(resultado["lotes_revertidos"], 1)
 
         # 4. Verificar stock restaurado
         self.stock_final.refresh_from_db()
-        self.assertEqual(self.stock_final.cantidad, Decimal('50.00'))
+        self.assertEqual(self.stock_final.cantidad, Decimal("50.00"))
 
         # 5. Verificar MovimientoInventario DEVOLUCION
         devolucion = MovimientoInventario.objects.filter(
-            tipo_movimiento='DEVOLUCION',
-            producto=self.producto_final
+            tipo_movimiento="DEVOLUCION", producto=self.producto_final
         ).first()
         self.assertIsNotNone(devolucion)
-        self.assertEqual(devolucion.cantidad, Decimal('50.00'))
+        self.assertEqual(devolucion.cantidad, Decimal("50.00"))
         self.assertEqual(devolucion.bodega_destino, self.bodega_despacho)
 
-    def test_revertir_despacho_requiere_justificacion(self):
+    def test_revertir_despacho_dado_sin_justificacion_cuando_revierte_entonces_falla(self):
         """
         Caso 2: Reversión sin justificación falla
 
@@ -215,30 +199,19 @@ class DespachReversionTestCase(TransactionTestCase):
         - ValueError si justificación está vacía
         - Justificación debe ser string no vacío
         """
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=1,
-            total_peso=Decimal('50.00')
-        )
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=1, total_peso=Decimal("50.00"))
 
         DetalleHistorialDespacho.objects.create(
-            historial=historial,
-            lote=self.lote,
-            producto=self.producto_final,
-            peso=Decimal('50.00')
+            historial=historial, lote=self.lote, producto=self.producto_final, peso=Decimal("50.00")
         )
 
         # Intentar revertir sin justificación
         with self.assertRaises(ValueError) as context:
-            DespachoReversionService.revertir_despacho(
-                historial,
-                self.jefe,
-                justificacion=""
-            )
+            DespachoReversionService.revertir_despacho(historial, self.jefe, justificacion="")
 
         self.assertIn("obligatoria", str(context.exception).lower())
 
-    def test_revertir_despacho_restaura_pedido(self):
+    def test_revertir_despacho_dado_pedido_despachado_cuando_revierte_entonces_vuelve_a_pendiente(self):
         """
         Caso 3: PedidoVenta vuelve a estado 'pendiente'
 
@@ -247,102 +220,96 @@ class DespachReversionTestCase(TransactionTestCase):
         - Pedido en estado 'pendiente' después de reversión
         """
         # Actualizar pedido a despachado
-        self.pedido.estado = 'despachado'
+        self.pedido.estado = "despachado"
         self.pedido.save()
 
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=1,
-            total_peso=Decimal('50.00')
-        )
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=1, total_peso=Decimal("50.00"))
 
         DetalleHistorialDespachoPedido.objects.create(
-            historial=historial,
-            pedido=self.pedido,
-            cantidad_despachada=Decimal('50.00')
+            historial=historial, pedido=self.pedido, cantidad_despachada=Decimal("50.00")
         )
 
         DetalleHistorialDespacho.objects.create(
             historial=historial,
             lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00'),
+            peso=Decimal("50.00"),
             pedido=self.pedido,
         )
 
         # El movimiento VENTA original debe existir para que la reversión lo localice
-        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final.cantidad = Decimal("0.00")
         self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
         self.stock_final.save()
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='VENTA',
+            tipo_movimiento="VENTA",
             producto=self.producto_final,
-            cantidad=Decimal('50.00'),
+            cantidad=Decimal("50.00"),
             bodega_origen=self.bodega_despacho,
             lote=self.lote,
             usuario=self.usuario,
             documento_ref=f"Despacho #{historial.id}",
-            saldo_resultante=Decimal('0.00')
+            saldo_resultante=Decimal("0.00"),
         )
 
         # Reversión
-        DespachoReversionService.revertir_despacho(
-            historial,
-            self.jefe,
-            justificacion="Cliente canceló orden"
-        )
+        DespachoReversionService.revertir_despacho(historial, self.jefe, justificacion="Cliente canceló orden")
 
         # Verificar pedido revertido
         self.pedido.refresh_from_db()
-        self.assertEqual(self.pedido.estado, 'pendiente')
+        self.assertEqual(self.pedido.estado, "pendiente")
         self.assertIsNone(self.pedido.fecha_despacho)
 
-    def test_revertir_despacho_transaccional(self):
+    def test_revertir_despacho_dado_fallo_intermedio_cuando_revierte_entonces_no_deja_cambios(self):
         """
-        Caso 4: Reversión es transaccional
+        Caso 4: un fallo DESPUÉS de restaurar el stock (al revertir los químicos) deshace todo.
 
-        Verifica:
-        - Si falla un paso, todo se revierte
-        - Stock no cambia si hay error
+        Antes la prueba usaba un detalle sin lote, que la reversión salta sin fallar, y tragaba
+        cualquier excepción: pasaba sin probar la atomicidad. Ahora el fallo es real y explícito.
         """
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=1,
-            total_peso=Decimal('50.00')
-        )
-
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=1, total_peso=Decimal("50.00"))
         DetalleHistorialDespachoPedido.objects.create(
-            historial=historial,
-            pedido=self.pedido,
-            cantidad_despachada=Decimal('50.00')
+            historial=historial, pedido=self.pedido, cantidad_despachada=Decimal("50.00")
         )
-
-        # Detalle con lote inválido (causará error)
         DetalleHistorialDespacho.objects.create(
             historial=historial,
-            lote=None,  # Forzar error
+            lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00')
+            peso=Decimal("50.00"),
+            pedido=self.pedido,
+        )
+        self.stock_final.cantidad = Decimal("0.00")
+        self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
+        self.stock_final.save()
+        MovimientoInventario.objects.create(
+            tipo_movimiento="VENTA",
+            producto=self.producto_final,
+            cantidad=Decimal("50.00"),
+            bodega_origen=self.bodega_despacho,
+            lote=self.lote,
+            usuario=self.usuario,
+            documento_ref=f"Despacho #{historial.id}",
+            saldo_resultante=Decimal("0.00"),
         )
 
-        stock_antes = self.stock_final.cantidad
+        with (
+            patch.object(
+                DespachoReversionService,
+                "_revertir_descargas_quimicas",
+                side_effect=RuntimeError("Fallo simulado al revertir químicos"),
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            DespachoReversionService.revertir_despacho(historial, self.jefe, justificacion="Test error")
 
-        # Reversión debería fallar pero sin afectar stock
-        try:
-            DespachoReversionService.revertir_despacho(
-                historial,
-                self.jefe,
-                justificacion="Test error"
-            )
-        except Exception:
-            pass
-
+        # La transacción se deshizo: ni stock restaurado ni movimiento DEVOLUCION.
         self.stock_final.refresh_from_db()
-        # Stock debería permanecer sin cambios debido a transacción
-        self.assertEqual(self.stock_final.cantidad, stock_antes)
+        self.assertEqual(self.stock_final.cantidad, Decimal("0.00"))
+        self.assertFalse(MovimientoInventario.objects.filter(tipo_movimiento="DEVOLUCION").exists())
+        self.assertFalse(DetalleHistorialDespacho.objects.filter(historial=historial, es_devolucion=True).exists())
 
-    def test_revertir_despacho_con_descarga_quimica_no_falla_por_precision_decimal(self):
+    def test_revertir_despacho_dado_op_con_quimicos_descargados_cuando_revierte_entonces_no_falla_por_precision(self):
         """
         Caso 5: revertir un despacho cuya OP tiene químicos descargados no debe
         fallar por precisión decimal.
@@ -353,8 +320,8 @@ class DespachReversionTestCase(TransactionTestCase):
         places"), y la reversión completa del despacho fallaba con 500.
         """
         orden = OrdenProduccion.objects.create(
-            codigo='OP-QUIM-001',
-            peso_neto_requerido=Decimal('50.00'),
+            codigo="OP-QUIM-001",
+            peso_neto_requerido=Decimal("50.00"),
             inventario_descontado=True,
         )
         self.lote.orden_produccion = orden
@@ -364,53 +331,44 @@ class DespachReversionTestCase(TransactionTestCase):
             orden_produccion=orden,
             producto=self.producto_quimico,
             bodega=self.bodega_despacho,
-            cantidad_calculada_kg=Decimal('1.123456'),
-            estado='aplicada',
+            cantidad_calculada_kg=Decimal("1.123456"),
+            estado="aplicada",
         )
 
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=1,
-            total_peso=Decimal('50.00')
-        )
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=1, total_peso=Decimal("50.00"))
 
         DetalleHistorialDespacho.objects.create(
-            historial=historial,
-            lote=self.lote,
-            producto=self.producto_final,
-            peso=Decimal('50.00')
+            historial=historial, lote=self.lote, producto=self.producto_final, peso=Decimal("50.00")
         )
 
-        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final.cantidad = Decimal("0.00")
         self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
         self.stock_final.save()
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='VENTA',
+            tipo_movimiento="VENTA",
             producto=self.producto_final,
-            cantidad=Decimal('50.00'),
+            cantidad=Decimal("50.00"),
             bodega_origen=self.bodega_despacho,
             lote=self.lote,
             usuario=self.usuario,
             documento_ref=f"Despacho #{historial.id}",
-            saldo_resultante=Decimal('0.00')
+            saldo_resultante=Decimal("0.00"),
         )
 
         cantidad_quimico_antes = self.stock_quimico.cantidad
 
         # No debe lanzar ValidationError por decimales
-        DespachoReversionService.revertir_despacho(
-            historial, self.jefe, justificacion="Revertir con químicos"
-        )
+        DespachoReversionService.revertir_despacho(historial, self.jefe, justificacion="Revertir con químicos")
 
         self.stock_quimico.refresh_from_db()
         self.assertEqual(
             self.stock_quimico.cantidad,
-            (cantidad_quimico_antes + Decimal('1.123456')).quantize(Decimal('0.001')),
+            (cantidad_quimico_antes + Decimal("1.123456")).quantize(Decimal("0.001")),
         )
 
         descarga = DescargaQuimicoOP.objects.get(orden_produccion=orden)
-        self.assertEqual(descarga.estado, 'revertida')
+        self.assertEqual(descarga.estado, "revertida")
 
 
 class DespachReversionAPITestCase(TestCase):
@@ -419,83 +377,83 @@ class DespachReversionAPITestCase(TestCase):
     """
 
     def setUp(self):
-        self.usuario = CustomUser.objects.create_user(
-            username='despacho',
-            password='test123'
-        )
-        despacho_group, _ = Group.objects.get_or_create(name='despacho')
+        self.usuario = CustomUser.objects.create_user(username="despacho", password="test123")
+        despacho_group, _ = Group.objects.get_or_create(name="despacho")
         self.usuario.groups.add(despacho_group)
         self.client = APIClient()
         self.client.force_authenticate(user=self.usuario)
 
-    def test_revertir_endpoint_requiere_justificacion(self):
+    def test_revertir_despacho_endpoint_dado_justificacion_vacia_cuando_post_entonces_400(self):
         """
         HTTP 400 si justificación está vacía
         """
-        sede = Sede.objects.create(nombre='Test', location='Lima')
-        Bodega.objects.create(nombre='Test', sede=sede)
-        usuario = CustomUser.objects.create_user(username='test', password='test')
+        sede = Sede.objects.create(nombre="Test", location="Lima")
+        Bodega.objects.create(nombre="Test", sede=sede)
+        usuario = CustomUser.objects.create_user(username="test", password="test")
+        # El historial se acota a la sede de sus pedidos (OWASP A01): el despachador
+        # y el pedido del despacho son de la misma sede.
+        self.usuario.sede = sede
+        self.usuario.save()
 
-        historial = HistorialDespacho.objects.create(
-            usuario=usuario,
-            total_bultos=0,
-            total_peso=Decimal('0.00')
+        historial = HistorialDespacho.objects.create(usuario=usuario, total_bultos=0, total_peso=Decimal("0.00"))
+        cliente = Cliente.objects.create(
+            ruc_cedula="1790000000999",
+            nombre_razon_social="Cliente Rev",
+            direccion_envio="Lima",
+            nivel_precio="normal",
+            sede=sede,
+        )
+        pedido = PedidoVenta.objects.create(cliente=cliente, guia_remision="GR-REV-400", sede=sede)
+        DetalleHistorialDespachoPedido.objects.create(
+            historial=historial, pedido=pedido, cantidad_despachada=Decimal("0.000")
         )
 
         response = self.client.post(
-            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
-            {'justificacion': ''},
-            format='json'
+            f"/api/inventory/historial-despachos/{historial.id}/revertir/", {"justificacion": ""}, format="json"
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('justificacion', response.data)
+        self.assertIn("justificacion", response.data)
 
-    def test_revertir_endpoint_con_justificacion(self):
+    def test_revertir_despacho_endpoint_dado_justificacion_valida_cuando_post_entonces_200(self):
         """
         HTTP 200 con justificación válida
         """
-        sede = Sede.objects.create(nombre='Test', location='Lima')
-        Bodega.objects.create(nombre='Test', sede=sede)
+        sede = Sede.objects.create(nombre="Test", location="Lima")
+        Bodega.objects.create(nombre="Test", sede=sede)
 
-        historial = HistorialDespacho.objects.create(
-            usuario=self.usuario,
-            total_bultos=0,
-            total_peso=Decimal('0.00')
-        )
+        historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=0, total_peso=Decimal("0.00"))
 
         response = self.client.post(
-            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
-            {'justificacion': 'Error de procesamiento'},
-            format='json'
+            f"/api/inventory/historial-despachos/{historial.id}/revertir/",
+            {"justificacion": "Error de procesamiento"},
+            format="json",
         )
 
         # 200 o 404 dependiendo de si existe el despacho
         # Si 200, verificar que no falla por falta de justificación
         if response.status_code == 200:
-            self.assertIn('message', response.data)
+            self.assertIn("message", response.data)
 
     def test_destroy_dado_ejecutivo_cuando_delete_entonces_403(self):
         # HistorialDespachoViewSet.destroy() hacía la misma reversión que
         # `revertir/` pero heredaba IsDespachoReader (incluye ejecutivo), mientras
         # `revertir/` exige IsDespachoWriter (excluye ejecutivo a propósito).
         # Ambas acciones deben tener el mismo nivel de permiso.
-        sede = Sede.objects.create(nombre='Test Ejecutivo', location='Lima')
-        Bodega.objects.create(nombre='Test Ejecutivo', sede=sede)
-        usuario = CustomUser.objects.create_user(username='test_ejecutivo_owner', password='test')
-        historial = HistorialDespacho.objects.create(
-            usuario=usuario, total_bultos=0, total_peso=Decimal('0.00')
-        )
+        sede = Sede.objects.create(nombre="Test Ejecutivo", location="Lima")
+        Bodega.objects.create(nombre="Test Ejecutivo", sede=sede)
+        usuario = CustomUser.objects.create_user(username="test_ejecutivo_owner", password="test")
+        historial = HistorialDespacho.objects.create(usuario=usuario, total_bultos=0, total_peso=Decimal("0.00"))
 
-        ejecutivo_group, _ = Group.objects.get_or_create(name='ejecutivo')
-        ejecutivo = CustomUser.objects.create_user(username='ejecutivo_test', password='test')
+        ejecutivo_group, _ = Group.objects.get_or_create(name="ejecutivo")
+        ejecutivo = CustomUser.objects.create_user(username="ejecutivo_test", password="test")
         ejecutivo.groups.add(ejecutivo_group)
         client = APIClient()
         client.force_authenticate(user=ejecutivo)
 
         response = client.delete(
-            f'/api/inventory/historial-despachos/{historial.id}/',
-            {'justificacion': 'Intento no autorizado'},
-            format='json'
+            f"/api/inventory/historial-despachos/{historial.id}/",
+            {"justificacion": "Intento no autorizado"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -1,30 +1,53 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): loading en true / sin formulas / formulas existentes / busqueda por codigo
+ *   / mas de 20 formulas.
+ * - Análisis de valores límite (BVA): peso o litros vacios / un catalogo de procesos vacio / editar una
+ *   formula con description y notas no vacias / un insumo con litros de bano vacios.
+ * - Transición de estados (STT): formula aprobada.
+ * - Caja blanca (CB): ramas de error — error de red / un error al generar el PDF.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { FormulaQuimica, calcularCantidad } from './FormulaQuimica';
-import type { Quimico } from '../../lib/types';
+import { FormulaQuimica } from './FormulaQuimica';
+import { calcularCantidad } from './calcularCantidad';
+import type { ProcesoTintoreria, Quimico } from '../../lib/types';
+
+import { FormulaColor } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
 
+const mockImprimirDosificacion = vi.fn();
+vi.mock('../../lib/api/formulasApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../lib/api/formulasApi')>();
+  return {
+    formulasApi: {
+      ...original.formulasApi,
+      imprimirDosificacion: (...args: unknown[]) => mockImprimirDosificacion(...args),
+    },
+  };
+});
+
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -48,36 +71,48 @@ const QUIMICO_2: Quimico = {
   precio_base: 20,
 };
 
-const FORMULA_1 = {
+const PROCESOS: ProcesoTintoreria[] = [
+  { id: 1, codigo: 'DESCRUDE', nombre: 'Descrude Alcalino', tipo: 'pre_tratamiento', activo: true },
+  { id: 2, codigo: 'TINTURA', nombre: 'Tintura Principal', tipo: 'colorante', activo: true },
+  { id: 3, codigo: 'JABONADO', nombre: 'Jabonado Final', tipo: 'lavado', activo: true },
+  { id: 4, codigo: 'VIEJO', nombre: 'Proceso Inactivo', tipo: 'lavado', activo: false },
+];
+
+const FORMULA_1: FormulaColor = {
   id: 10,
   codigo: 'FQ-1000',
+  version: 1,
   nombre_color: 'ROJO INTENSO',
   description: '',
   tipo_sustrato: 'algodon',
   estado: 'en_pruebas',
+  version_oficial: null,
   observaciones: '',
   fases: [
     {
       id: 100,
-      nombre: 'tintura',
+      proceso: 2,
+      ciclo: 3,
       orden: 1,
       temperatura: 60,
       tiempo: 30,
       observaciones: '',
       detalles: [
-        { id: 1000, producto: 1, tipo_calculo: 'gr_l', concentracion_gr_l: 5, porcentaje: null, orden_adicion: 1, notas: '' },
+        { id: 1000, fase: 100, producto: 1, gramos_por_kilo: 0, tipo_calculo: 'gr_l', concentracion_gr_l: 5, porcentaje: null, orden_adicion: 1, notas: '' },
       ],
     },
   ],
 };
 
-const FORMULA_2 = {
+const FORMULA_2: FormulaColor = {
   id: 11,
   codigo: 'FQ-1001',
+  version: 2,
   nombre_color: 'AZUL MARINO',
   description: '',
   tipo_sustrato: 'poliester',
   estado: 'aprobada',
+  version_oficial: 2,
   observaciones: '',
   fases: [],
 };
@@ -86,6 +121,7 @@ function renderComponent(props: Partial<React.ComponentProps<typeof FormulaQuimi
   const defaults: React.ComponentProps<typeof FormulaQuimica> = {
     formulas: [],
     quimicos: [QUIMICO_1, QUIMICO_2],
+    procesos: PROCESOS,
     loading: false,
     onFormulaCreate: vi.fn().mockResolvedValue(true),
     onFormulaUpdate: vi.fn().mockResolvedValue(true),
@@ -272,7 +308,7 @@ describe('FormulaQuimica', () => {
       estado: 'en_pruebas',
       tipo_sustrato: 'algodon',
       fases: [expect.objectContaining({
-        nombre: 'pre_tratamiento',
+        proceso: 1,
         orden: 1,
         detalles: [expect.objectContaining({
           producto: 1,
@@ -350,8 +386,10 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(concentracionInput);
     await userEvent.type(concentracionInput, '5');
 
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
+    const litrosInput = screen.getByPlaceholderText('Ej: 860');
+    await userEvent.type(litrosInput, '100');
 
     await waitFor(() => expect(screen.getByText('500.00g')).toBeInTheDocument());
   });
@@ -367,8 +405,10 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(porcentajeInput);
     await userEvent.type(porcentajeInput, '20');
 
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
+    const litrosInput = screen.getByPlaceholderText('Ej: 860');
+    await userEvent.type(litrosInput, '50');
 
     await waitFor(() => expect(screen.getByText('2.000kg')).toBeInTheDocument());
   });
@@ -393,7 +433,7 @@ describe('FormulaQuimica', () => {
     const onFormulaUpdate = vi.fn().mockResolvedValue(true);
     renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Ej: FQ-1002')).toHaveValue('FQ-1000');
@@ -407,32 +447,201 @@ describe('FormulaQuimica', () => {
       nombre_color: 'ROJO INTENSO',
       estado: 'en_pruebas',
       fases: [expect.objectContaining({
-        nombre: 'tintura',
+        proceso: 2,
+        ciclo: 3,
         detalles: [expect.objectContaining({ producto: 1, concentracion_gr_l: 5 })],
       })],
     })));
   });
 
-  it('dado una formula en edicion cuando cambia el estado a aprobada y actualiza entonces llama a onFormulaUpdate con el nuevo estado', async () => {
-    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
-    renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
+  // --- Fase 4 (spec 2026-09-24, D7-D9): ensayos/oficial se mueven a la pestaña
+  // Versiones dentro del detalle; el editor ya no versiona ni pide motivo. ---
+  const FORMULA_APROBADA: FormulaColor = {
+    ...FORMULA_1, id: 20, codigo: 'FQ-2000', nombre_color: 'VERDE BOSQUE', estado: 'aprobada', version_oficial: 1,
+  };
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Aprobada' }));
+  it('dado formulas con y sin version oficial cuando lista entonces muestra la version o un guion', () => {
+    renderComponent({ formulas: [FORMULA_1, FORMULA_2] });
+    expect(screen.getByText('Versión oficial')).toBeInTheDocument();
+    expect(screen.getByText('v2')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('dado una formula en edicion cuando abre el editor entonces el estado es de solo lectura', async () => {
+    renderComponent({ formulas: [FORMULA_1] });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.getByText('En Pruebas')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobada' })).not.toBeInTheDocument();
+  });
+
+  it('dado una formula cuando hace click en Ver detalle entonces abre la vista con pestanas Receta Versiones Ordenes', async () => {
+    renderComponent({ formulas: [FORMULA_1] });
+    await userEvent.click(screen.getByRole('button', { name: 'Ver detalle' }));
+    expect(screen.getByRole('tab', { name: 'Receta' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Versiones' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Órdenes' })).toBeInTheDocument();
+  });
+
+  it('dado formula aprobada cuando actualiza la receta entonces no pide ni envia motivo', async () => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_APROBADA], onFormulaUpdate });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.queryByLabelText(/Motivo del cambio/)).not.toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
 
-    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(10, expect.objectContaining({
-      codigo: 'FQ-1000',
-      nombre_color: 'ROJO INTENSO',
-      estado: 'aprobada',
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(20, expect.objectContaining({ estado: 'aprobada' })));
+    expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
+  });
+
+  it('dado formula en pruebas cuando actualiza entonces no pide ni envia motivo', async () => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.queryByLabelText(/Motivo del cambio/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
+
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalled());
+    expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
+  });
+
+  it('dado el checkbox de laboratorio cuando esta activo entonces envia es_laboratorio al crear', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+    await abrirNuevaFormula();
+    await userEvent.click(screen.getByLabelText(/Fórmula de laboratorio/));
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-LAB-1');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'PRUEBA');
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    await userEvent.type(inputConcentracionDeFila('Soda Cáustica'), '2');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ es_laboratorio: true })));
+  });
+
+  it('dado el toggle de mostrar laboratorio cuando hace click entonces llama al callback del padre', async () => {
+    const onToggleIncluirLaboratorio = vi.fn();
+    renderComponent({ formulas: [FORMULA_1], onToggleIncluirLaboratorio });
+    await userEvent.click(screen.getByLabelText(/Mostrar fórmulas de laboratorio/));
+    expect(onToggleIncluirLaboratorio).toHaveBeenCalled();
+  });
+
+  it('dado codigo y color cuando crea una variante entonces llama a onFormulaDuplicate con esos datos', async () => {
+    const onFormulaDuplicate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_1], onFormulaDuplicate });
+    await userEvent.click(screen.getByRole('button', { name: 'Crear variante' }));
+    const dialogo = screen.getByRole('dialog');
+    expect(within(dialogo).getByRole('button', { name: 'Crear variante' })).toBeDisabled();
+
+    await userEvent.type(within(dialogo).getByLabelText('Código'), 'FQ-1000-B');
+    await userEvent.type(within(dialogo).getByLabelText('Nombre del color'), 'rojo claro');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Crear variante' }));
+
+    await waitFor(() => expect(onFormulaDuplicate).toHaveBeenCalledWith(10, { codigo: 'FQ-1000-B', nombre_color: 'ROJO CLARO' }));
+  });
+
+  describe('imprimir la hoja de dosificación', () => {
+    const FORMULA_OFICIAL: FormulaColor = { ...FORMULA_1, version_oficial: 3 };
+
+    beforeEach(() => {
+      mockImprimirDosificacion.mockReset();
+      vi.spyOn(window, 'open').mockReturnValue(null);
+      URL.createObjectURL = vi.fn(() => 'blob:hoja');
+    });
+
+    async function abrirImprimir(formula: FormulaColor) {
+      renderComponent({ formulas: [formula] });
+      await userEvent.click(screen.getByRole('button', { name: 'Imprimir' }));
+      return screen.getByRole('dialog');
+    }
+
+    it('dado una formula con version oficial cuando imprime con peso y litros entonces pide el PDF y lo abre', async () => {
+      mockImprimirDosificacion.mockResolvedValueOnce(new Blob(['%PDF']));
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+      expect(within(dialogo).getByText(/versión oficial v3/)).toBeInTheDocument();
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      await userEvent.type(within(dialogo).getByLabelText('Litros de baño'), '800');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Imprimir hoja' }));
+
+      await waitFor(() => expect(mockImprimirDosificacion).toHaveBeenCalledWith(10, 100, 800));
+      expect(window.open).toHaveBeenCalledWith('blob:hoja', '_blank');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    it('dado una formula sin version oficial cuando abre el dialogo entonces avisa que se imprime como borrador', async () => {
+      const dialogo = await abrirImprimir(FORMULA_1);
+      expect(within(dialogo).getByText(/no tiene versión oficial/)).toBeInTheDocument();
+      expect(within(dialogo).getByText(/BORRADOR/)).toBeInTheDocument();
+    });
+
+    it('dado peso o litros vacios cuando abre el dialogo entonces no permite imprimir', async () => {
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+      expect(within(dialogo).getByRole('button', { name: 'Imprimir hoja' })).toBeDisabled();
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      expect(within(dialogo).getByRole('button', { name: 'Imprimir hoja' })).toBeDisabled();
+      expect(mockImprimirDosificacion).not.toHaveBeenCalled();
+    });
+
+    it('dado un error al generar el PDF cuando imprime entonces muestra un aviso y mantiene el dialogo', async () => {
+      mockImprimirDosificacion.mockRejectedValueOnce(new Error('503'));
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      await userEvent.type(within(dialogo).getByLabelText('Litros de baño'), '800');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Imprimir hoja' }));
+
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se pudo generar la hoja de dosificación.'));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+  });
+
+  it('dado el catalogo de procesos cuando edita una fase entonces solo ofrece los activos', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    expect(screen.getByRole('button', { name: 'Jabonado Final' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Proceso Inactivo' })).not.toBeInTheDocument();
+  });
+
+  it('dado cambio de proceso y ciclo en la fase cuando crea entonces envia el proceso y el ciclo elegidos', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+    await abrirNuevaFormula();
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-3010');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'CELESTE');
+    await userEvent.click(screen.getByRole('button', { name: 'Jabonado Final' }));
+    expect(screen.getByText('Fase 1: Jabonado Final')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Ciclo de la fase 1'), '4');
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    await userEvent.type(inputConcentracionDeFila('Soda Cáustica'), '2');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(expect.objectContaining({
+      fases: [expect.objectContaining({ proceso: 3, ciclo: 4 })],
     })));
+  });
+
+  it('dado un catalogo de procesos vacio cuando intenta crear entonces exige seleccionar un proceso', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate, procesos: [] });
+    await abrirNuevaFormula();
+    expect(screen.getByText('Sin procesos en el catálogo')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(screen.getByText('Seleccione un proceso')).toBeInTheDocument());
+    expect(onFormulaCreate).not.toHaveBeenCalled();
   });
 
   it('dado una formula en edicion cuando hace click en exportar dosificador entonces llama al callback con el id', async () => {
     const onExportDosificador = vi.fn();
     renderComponent({ formulas: [FORMULA_1], onExportDosificador });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     await userEvent.click(screen.getByRole('button', { name: /Exportar Dosificador/i }));
 
     expect(onExportDosificador).toHaveBeenCalledWith(10);
@@ -465,35 +674,34 @@ describe('FormulaQuimica', () => {
   });
 
   it('dado editar una formula con description y notas no vacias cuando abre el editor entonces las precarga', async () => {
-    const FORMULA_CON_NOTAS = {
+    const FORMULA_CON_NOTAS: FormulaColor = {
       ...FORMULA_1,
       description: 'Fórmula de referencia para algodón',
       fases: [{
-        ...FORMULA_1.fases[0],
-        detalles: [{ ...FORMULA_1.fases[0].detalles[0], notas: 'Agregar despacio' }],
+        ...FORMULA_1.fases![0],
+        detalles: [{ ...FORMULA_1.fases![0].detalles[0], notas: 'Agregar despacio' }],
       }],
     };
     renderComponent({ formulas: [FORMULA_CON_NOTAS] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
   });
 
   it('dado editar una formula sin la propiedad fases cuando abre el editor entonces usa una lista de fases vacia', async () => {
-    const FORMULA_SIN_FASES: any = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
-    delete FORMULA_SIN_FASES.fases;
+    const { fases: _fases, ...FORMULA_SIN_FASES } = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
     renderComponent({ formulas: [FORMULA_SIN_FASES] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
     expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
   });
 
   it('dado una formula sin fases cuando abre el editor entonces la calculadora muestra el mensaje de sin insumos', async () => {
     renderComponent({ formulas: [FORMULA_2] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
   });
 
-  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a y hace blur entonces navega', async () => {
+  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a y hace blur-sm entonces navega', async () => {
     const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
       ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
     }));
@@ -521,7 +729,7 @@ describe('FormulaQuimica', () => {
     expect(screen.getByPlaceholderText('Buscar insumo...')).toBeInTheDocument();
   });
 
-  it('dado un insumo con relacion de bano vacia cuando calcula entonces usa 0 como fallback sin lanzar error', async () => {
+  it('dado un insumo con litros de bano vacios cuando calcula entonces usa 0 como fallback sin lanzar error', async () => {
     renderComponent();
     await abrirNuevaFormula();
     await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
@@ -530,11 +738,9 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(concentracionInput);
     await userEvent.type(concentracionInput, '5');
 
-    const relacionBanoInput = screen.getByDisplayValue('10');
-    await userEvent.clear(relacionBanoInput);
-
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    // Litros de baño se deja vacío a propósito (BVA): no hay valor por defecto (D3).
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
 
     await waitFor(() => expect(screen.getByText('0.00g')).toBeInTheDocument());
   });

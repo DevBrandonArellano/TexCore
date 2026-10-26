@@ -6,13 +6,14 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ProductSelect } from '../ui/product-select';
-import { ChevronLeft, ChevronRight, Download, Edit2, ShieldCheck, PackageX, Trash2 } from 'lucide-react';
+import { Download, Edit2, ShieldCheck, PackageX, Trash2 } from 'lucide-react';
 import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
 import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
 import { RegistrarMermaDialog } from '../bodeguero/RegistrarMermaDialog';
 import { EliminarMovimientoDialog } from '../bodeguero/EliminarMovimientoDialog';
 import type { Producto, Bodega, Proveedor, Movimiento } from '../../lib/types';
 import { useKardex } from './useKardex';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface KardexViewProps {
   productos: Producto[];
@@ -21,8 +22,8 @@ interface KardexViewProps {
   onDataRefresh?: () => void;
 }
 
-function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: KardexViewProps) {
-  const kardex = useKardex(bodegas);
+function KardexViewImpl({ productos, bodegas, onDataRefresh }: KardexViewProps) {
+  const kardex = useKardex();
 
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
@@ -36,9 +37,9 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
     tipoOperacion, setTipoOperacion,
     fechaInicio, setFechaInicio,
     fechaFin, setFechaFin,
-    kardexData, isLoading,
-    currentPage, setCurrentPage, totalPages, paginatedData,
-    handleFetchKardex, handleClearFilters, exportToCSV,
+    isLoading, mostrarSaldo,
+    currentPage, setCurrentPage, totalPages, totalCount, paginatedData,
+    handleFetchKardex, recargarPagina, handleClearFilters, exportarExcel, exportando,
   } = kardex;
 
   return (
@@ -54,8 +55,8 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
             <Button onClick={handleFetchKardex} disabled={isLoading}>
               {isLoading ? 'Consultando...' : 'Consultar'}
             </Button>
-            <Button variant="secondary" onClick={exportToCSV} className="gap-2">
-              <Download className="w-4 h-4" /> Exportar CSV
+            <Button variant="secondary" onClick={exportarExcel} disabled={exportando} className="gap-2">
+              <Download className="w-4 h-4" /> {exportando ? 'Generando...' : 'Exportar Excel'}
             </Button>
             <Button variant="outline" className="gap-2" onClick={() => setShowMermaDialog(true)}>
               <PackageX className="w-4 h-4" /> Registrar Merma
@@ -125,7 +126,7 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
                 <TableHead>Producto</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead className="text-right">Cantidad</TableHead>
-                {selectedProducto !== 'all' && selectedBodega !== 'all' && (
+                {mostrarSaldo && (
                   <TableHead className="text-right font-bold text-primary">Saldo</TableHead>
                 )}
                 <TableHead>Referencia</TableHead>
@@ -146,18 +147,18 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(row as any).esEntrada ? 'bg-green-100 text-green-700' :
-                          (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${row.esEntrada ? 'bg-green-100 text-green-700' :
+                          row.esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
                         }`}>
                         {row.tipo_movimiento}
                       </span>
                     </TableCell>
-                    <TableCell className={`text-right font-mono ${(row as any).esEntrada ? 'text-green-600' : (row as any).esSalida ? 'text-red-600' : ''}`}>
-                      {(row as any).esSalida ? `-${row.cantidad}` : `+${row.cantidad}`}
+                    <TableCell className={`text-right font-mono ${row.esEntrada ? 'text-green-600' : row.esSalida ? 'text-red-600' : ''}`}>
+                      {row.esSalida ? `-${row.cantidad}` : `+${row.cantidad}`}
                     </TableCell>
-                    {selectedProducto !== 'all' && selectedBodega !== 'all' && (
+                    {mostrarSaldo && (
                       <TableCell className="text-right font-bold font-mono text-primary">
-                        {(row as any).saldo_acumulado !== undefined ? Number((row as any).saldo_acumulado).toFixed(2) : '-'}
+                        {row.saldo_acumulado !== undefined ? Number(row.saldo_acumulado).toFixed(2) : '-'}
                       </TableCell>
                     )}
                     <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">
@@ -198,7 +199,7 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={selectedProducto !== 'all' && selectedBodega !== 'all' ? 7 : 6} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={mostrarSaldo ? 7 : 6} className="text-center py-10 text-muted-foreground">
                     {isLoading ? 'Cargando movimientos...' : 'No se encontraron movimientos con los filtros seleccionados.'}
                   </TableCell>
                 </TableRow>
@@ -207,35 +208,16 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
           </Table>
         </div>
 
-        {kardexData.length > 0 && (
-          <div className="flex items-center justify-between mt-4">
-            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1 || isLoading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
-              <span className="flex items-center gap-1 text-sm">
-                <span className="text-muted-foreground">Ir a</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  defaultValue={currentPage}
-                  key={currentPage}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const v = parseInt((e.target as HTMLInputElement).value, 10);
-                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                  }}
-                  className="w-14 h-8 text-center py-0 px-1"
-                />
-              </span>
-              <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || isLoading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
-            </div>
-          </div>
+        {totalCount > 0 && (
+          <ControlesPaginacion
+            currentPage={currentPage}
+            totalPages={totalPages}
+            setCurrentPage={setCurrentPage}
+            total={totalCount}
+            etiquetaTotal="movimientos"
+            cargando={isLoading}
+            className="mt-4"
+          />
         )}
       </CardContent>
 
@@ -247,7 +229,7 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
           onClose={() => setEditingMovimiento(null)}
           onSuccess={() => {
             setEditingMovimiento(null);
-            handleFetchKardex();
+            recargarPagina();
             if (onDataRefresh) onDataRefresh();
           }}
         />
@@ -270,7 +252,7 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
         productos={productos}
         bodegas={bodegas}
         onSuccess={() => {
-          handleFetchKardex();
+          recargarPagina();
           if (onDataRefresh) onDataRefresh();
         }}
       />
@@ -280,7 +262,7 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
         open={!!deletingMovimiento}
         onClose={() => setDeletingMovimiento(null)}
         onSuccess={() => {
-          handleFetchKardex();
+          recargarPagina();
           if (onDataRefresh) onDataRefresh();
         }}
       />

@@ -10,11 +10,12 @@ archivo. Por eso ya no hay aquí un cliente HTTP saliente ni un token
 manager propio (se eliminaron DjangoReportRepository/JWTTokenManager y los
 routers por-reporte que dependían de ellos).
 """
+
 import logging
 import logging.handlers
 import os
+import pathlib
 import time
-
 from contextlib import asynccontextmanager
 
 import httpx
@@ -25,14 +26,13 @@ from fastapi.responses import JSONResponse
 
 from src.database.engine import init_db
 from src.logging_rfc5424 import RFC5424Formatter
+from src.routers import generate
 
 
 def _get_required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"Variable de entorno requerida no configurada: '{name}'"
-        )
+        raise RuntimeError(f"Variable de entorno requerida no configurada: '{name}'")
     return value
 
 
@@ -41,7 +41,7 @@ def _setup_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     handlers = [handler]
-    if os.path.exists("/dev/log"):
+    if pathlib.Path("/dev/log").exists():
         syslog_h = logging.handlers.SysLogHandler(address="/dev/log")
         syslog_h.setFormatter(formatter)
         handlers.append(syslog_h)
@@ -84,16 +84,13 @@ async def log_requests_rfc5424(request: Request, call_next):
     finally:
         duration_ms = int((time.time() - start_time) * 1000)
         status_code = response.status_code if response else 500
-        level = (
-            logging.ERROR
-            if status_code >= 500
-            else logging.WARNING
-            if status_code >= 400
-            else logging.INFO
-        )
+        level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
         logging.getLogger("http-request").log(
             level,
-            f"{request.method} {request.url.path} {status_code}",
+            "%s %s %s",
+            request.method,
+            request.url.path,
+            status_code,
             extra={
                 "sd": {
                     "method": request.method,
@@ -132,9 +129,7 @@ async def verify_jwt_service_token(request: Request, call_next):
     except jwt.ExpiredSignatureError:
         return JSONResponse(status_code=401, content={"detail": "Token expirado."})
     except jwt.InvalidTokenError as exc:
-        return JSONResponse(
-            status_code=401, content={"detail": f"Token inválido: {exc}"}
-        )
+        return JSONResponse(status_code=401, content={"detail": f"Token inválido: {exc}"})
 
     # ISO 27001 A.9.4: rechazar refresh tokens usados como access tokens
     if payload.get("type") != "service_access":
@@ -171,7 +166,5 @@ def health_check():
     except httpx.RequestError:
         return {"status": "degraded", "django_api": "unreachable"}
 
-
-from src.routers import generate
 
 app.include_router(generate.router, tags=["Generate"])

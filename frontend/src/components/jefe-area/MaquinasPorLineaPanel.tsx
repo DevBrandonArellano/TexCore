@@ -36,7 +36,7 @@ function MaquinasPorLineaPanelImpl({
 
   return (
     <Card className="col-span-4 flex flex-col h-auto">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">

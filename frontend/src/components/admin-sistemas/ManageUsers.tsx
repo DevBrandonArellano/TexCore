@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -8,12 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
-import { User, Sede, Area } from '../../lib/types';
+import { Area, PayloadUsuario, Sede, User } from '../../lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface Group {
   id: number;
@@ -27,8 +28,8 @@ interface ManageUsersProps {
   groups: Group[];
   // Sede seleccionada en el sidebar del AdminSistemasDashboard (para asignación automática)
   selectedSedeId?: string;
-  onUserCreate: (userData: any) => Promise<boolean>;
-  onUserUpdate: (userId: number, userData: any) => Promise<boolean>;
+  onUserCreate: (userData: PayloadUsuario) => Promise<boolean>;
+  onUserUpdate: (userId: number, userData: PayloadUsuario) => Promise<boolean>;
   onUserDelete: (userId: number) => void;
   loading: boolean;
 }
@@ -82,16 +83,6 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
     return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
   };
 
-  // Asignación automática de sede al crear (cuando el rol la requiere)
-  useEffect(() => {
-    if (editingUser) return;
-    if (!formData.groups[0]) return;
-    const groupName = getGroupName(formData.groups[0]);
-    if (!groupName || groupName === 'admin_sistemas') return;
-    if (formData.sede) return;
-    if (!sedes.length) return;
-    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
-  }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
 
   const {
     currentPage: safePage,
@@ -120,6 +111,13 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
 
   const getGroupName = (groupId: number): string | undefined => {
     return groups.find(g => g.id === groupId)?.name;
+  }
+
+  // Asignación automática de sede al crear (cuando el rol la requiere), durante el
+  // render: deja de cumplirse en cuanto la sede queda asignada.
+  const grupoElegido = formData.groups[0] ? getGroupName(formData.groups[0]) : undefined;
+  if (!editingUser && grupoElegido && grupoElegido !== 'admin_sistemas' && !formData.sede && sedes.length > 0) {
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
   }
 
   const validate = () => {
@@ -160,12 +158,9 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
       password: formData.password || undefined,
     };
 
-    let success = false;
-    if (editingUser) {
-      success = await onUserUpdate(editingUser.id, userDataToSend);
-    } else {
-      success = await onUserCreate(userDataToSend);
-    }
+    const success = editingUser
+      ? await onUserUpdate(editingUser.id, userDataToSend)
+      : await onUserCreate(userDataToSend);
 
     if (success) {
       setIsOpen(false);
@@ -206,7 +201,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
 
   return (
     <Card className="flex flex-col h-full min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Usuarios</CardTitle>
@@ -229,7 +224,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                 Nuevo Usuario
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
@@ -446,7 +441,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Usuario</TableHead>
@@ -514,52 +509,12 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4 shrink-0"
+        />
       </CardContent>
     </Card>
   );

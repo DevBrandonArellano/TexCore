@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/pedidos-venta/ (crear),HTTPError('400 Client Error: Bad Request for url: /api/pedidos-venta/ (crear)'),143,2026-09-29T19:21:05Z,2026-09-29T19:24:35Z
+POST,/api/inventory/process-despacho/,HTTPError('400 Client Error: Bad Request for url: /api/inventory/process-despacho/'),168,2026-09-29T19:21:05Z,2026-09-29T19:24:36Z
+POST,/api/inventory/transferencias/,HTTPError('400 Client Error: Bad Request for url: /api/inventory/transferencias/'),4,2026-09-29T19:21:46Z,2026-09-29T19:24:30Z

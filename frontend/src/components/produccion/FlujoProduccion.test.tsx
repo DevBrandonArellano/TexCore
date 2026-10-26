@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): carga inicial / sin ordenes / error al cargar / ordenes sin etapas
+ *   configuradas / orden con etapas configuradas para su area.
+ * - Caja blanca (CB): ramas de error — error al cargar.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -5,11 +11,11 @@ import { FlujoProduccion } from './FlujoProduccion';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
-vi.mock('sonner', () => ({ toast: { error: (...args: any[]) => toastErrorMock(...args) } }));
+vi.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => toastErrorMock(...args) } }));
 
 const ORDEN_SIN_ETAPAS = {
   id: 1,
@@ -41,7 +47,7 @@ const ETAPA = {
   bodega_salida: { nombre: 'Bodega Final' },
 };
 
-function mockFetch(ordenes: any[], etapas: any[] = []) {
+function mockFetch(ordenes: unknown[], etapas: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: { results: ordenes } });
     if (url === '/etapas-produccion/') return Promise.resolve({ data: { results: etapas } });

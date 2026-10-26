@@ -1,8 +1,16 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin datos / isLoading en true y sin datos / movimientos de entrada y
+ *   salida sin filtro de producto/bodega / consulta de kardex con saldo / fila sin saldo acumulado.
+ * - Análisis de valores límite (BVA): sin datos / isLoading en true y sin datos.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { KardexView } from './KardexView';
+
+import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora. Se mockea useKardex (ya testeado por su cuenta)
 // para aislar las ramas propias de KardexView: columna de saldo condicional,
@@ -10,11 +18,11 @@ import { KardexView } from './KardexView';
 
 const mockUseKardex = vi.fn();
 vi.mock('./useKardex', () => ({
-  useKardex: (...args: any[]) => mockUseKardex(...args),
+  useKardex: (...args: unknown[]) => mockUseKardex(...args),
 }));
 
 vi.mock('../bodeguero/EditarMovimientoDialog', () => ({
-  EditarMovimientoDialog: ({ onSuccess, onClose }: any) => (
+  EditarMovimientoDialog: ({ onSuccess, onClose }: import('react').ComponentProps<typeof import('../bodeguero/EditarMovimientoDialog').EditarMovimientoDialog>) => (
     <div>
       <button onClick={onSuccess}>confirmar-edicion</button>
       <button onClick={onClose}>cerrar-edicion</button>
@@ -22,7 +30,7 @@ vi.mock('../bodeguero/EditarMovimientoDialog', () => ({
   ),
 }));
 vi.mock('../bodeguero/AuditoriaDialog', () => ({
-  AuditoriaDialog: ({ onClose, movimientoId }: any) => (
+  AuditoriaDialog: ({ onClose, movimientoId }: import('react').ComponentProps<typeof import('../bodeguero/AuditoriaDialog').AuditoriaDialog>) => (
     <div>
       <span>auditoria-{movimientoId}</span>
       <button onClick={onClose}>cerrar-auditoria</button>
@@ -30,12 +38,12 @@ vi.mock('../bodeguero/AuditoriaDialog', () => ({
   ),
 }));
 vi.mock('../bodeguero/RegistrarMermaDialog', () => ({
-  RegistrarMermaDialog: ({ open, onSuccess }: any) => (
+  RegistrarMermaDialog: ({ open, onSuccess }: import('react').ComponentProps<typeof import('../bodeguero/RegistrarMermaDialog').RegistrarMermaDialog>) => (
     open ? <div><button onClick={onSuccess}>confirmar-merma</button></div> : null
   ),
 }));
 vi.mock('../bodeguero/EliminarMovimientoDialog', () => ({
-  EliminarMovimientoDialog: ({ movimiento, onSuccess, onClose }: any) => (
+  EliminarMovimientoDialog: ({ movimiento, onSuccess, onClose }: import('react').ComponentProps<typeof import('../bodeguero/EliminarMovimientoDialog').EliminarMovimientoDialog>) => (
     movimiento ? (
       <div>
         <button onClick={onSuccess}>confirmar-eliminar</button>
@@ -47,33 +55,34 @@ vi.mock('../bodeguero/EliminarMovimientoDialog', () => ({
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 vi.mock('../ui/product-select', () => ({
-  ProductSelect: ({ onValueChange }: any) => (
+  ProductSelect: ({ onValueChange }: import('react').ComponentProps<typeof import('../ui/product-select').ProductSelect>) => (
     <button onClick={() => onValueChange('1')}>seleccionar-producto</button>
   ),
 }));
 
-function baseKardex(overrides: Partial<any> = {}) {
+function baseKardex(overrides: Record<string, unknown> = {}) {
   return {
     selectedBodega: 'all', setSelectedBodega: vi.fn(),
     selectedProducto: 'all', setSelectedProducto: vi.fn(),
     tipoOperacion: 'all', setTipoOperacion: vi.fn(),
     fechaInicio: '', setFechaInicio: vi.fn(),
     fechaFin: '', setFechaFin: vi.fn(),
-    kardexData: [], isLoading: false,
-    currentPage: 1, setCurrentPage: vi.fn(), totalPages: 1, paginatedData: [],
-    handleFetchKardex: vi.fn(), handleClearFilters: vi.fn(), exportToCSV: vi.fn(),
+    kardexData: [], isLoading: false, mostrarSaldo: false,
+    currentPage: 1, setCurrentPage: vi.fn(), totalPages: 1, totalCount: 0, paginatedData: [],
+    handleFetchKardex: vi.fn(), recargarPagina: vi.fn(), handleClearFilters: vi.fn(),
+    exportarExcel: vi.fn(), exportando: false,
     ...overrides,
   };
 }
@@ -112,12 +121,12 @@ describe('KardexView', () => {
     expect(screen.queryByText('Saldo')).not.toBeInTheDocument();
     expect(screen.getByText('+10')).toBeInTheDocument();
     expect(screen.getByText('-5')).toBeInTheDocument();
-    expect(screen.getByText('-')).toBeInTheDocument(); // documento_ref null
+    expect(screen.getByText('-')).toBeInTheDocument(); // documento_ref nulo
   });
 
-  it('dado producto y bodega seleccionados cuando renderiza entonces muestra la columna de saldo con el valor formateado', () => {
+  it('dado consulta de kardex con saldo cuando renderiza entonces muestra la columna de saldo con el valor formateado', () => {
     mockUseKardex.mockReturnValue(baseKardex({
-      selectedProducto: '1', selectedBodega: '2',
+      mostrarSaldo: true,
       kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA],
     }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
@@ -128,27 +137,51 @@ describe('KardexView', () => {
   it('dado fila sin saldo_acumulado cuando muestra la columna de saldo entonces muestra guion', () => {
     const movSinSaldo = { ...MOV_ENTRADA, saldo_acumulado: undefined };
     mockUseKardex.mockReturnValue(baseKardex({
-      selectedProducto: '1', selectedBodega: '2',
+      mostrarSaldo: true,
       kardexData: [movSinSaldo], paginatedData: [movSinSaldo],
     }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
+  it('dado filtros de producto y bodega elegidos sin consultar cuando renderiza entonces no muestra la columna de saldo', () => {
+    // La columna depende de la consulta hecha, no de lo que se eligió después sin consultar.
+    mockUseKardex.mockReturnValue(baseKardex({
+      selectedProducto: '1', selectedBodega: '2', mostrarSaldo: false,
+      kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], totalCount: 1,
+    }));
+    render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
+    expect(screen.queryByText('Saldo')).not.toBeInTheDocument();
+  });
+
   it('dado click en Limpiar y Consultar y Exportar cuando se activan entonces llaman a sus handlers', async () => {
     const handleClearFilters = vi.fn();
     const handleFetchKardex = vi.fn();
-    const exportToCSV = vi.fn();
-    mockUseKardex.mockReturnValue(baseKardex({ handleClearFilters, handleFetchKardex, exportToCSV }));
+    const exportarExcel = vi.fn();
+    mockUseKardex.mockReturnValue(baseKardex({ handleClearFilters, handleFetchKardex, exportarExcel }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Limpiar' }));
     await userEvent.click(screen.getByRole('button', { name: 'Consultar' }));
-    await userEvent.click(screen.getByRole('button', { name: /Exportar CSV/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Exportar Excel/i }));
 
     expect(handleClearFilters).toHaveBeenCalled();
     expect(handleFetchKardex).toHaveBeenCalled();
-    expect(exportToCSV).toHaveBeenCalled();
+    expect(exportarExcel).toHaveBeenCalled();
+  });
+
+  it('dado exportacion en curso cuando renderiza entonces deshabilita el boton de exportar', () => {
+    mockUseKardex.mockReturnValue(baseKardex({ exportando: true }));
+    render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
+    expect(screen.getByRole('button', { name: /Generando/i })).toBeDisabled();
+  });
+
+  it('dado resultados cuando renderiza entonces muestra el total de movimientos de la consulta', () => {
+    mockUseKardex.mockReturnValue(baseKardex({
+      kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], totalCount: 1234, totalPages: 62,
+    }));
+    render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
+    expect(screen.getByText(/1234 movimientos/)).toBeInTheDocument();
   });
 
   it('dado click en el boton de auditoria cuando se activa entonces abre el dialogo de auditoria con el id correcto', async () => {
@@ -165,10 +198,10 @@ describe('KardexView', () => {
     expect(screen.queryByText('auditoria-1')).not.toBeInTheDocument();
   });
 
-  it('dado click en editar cuando se confirma entonces refresca el kardex y llama onDataRefresh', async () => {
-    const handleFetchKardex = vi.fn();
+  it('dado click en editar cuando se confirma entonces recarga la pagina actual y llama onDataRefresh', async () => {
+    const recargarPagina = vi.fn();
     const onDataRefresh = vi.fn();
-    mockUseKardex.mockReturnValue(baseKardex({ kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], handleFetchKardex }));
+    mockUseKardex.mockReturnValue(baseKardex({ kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], totalCount: 1, recargarPagina }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} onDataRefresh={onDataRefresh} />);
 
     const fila = screen.getByText('Hilo Azul').closest('tr') as HTMLElement;
@@ -176,7 +209,7 @@ describe('KardexView', () => {
     await userEvent.click(editBtn);
     await userEvent.click(screen.getByText('confirmar-edicion'));
 
-    expect(handleFetchKardex).toHaveBeenCalled();
+    expect(recargarPagina).toHaveBeenCalled();
     expect(onDataRefresh).toHaveBeenCalled();
   });
 
@@ -191,33 +224,33 @@ describe('KardexView', () => {
     expect(screen.queryByText('confirmar-edicion')).not.toBeInTheDocument();
   });
 
-  it('dado click en eliminar cuando se confirma entonces refresca el kardex', async () => {
-    const handleFetchKardex = vi.fn();
-    mockUseKardex.mockReturnValue(baseKardex({ kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], handleFetchKardex }));
+  it('dado click en eliminar cuando se confirma entonces recarga la pagina actual', async () => {
+    const recargarPagina = vi.fn();
+    mockUseKardex.mockReturnValue(baseKardex({ kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA], totalCount: 1, recargarPagina }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
     const fila = screen.getByText('Hilo Azul').closest('tr') as HTMLElement;
     const [, , delBtn] = within(fila).getAllByRole('button');
     await userEvent.click(delBtn);
     await userEvent.click(screen.getByText('confirmar-eliminar'));
-    expect(handleFetchKardex).toHaveBeenCalled();
+    expect(recargarPagina).toHaveBeenCalled();
   });
 
-  it('dado click en registrar merma cuando se abre y se confirma entonces refresca el kardex', async () => {
-    const handleFetchKardex = vi.fn();
-    mockUseKardex.mockReturnValue(baseKardex({ handleFetchKardex }));
+  it('dado click en registrar merma cuando se abre y se confirma entonces recarga la pagina actual', async () => {
+    const recargarPagina = vi.fn();
+    mockUseKardex.mockReturnValue(baseKardex({ recargarPagina }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
     await userEvent.click(screen.getByRole('button', { name: /Registrar Merma/i }));
     await userEvent.click(screen.getByText('confirmar-merma'));
-    expect(handleFetchKardex).toHaveBeenCalled();
+    expect(recargarPagina).toHaveBeenCalled();
   });
 
   it('dado mas de una pagina cuando cambia de pagina con los botones entonces llama setCurrentPage', async () => {
     const setCurrentPage = vi.fn();
     mockUseKardex.mockReturnValue(baseKardex({
       kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA],
-      currentPage: 2, totalPages: 3, setCurrentPage,
+      currentPage: 2, totalPages: 3, totalCount: 60, setCurrentPage,
     }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
@@ -231,7 +264,7 @@ describe('KardexView', () => {
     const setCurrentPage = vi.fn();
     mockUseKardex.mockReturnValue(baseKardex({
       kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA],
-      currentPage: 1, totalPages: 3, setCurrentPage,
+      currentPage: 1, totalPages: 3, totalCount: 60, setCurrentPage,
     }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
@@ -245,7 +278,7 @@ describe('KardexView', () => {
     const setCurrentPage = vi.fn();
     mockUseKardex.mockReturnValue(baseKardex({
       kardexData: [MOV_ENTRADA], paginatedData: [MOV_ENTRADA],
-      currentPage: 1, totalPages: 3, setCurrentPage,
+      currentPage: 1, totalPages: 3, totalCount: 60, setCurrentPage,
     }));
     render(<KardexView productos={[]} bodegas={[]} proveedores={[]} />);
 
@@ -262,7 +295,7 @@ describe('KardexView', () => {
     const setTipoOperacion = vi.fn();
     const setFechaInicio = vi.fn();
     mockUseKardex.mockReturnValue(baseKardex({ setSelectedBodega, setSelectedProducto, setTipoOperacion, setFechaInicio }));
-    const { container } = render(<KardexView productos={[]} bodegas={[{ id: 1, nombre: 'B1' } as any]} proveedores={[]} />);
+    const { container } = render(<KardexView productos={[]} bodegas={[parcial({ id: 1, nombre: 'B1' })]} proveedores={[]} />);
 
     await userEvent.click(screen.getByText('Todas las Bodegas'));
     expect(setSelectedBodega).toHaveBeenCalledWith('all');

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { Card, CardContent, CardHeader } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -9,10 +9,15 @@ import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package, Rot
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
+import { logger } from '../../lib/logger';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { GuiaRemisionModal } from './GuiaRemisionModal';
+
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 // Interfaces basadas en los serializers del backend
 interface DetalleHistorial {
@@ -65,8 +70,26 @@ export function HistorialDespachos() {
     const fechaHasta = searchParams.get('fecha_hasta') || '';
     
     // Estado local
-    const [data, setData] = useState<PaginatedResponse | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const carga = useCargaRemota(
+        () => {
+            const params = new URLSearchParams();
+            params.append('page', page.toString());
+            if (fechaDesde) params.append('fecha_desde', fechaDesde);
+            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+            return apiClient
+                .get<PaginatedResponse>(`/inventory/historial-despachos/?${params.toString()}`)
+                .then((response) => response.data)
+                .catch((error: unknown) => {
+                    console.error("Error fetching historial", error);
+                    toast.error("Error al cargar el historial de despachos");
+                    throw error;
+                });
+        },
+        `${page}|${fechaDesde}|${fechaHasta}`, // Dependencias a la URL
+    );
+    const data = carga.datos;
+    const isLoading = carga.cargando;
+    const { recargar: fetchHistorial } = carga;
     const [selectedDespacho, setSelectedDespacho] = useState<HistorialDespacho | null>(null);
 
     // Inputs locales para filtros de fecha antes de aplicar a URL
@@ -83,29 +106,6 @@ export function HistorialDespachos() {
     const [guiaRemisionDespachoId, setGuiaRemisionDespachoId] = useState<number | null>(null);
     const [imprimiendoHistorial, setImprimiendoHistorial] = useState(false);
 
-    useEffect(() => {
-        fetchHistorial();
-    }, [page, fechaDesde, fechaHasta]); // Dependencias a la URL
-
-    const fetchHistorial = async () => {
-        setIsLoading(true);
-        try {
-            // Construir params para axios
-            const params = new URLSearchParams();
-            params.append('page', page.toString());
-            if (fechaDesde) params.append('fecha_desde', fechaDesde);
-            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-            
-            const response = await apiClient.get<PaginatedResponse>(`/inventory/historial-despachos/?${params.toString()}`);
-            setData(response.data);
-        } catch (error) {
-            console.error("Error fetching historial", error);
-            toast.error("Error al cargar el historial de despachos");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleApplyFilters = () => {
         setSearchParams(prev => {
             if (localFechaDesde) {
@@ -120,7 +120,7 @@ export function HistorialDespachos() {
                 prev.delete('fecha_hasta');
             }
             
-            prev.set('page', '1'); // Reset to page 1 on filter
+            prev.set('page', '1'); // Vuelve a la página 1 al filtrar
             return prev;
         }, { replace: true });
     };
@@ -172,13 +172,10 @@ export function HistorialDespachos() {
             setReversionJustificacion('');
             fetchHistorial(); // Recargar lista
 
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error revirtiendo despacho", error);
-            toast.error(
-                error.response?.data?.error ||
-                error.response?.data?.justificacion ||
-                'Error al revertir el despacho'
-            );
+            const justificacion = (datosDeError(error) as { justificacion?: string } | undefined)?.justificacion;
+            toast.error(justificacion || mensajeDeLaApi(error, 'Error al revertir el despacho'));
         } finally {
             setReversionLoading(false);
         }
@@ -190,15 +187,16 @@ export function HistorialDespachos() {
             const params = new URLSearchParams();
             if (fechaDesde) params.append('fecha_desde', fechaDesde);
             if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+            // Se imprime solo la página que se está viendo (mismos filtros y misma paginación).
+            params.append('page', page.toString());
 
             const response = await apiClient.get(
                 `/inventory/historial-despachos/imprimir/?${params.toString()}`,
                 { responseType: 'blob' },
             );
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            window.open(url, '_blank');
+            abrirPdfEnPestana(response.data);
         } catch (error) {
-            console.error('Error al imprimir el historial', error);
+            logger.error('Error al imprimir el historial de despachos', { entity: 'HistorialDespachos', page, error: String(error) });
             toast.error('Error al generar el PDF del historial de despachos.');
         } finally {
             setImprimiendoHistorial(false);
@@ -357,12 +355,12 @@ export function HistorialDespachos() {
                         </TableBody>
                     </Table>
 
-                    {/* Pagination Controls */}
+                    {/* Controles de paginación */}
                     {data && data.count > 0 && (
                         <div className="flex items-center justify-between px-6 py-4 border-t">
                             <span className="text-sm text-muted-foreground">
                                 Mostrando página <span className="font-medium text-slate-900">{page}</span> 
-                                {/* Assuming standard limit calculation if needed, else simple display */}
+                                {/* Cálculo de límite estándar si hace falta; si no, visualización simple */}
                             </span>
                             <div className="flex gap-2">
                                 <Button
@@ -389,7 +387,7 @@ export function HistorialDespachos() {
 
             {/* Modal de Detalles del Despacho */}
             <Dialog open={!!selectedDespacho} onOpenChange={(open) => !open && setSelectedDespacho(null)}>
-                <DialogContent className="max-w-3xl">
+                <DialogContent className="sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl flex items-center gap-2">
                             <Package className="w-5 h-5 text-primary" />
@@ -404,7 +402,7 @@ export function HistorialDespachos() {
 
                     {selectedDespacho && (
                         <div className="space-y-6">
-                            {/* Summary Cards */}
+                            {/* Tarjetas de resumen */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <Card className="bg-slate-50 border-none shadow-none">
                                     <CardContent className="p-4 flex flex-col items-center justify-center">
@@ -427,14 +425,14 @@ export function HistorialDespachos() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Pedidos List */}
+                                {/* Lista de pedidos */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-sm text-slate-500 uppercase flex items-center gap-2 border-b pb-1">
                                         Pedidos Abarcados
                                     </h3>
                                     <div className="space-y-2">
                                         {selectedDespacho.pedidos_detalle.map(p => (
-                                            <div key={p.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-sm">
+                                            <div key={p.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-xs">
                                                 <div className="flex flex-col">
                                                     <span className="font-semibold text-sm">{p.cliente_nombre}</span>
                                                     <span className="text-xs text-muted-foreground font-mono">Guía: {p.guia_remision}</span>
@@ -444,16 +442,16 @@ export function HistorialDespachos() {
                                     </div>
                                 </div>
 
-                                {/* Lotes List */}
+                                {/* Lista de lotes */}
                                 <div className="space-y-3">
                                     <h3 className="font-medium text-sm text-slate-500 uppercase flex items-center gap-2 border-b pb-1">
                                         Lotes Escaneados
                                     </h3>
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                         {selectedDespacho.detalles.map(d => (
-                                            <div key={d.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-sm hover:border-slate-300 transition-colors">
+                                            <div key={d.id} className="flex justify-between items-center bg-white border p-3 rounded-md shadow-xs hover:border-slate-300 transition-colors">
                                                 <div className="flex flex-col">
-                                                    <span className="text-xs truncate max-w-[200px]" title={d.producto_nombre}>{d.producto_nombre}</span>
+                                                    <span className="text-xs truncate max-w-[280px]" title={d.producto_nombre}>{d.producto_nombre}</span>
                                                     <span className="font-mono text-sm font-semibold">{d.codigo_lote}</span>
                                                 </div>
                                                 <div className="flex flex-col items-end">

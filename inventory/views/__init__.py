@@ -1,23 +1,24 @@
-from .stock_views import StockBodegaViewSet, AlertasStockAPIView
-from .movimiento_views import MovimientoInventarioViewSet
-from .transferencia_views import TransferenciaStockAPIView
-from .kardex_views import KardexBodegaAPIView, RetroKardexAPIView, MovimientosPorLoteAPIView
-from .despacho_views import HistorialDespachoViewSet, ValidateLoteAPIView, ProcessDespachoAPIView
 from .audit_views import AuditLogViewSet
-from .mrp_views import RequerimientoMaterialViewSet, OrdenCompraSugeridaViewSet
+from .despacho_views import HistorialDespachoViewSet, ProcessDespachoAPIView, ValidateLoteAPIView
+from .kardex_views import KardexBodegaAPIView, MovimientosPorLoteAPIView, RetroKardexAPIView
+from .movimiento_views import MovimientoInventarioViewSet
+from .mrp_views import OrdenCompraSugeridaViewSet, RequerimientoMaterialViewSet
+from .stock_views import AlertasStockAPIView, StockBodegaViewSet, StockResumenAPIView
+from .transferencia_views import TransferenciaStockAPIView
 
 __all__ = [
-    'StockBodegaViewSet',
-    'AlertasStockAPIView',
-    'MovimientoInventarioViewSet',
-    'TransferenciaStockAPIView',
-    'KardexBodegaAPIView',
-    'RetroKardexAPIView',
-    'MovimientosPorLoteAPIView',
-    'HistorialDespachoViewSet',
-    'ValidateLoteAPIView',
-    'ProcessDespachoAPIView',
-    'AuditLogViewSet',
-    'RequerimientoMaterialViewSet',
-    'OrdenCompraSugeridaViewSet',
+    "AlertasStockAPIView",
+    "AuditLogViewSet",
+    "HistorialDespachoViewSet",
+    "KardexBodegaAPIView",
+    "MovimientoInventarioViewSet",
+    "MovimientosPorLoteAPIView",
+    "OrdenCompraSugeridaViewSet",
+    "ProcessDespachoAPIView",
+    "RequerimientoMaterialViewSet",
+    "RetroKardexAPIView",
+    "StockBodegaViewSet",
+    "StockResumenAPIView",
+    "TransferenciaStockAPIView",
+    "ValidateLoteAPIView",
 ]

@@ -11,6 +11,7 @@ Uso:
 Las variables de entorno obligatorias de ``settings.py`` se inyectan aquí con
 valores ficticios deterministas — nunca se usan contra recursos reales.
 """
+
 import os
 from pathlib import Path
 
@@ -18,6 +19,16 @@ from pathlib import Path
 os.environ.setdefault("SECRET_KEY", "test-secret-key-local-only")
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
+
+# RS-19: claves de cifrado en reposo. Deterministas y solo de prueba.
+os.environ.setdefault(
+    "FIELD_ENCRYPTION_KEYS",
+    "dwh7QzsrN1sGwqaYI4L_uE_KyxtOZ7XyJ4KS6qljFmA=",  # pragma: allowlist secret
+)
+os.environ.setdefault(
+    "BLIND_INDEX_KEY",
+    "Slp7cvUFBcFzchQ5hXNVMCPl-v7ExwFySsj5xHRZ7Dw",  # pragma: allowlist secret
+)
 
 # DATABASES también es Fail Fast en settings.py (barrido de higiene Fase 5.7) —
 # aunque este módulo sobreescribe DATABASES a SQLite justo debajo, la ejecución
@@ -39,13 +50,24 @@ os.environ.setdefault("DB_DRIVER", "unused")
 # replicamos eso aquí para el harness local.
 try:
     from dotenv import load_dotenv
+
     _env_test = Path(__file__).resolve().parent.parent / ".env.test"
     if _env_test.exists():
         load_dotenv(_env_test, override=False)
 except ImportError:
-    pass
+    _env_test = Path(__file__).resolve().parent.parent / ".env.test"
+    if _env_test.exists():
+        with Path(_env_test).open(encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    _v = _v.strip()
+                    if (_v.startswith('"') and _v.endswith('"')) or (_v.startswith("'") and _v.endswith("'")):
+                        _v = _v[1:-1]
+                    os.environ.setdefault(_k.strip(), _v)
 
-from TexCore.settings import *  # noqa: E402, F401, F403
+from TexCore.settings import *  # noqa: F403
 
 # ---------------------------------------------------------------------------
 # Base de datos — SQLite en memoria (rápida, sin dependencias externas)
@@ -57,4 +79,4 @@ DATABASES = {
     }
 }
 
-from TexCore.settings_test_common import *  # noqa: E402, F401, F403
+from TexCore.settings_test_common import *  # noqa: E402, F403

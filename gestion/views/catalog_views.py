@@ -1,14 +1,28 @@
-from rest_framework import viewsets
 import logging
+
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import IsSystemAdmin, IsAdminSistemasOrSede
+
 from gestion.models import Producto, Proveedor
+from gestion.permissions import (
+    IsCatalogManager,
+    IsSystemAdmin,
+    filtrar_catalogo_por_sede,
+    filtrar_por_sede,
+)
 from gestion.serializers import ProductoSerializer, ProveedorSerializer
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
+
+
+def _scope_catalog_queryset_by_sede(queryset, user, action):
+    if action in ["list", "retrieve"]:
+        return filtrar_catalogo_por_sede(queryset, user)
+    return filtrar_por_sede(queryset, user)
 
 
 class ChemicalViewSet(SedeAutoAssignMixin, viewsets.ModelViewSet):
@@ -16,13 +30,16 @@ class ChemicalViewSet(SedeAutoAssignMixin, viewsets.ModelViewSet):
     pagination_class = None
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAdminSistemasOrSede()]
+        return [IsAuthenticated(), IsCatalogManager()]
 
     def get_queryset(self):
-        queryset = Producto.objects.filter(tipo__in=['quimico', 'insumo'])
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        user = self.request.user
+        queryset = Producto.objects.filter(tipo__in=["quimico", "insumo"])
+        queryset = _scope_catalog_queryset_by_sede(queryset, user, self.action)
+
+        sede_id = self.request.query_params.get("sede_id", self.request.query_params.get("sede", None))
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
         return queryset
@@ -33,31 +50,27 @@ class ProductoViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVi
     pagination_class = None
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
-        # create/update/delete: admin_sistemas y admin_sede (consistente con setup_permissions)
-        return [IsAuthenticated(), IsAdminSistemasOrSede()]
+        return [IsAuthenticated(), IsCatalogManager()]
 
     def get_queryset(self):
         user = self.request.user
         queryset = Producto.objects.all()
 
-        # Multi-tenancy: Solo restringir si el usuario no es admin global
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            from django.db.models import Q
-            queryset = queryset.filter(Q(sede=user.sede) | Q(sede__isnull=True))
+        queryset = _scope_catalog_queryset_by_sede(queryset, user, self.action)
 
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        sede_id = self.request.query_params.get("sede_id", self.request.query_params.get("sede", None))
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
-        # Security Filter: Salesmen strictly cannot see chemicals or inputs
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
+        # Filtro de seguridad: los vendedores no pueden ver químicos ni insumos
+        if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
+            queryset = queryset.filter(tipo__in=["hilo", "tela", "subproducto"])
 
-        tipo = self.request.query_params.get('tipo', None)
+        tipo = self.request.query_params.get("tipo", None)
         if tipo:
-            tipos = [t.strip() for t in tipo.split(',')]
+            tipos = [t.strip() for t in tipo.split(",")]
             queryset = queryset.filter(tipo__in=tipos)
 
         return queryset
@@ -69,7 +82,7 @@ class ProveedorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelV
     pagination_class = None
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
@@ -77,10 +90,8 @@ class ProveedorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelV
         user = self.request.user
         qs = Proveedor.objects.all()
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            from django.db.models import Q
-            qs = qs.filter(Q(sede=user.sede) | Q(sede__isnull=True))
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        qs = filtrar_catalogo_por_sede(qs, user)
+        sede_id = self.request.query_params.get("sede_id", self.request.query_params.get("sede", None))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         return qs

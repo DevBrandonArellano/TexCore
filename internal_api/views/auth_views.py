@@ -3,10 +3,11 @@ Endpoints de autenticación servicio-a-servicio.
 SRP: solo emite y renueva JWT de servicio.
 ISO 27001 A.9.4: autenticación de servicios con secretos hasheados.
 """
+
 import ipaddress
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -56,7 +57,7 @@ def _is_internal_request(remote_addr: str) -> bool:
 
 def _generate_token_pair(credential: ServiceCredential) -> dict:
     """Genera par access+refresh JWT RS256. Lógica extraída para reutilización."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     access_payload = {
         "iss": "texcore",
         "sub": credential.name,
@@ -75,12 +76,8 @@ def _generate_token_pair(credential: ServiceCredential) -> dict:
         "type": "service_refresh",
     }
     return {
-        "access_token": jwt.encode(
-            access_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"
-        ),
-        "refresh_token": jwt.encode(
-            refresh_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"
-        ),
+        "access_token": jwt.encode(access_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"),
+        "refresh_token": jwt.encode(refresh_payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256"),
         "expires_in": settings.INTERNAL_JWT_ACCESS_TTL_SECONDS,
     }
 
@@ -95,7 +92,8 @@ class ServiceTokenView(APIView):
     def post(self, request):
         remote_addr = request.META.get("REMOTE_ADDR", "")
         if not _is_internal_request(remote_addr):
-            logger.critical(
+            # Falso positivo de Semgrep: registra la IP de origen, nunca el secreto ni el token.
+            logger.critical(  # nosemgrep: python-logger-credential-disclosure
                 "Intento de acceso a auth/token desde IP no privada: %s",
                 remote_addr,
                 extra={"sd": {"severity": 2, "remote_addr": remote_addr}},
@@ -128,7 +126,8 @@ class ServiceTokenView(APIView):
             return Response({"detail": "Servicio deshabilitado."}, status=403)
 
         if not check_password(service_secret, credential.secret_hash):
-            logger.warning(
+            # Falso positivo de Semgrep: registra el nombre del servicio, nunca el secreto ni el token.
+            logger.warning(  # nosemgrep: python-logger-credential-disclosure
                 "Secreto incorrecto para servicio: %s",
                 service_name,
                 extra={"sd": {"severity": 4, "service": service_name}},
@@ -138,7 +137,8 @@ class ServiceTokenView(APIView):
         credential.last_used_at = dj_timezone.now()
         credential.save(update_fields=["last_used_at"])
 
-        logger.info(
+        # Falso positivo de Semgrep: registra el nombre del servicio, nunca el secreto ni el token.
+        logger.info(  # nosemgrep: python-logger-credential-disclosure
             "Token emitido para servicio: %s",
             service_name,
             extra={"sd": {"severity": 6, "service": service_name}},
@@ -184,12 +184,8 @@ class ServiceTokenRefreshView(APIView):
             return Response({"detail": "Tipo de token incorrecto."}, status=401)
 
         try:
-            credential = ServiceCredential.objects.get(
-                name=payload["sub"], is_active=True
-            )
+            credential = ServiceCredential.objects.get(name=payload["sub"], is_active=True)
         except ServiceCredential.DoesNotExist:
-            return Response(
-                {"detail": "Servicio no encontrado o inactivo."}, status=403
-            )
+            return Response({"detail": "Servicio no encontrado o inactivo."}, status=403)
 
         return Response(_generate_token_pair(credential), status=200)

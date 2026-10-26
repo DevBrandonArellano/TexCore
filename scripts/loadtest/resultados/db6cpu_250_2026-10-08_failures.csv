@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/inventory/transferencias/,CatchResponseError('HTTP 400: Stock insuficiente en la bodega de origen. Disponible: N.N'),6,2026-10-08T15:10:27Z,2026-10-08T15:12:23Z
+POST,/api/inventory/historial-despachos/{id}/revertir/,CatchResponseError('HTTP 404: No HistorialDespacho matches the given query.'),4,2026-10-08T15:09:58Z,2026-10-08T15:12:06Z
+POST,/api/inventory/process-despacho/,CatchResponseError('HTTP 400: El lote EN-N-LN ya no tiene stock disponible.'),76,2026-10-08T15:08:55Z,2026-10-08T15:12:21Z

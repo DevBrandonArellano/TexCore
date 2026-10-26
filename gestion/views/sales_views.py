@@ -1,49 +1,68 @@
+import contextlib
+import logging
 from decimal import Decimal
 
-from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError
-import logging
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import (
-    IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin
-)
-from gestion.services.pago_reversion import PagoReversionService
+from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
-from gestion.models import (
-    Cliente, PagoCliente, PedidoVenta, DetallePedido
-)
-from gestion.utils import PrintingService, PaymentReconciler
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from gestion.models import Cliente, DetallePedido, PagoCliente, PedidoVenta
+from gestion.permissions import IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede, validar_visible
 from gestion.serializers import (
-    ClienteSerializer, ClienteListSerializer, PedidoVentaSerializer, DetallePedidoSerializer, PagoClienteSerializer,
-    AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    AnulacionPedidoSerializer,
+    ClienteListSerializer,
+    ClienteSerializer,
+    ModificacionPedidoSerializer,
+    PagoClienteSerializer,
+    PedidoVentaSerializer,
 )
-from django.db import transaction
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+from gestion.services.pago_reversion import PagoReversionService
+from gestion.utils import PaymentReconciler, PrintingService
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
+
+
+def _es_vendedor(user):
+    return user.groups.filter(name="vendedor").exists() and not user.is_superuser
+
+
+def _clientes_visibles(user):
+    """OWASP A01: clientes de la sede del usuario; el vendedor, solo los suyos."""
+    qs = filtrar_por_sede(Cliente.objects.all(), user)
+    return qs.filter(vendedor_asignado=user) if _es_vendedor(user) else qs
+
+
+def _pedidos_visibles(user):
+    """OWASP A01: pedidos de la sede del usuario; el vendedor, solo los suyos."""
+    qs = filtrar_por_sede(PedidoVenta.objects.all(), user)
+    return qs.filter(vendedor_asignado=user) if _es_vendedor(user) else qs
 
 
 class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
 
     def get_serializer_class(self):
-        if self.action == 'list':
+        if self.action == "list":
             return ClienteListSerializer
         return ClienteSerializer
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Cliente.objects.all()
+        queryset = _clientes_visibles(user)
 
         # ClienteListSerializer.get_ultima_compra() y ClienteSerializer.get_ultima_compra()
         # (ambos vía UltimaCompraMixin) solo necesitan el ÚLTIMO pedido de cada cliente.
@@ -52,34 +71,24 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
         # relacionado no puede servirse desde la caché de prefetch_related (solo cubre
         # .all() sin modificar), así que disparaba una query nueva por cliente de todos
         # modos. Aquí solo anotamos el id; list() hace el bulk-fetch real (ver abajo).
-        ultima_compra_ids = PedidoVenta.objects.filter(
-            cliente_id=OuterRef('pk')
-        ).order_by('-fecha_pedido').values('id')[:1]
+        ultima_compra_ids = (
+            PedidoVenta.objects.filter(cliente_id=OuterRef("pk")).order_by("-fecha_pedido").values("id")[:1]
+        )
         queryset = queryset.annotate(_ultima_compra_id=Subquery(ultima_compra_ids))
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
-        vendedor_id = self.request.query_params.get('vendedor_id')
-        vendedor_username = self.request.query_params.get('vendedor_username')
+        vendedor_id = self.request.query_params.get("vendedor_id")
+        vendedor_username = self.request.query_params.get("vendedor_username")
         if (vendedor_id or vendedor_username) and (
             user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
         ):
             if vendedor_id:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
-                except (TypeError, ValueError):
-                    pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
 
-        # Multi-tenancy: Superusers, system admins and executives can see all sedes
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(sede=user.sede)
-
-        # If user is a salesman, only show their assigned clients
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            queryset = queryset.filter(vendedor_asignado=user)
-
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        sede_id = self.request.query_params.get("sede_id", self.request.query_params.get("sede", None))
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
@@ -93,12 +102,12 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
         # Bulk-fetch de los últimos pedidos de la página actual (ids anotados en
         # get_queryset) — evita el N+1 de resolver 'ultima_compra' cliente por cliente.
         pedido_ids = [c._ultima_compra_id for c in objetos if c._ultima_compra_id]
-        ultima_compra_por_id = PedidoVenta.objects.filter(
-            id__in=pedido_ids
-        ).prefetch_related('detalles__producto').in_bulk()
+        ultima_compra_por_id = (
+            PedidoVenta.objects.filter(id__in=pedido_ids).prefetch_related("detalles__producto").in_bulk()
+        )
 
         context = self.get_serializer_context()
-        context['ultima_compra_por_id'] = ultima_compra_por_id
+        context["ultima_compra_por_id"] = ultima_compra_por_id
         serializer = self.get_serializer(objetos, many=True, context=context)
         if page is not None:
             return self.get_paginated_response(serializer.data)
@@ -107,22 +116,27 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
     def get_perform_create_extra_kwargs(self, serializer):
         # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         user = self.request.user
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            return {'vendedor_asignado': user}
+        if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
+            return {"vendedor_asignado": user}
         return {}
 
 
-class PagoClienteViewSet(viewsets.ModelViewSet):
+class PagoClienteViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Un pago no se edita ni se borra: se revierte con justificación
+    (`revertir`), que deja auditoría y re-concilia la cartera del cliente."""
+
     serializer_class = PagoClienteSerializer
     # P0-017: solo roles del dominio comercial gestionan pagos (ISO 27001 A.9.4)
     permission_classes = [IsAuthenticated, IsVendedorOrEjecutivoOrAdmin]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = PagoCliente.objects.select_related('cliente', 'sede').order_by('-fecha')
+        queryset = PagoCliente.objects.select_related("cliente", "sede").order_by("-fecha")
+        # El pago pertenece a la sede de su cliente (PagoCliente.sede puede venir vacía).
+        queryset = filtrar_por_sede(queryset, user, "cliente__sede")
 
-        # Filtering: Salesmen only see payments of their assigned clients
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+        # Filtrado: los vendedores solo ven los pagos de sus clientes asignados
+        if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
             queryset = queryset.filter(cliente__vendedor_asignado=user)
 
         return queryset
@@ -134,8 +148,9 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
         el mismo saldo (race condition).
         """
         user = self.request.user
-        cliente = serializer.validated_data['cliente']
-        monto = serializer.validated_data['monto']
+        cliente = serializer.validated_data["cliente"]
+        monto = serializer.validated_data["monto"]
+        validar_visible(_clientes_visibles(user), cliente, "cliente")
 
         with transaction.atomic():
             # Lock sin las anotaciones del manager (subqueries no se pueden
@@ -146,86 +161,35 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             saldo_actual = Cliente.objects.get(pk=cliente.pk).saldo_calculado
 
             if monto <= 0:
-                raise ValidationError({'monto': 'El monto del pago debe ser mayor a cero.'})
+                raise ValidationError({"monto": "El monto del pago debe ser mayor a cero."})
 
             # P1-002: sobrepago solo con marca explícita de anticipo — previene
             # errores de digitación sin bloquear pagos por adelantado legítimos
-            es_anticipo = serializer.validated_data.get('es_anticipo', False)
+            es_anticipo = serializer.validated_data.get("es_anticipo", False)
             if monto > saldo_actual and not es_anticipo:
-                raise ValidationError({
-                    'monto': (
-                        f'El pago (${monto}) excede la deuda actual del cliente '
-                        f'(${saldo_actual}). Si es un pago por adelantado, '
-                        f'marque la opción "Anticipo".'
-                    )
-                })
+                raise ValidationError(
+                    {
+                        "monto": (
+                            f"El pago (${monto}) excede la deuda actual del cliente "
+                            f"(${saldo_actual}). Si es un pago por adelantado, "
+                            f'marque la opción "Anticipo".'
+                        )
+                    }
+                )
 
-            # Auto-assign sede from user
-            if hasattr(user, 'sede') and user.sede:
-                serializer.save(sede=user.sede)
-            else:
-                serializer.save()
+            # El pago pertenece a la sede de su cliente, no a la de quien lo registra.
+            serializer.save(sede=cliente.sede or user.sede)
 
             # Reconciliación dentro de la misma transacción: si falla,
             # el pago se revierte junto con ella (sin pagos huérfanos)
             PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
 
-    def destroy(self, request, *args, **kwargs):
-        """
-        Artefacto RUP: Eliminación de Pago con Reversión
-        Caso de Uso: CU-ReversionPagoCliente
-
-        DELETE /pagos-cliente/{id}/ con justificación obligatoria.
-
-        Valida: justificación no vacía (requerida para auditoría).
-        Si falta: HTTP 400 Bad Request.
-        Si éxito: HTTP 204 No Content.
-        """
-        pago = self.get_object()
-        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
-
-        if not justificacion:
-            return Response(
-                {'justificacion': 'Justificación obligatoria para revertir pago'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # P0-005: reversión + reconciliación atómicas, con lock del cliente
-            with transaction.atomic():
-                Cliente._base_manager.select_for_update().get(pk=pago.cliente_id)
-
-                resultado = PagoReversionService.revertir_pago(
-                    pago,
-                    request.user,
-                    justificacion
-                )
-
-                # Trigger Reconciliation for the client after reversal
-                PaymentReconciler.reconcile_client_orders(pago.cliente)
-
-            logger.info(
-                f"[REVERSIÓN PAGO EXITOSA] Pago {resultado['pago_id']} revertido. "
-                f"Cliente: {resultado['cliente_nombre']}, "
-                f"Monto: {resultado['monto_revertido']}"
-            )
-
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        except ValueError as e:
-            return Response(
-                {'justificacion': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
-            return Response(
-                {'error': 'Error al revertir pago'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=True, methods=['post'], url_path='revertir',
-            permission_classes=[IsAuthenticated, IsVendedorOrEjecutivoOrAdmin])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="revertir",
+        permission_classes=[IsAuthenticated, IsVendedorOrEjecutivoOrAdmin],
+    )
     def revertir(self, request, pk=None):
         """
         Artefacto RUP: Acción de Reversión de Pago (alternativa a DELETE)
@@ -237,12 +201,11 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
         Respuesta: 200 OK con estadísticas o 400 Bad Request.
         """
         pago = self.get_object()
-        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+        justificacion = request.data.get("justificacion", "").strip() if request.data else ""
 
         if not justificacion:
             return Response(
-                {'error': 'Justificación obligatoria para revertir pago'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Justificación obligatoria para revertir pago"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
@@ -250,78 +213,73 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 Cliente._base_manager.select_for_update().get(pk=pago.cliente_id)
 
-                resultado = PagoReversionService.revertir_pago(
-                    pago,
-                    request.user,
-                    justificacion
-                )
+                resultado = PagoReversionService.revertir_pago(pago, request.user, justificacion)
 
-                # Trigger Reconciliation for the client after reversal
+                # Reconcilia al cliente tras la reversión
                 PaymentReconciler.reconcile_client_orders(pago.cliente)
 
             return Response(
                 {
-                    'message': (
-                        'Pago revertido exitosamente. '
-                        'Deuda del cliente restaurada a '
-                        f'${resultado["saldo_anterior_pago"]}'
+                    "message": (
+                        "Pago revertido exitosamente. "
+                        "Deuda del cliente restaurada a "
+                        f"${resultado['saldo_anterior_pago']}"
                     ),
-                    'resultado': {
-                        'pago_id': resultado['pago_id'],
-                        'cliente_id': resultado['cliente_id'],
-                        'cliente_nombre': resultado['cliente_nombre'],
-                        'monto_revertido': str(
-                            resultado['monto_revertido']),
-                        'saldo_anterior_pago': str(
-                            resultado['saldo_anterior_pago'])}},
-                status=status.HTTP_200_OK)
+                    "resultado": {
+                        "pago_id": resultado["pago_id"],
+                        "cliente_id": resultado["cliente_id"],
+                        "cliente_nombre": resultado["cliente_nombre"],
+                        "monto_revertido": str(resultado["monto_revertido"]),
+                        "saldo_anterior_pago": str(resultado["saldo_anterior_pago"]),
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except ValueError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
-            return Response(
-                {'error': 'Error al revertir pago'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            logger.exception(
+                "[ERROR REVERSIÓN PAGO] %s",
+                str(e),
             )
+            return Response({"error": "Error al revertir pago"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class PedidoVentaViewSet(viewsets.ModelViewSet):
+class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Un pedido no se edita ni se borra por la vía genérica: `modificar` y
+    `anular` exigen estado pendiente, motivo y dejan auditoría; el estado, el
+    pago y la guía los fijan el despacho y la conciliación."""
+
     serializer_class = PedidoVentaSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ["create", "generar_orden_mto"]:
             return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        queryset = PedidoVenta.objects.select_related(
-            'cliente', 'sede', 'vendedor_asignado'
-        ).prefetch_related('detalles', 'detalles__producto').order_by('-fecha_pedido')
+        queryset = (
+            _pedidos_visibles(user)
+            .select_related("cliente", "sede", "vendedor_asignado")
+            .prefetch_related("detalles", "detalles__producto")
+            .order_by("-fecha_pedido")
+        )
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
-        vendedor_id = self.request.query_params.get('vendedor_id')
-        vendedor_username = self.request.query_params.get('vendedor_username')
+        vendedor_id = self.request.query_params.get("vendedor_id")
+        vendedor_username = self.request.query_params.get("vendedor_username")
         if (vendedor_id or vendedor_username) and (
             user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
         ):
             if vendedor_id:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
-                except (TypeError, ValueError):
-                    pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
 
-        # Filtering: Salesmen only see their own orders
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            queryset = queryset.filter(vendedor_asignado=user)
-
-        sede_id = self.request.query_params.get('sede_id')
+        sede_id = self.request.query_params.get("sede_id")
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
@@ -329,20 +287,18 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         # 'despachado_parcial' — un despacho parcial debe seguir apareciendo
         # en la cola hasta completarse). Acepta uno o varios valores separados
         # por coma (?estado=pendiente,despachado_parcial); antes solo un valor.
-        estado = self.request.query_params.get('estado')
+        estado = self.request.query_params.get("estado")
         if estado:
-            estados_solicitados = [e.strip() for e in estado.split(',') if e.strip()]
+            estados_solicitados = [e.strip() for e in estado.split(",") if e.strip()]
             estados_validos = dict(PedidoVenta.ESTADO_CHOICES)
             invalidos = [e for e in estados_solicitados if e not in estados_validos]
             if invalidos:
-                raise ValidationError(
-                    {'estado': f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."}
-                )
+                raise ValidationError({"estado": f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."})
             queryset = queryset.filter(estado__in=estados_solicitados)
 
-        # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
-        if self.action == 'list':
-            limit = self.request.query_params.get('limit', 100)
+        # Solo en list: omite pedidos antiguos para no sobrecargar memoria
+        if self.action == "list":
+            limit = self.request.query_params.get("limit", 100)
             try:
                 limit = int(limit)
             except (ValueError, TypeError):
@@ -351,7 +307,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def download_pdf(self, request, pk=None):
         """
         Nota de venta en PDF. Por defecto lista TODOS los detalles del pedido
@@ -368,7 +324,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         cliente = pedido.cliente
         sede = pedido.sede
 
-        historial_id = request.query_params.get('historial_id')
+        historial_id = request.query_params.get("historial_id")
         if historial_id:
             items = self._detalles_desde_historial(pedido, historial_id)
         else:
@@ -386,34 +342,36 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             "empresa_nombre": sede.nombre if sede else "Empresa Principal",  # Nombre Sede como Empresa Principal
             "esta_pagado": pedido.esta_pagado,
             "valor_retencion": float(pedido.valor_retencion or 0),
-            "detalles": items
+            "detalles": items,
         }
 
-        # Call microservice
+        # Llama al microservicio
         pdf_content = PrintingService.generate_nota_venta_pdf(data)
 
         if pdf_content:
             from django.http import HttpResponse
-            response = HttpResponse(pdf_content, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.guia_remision or pedido.id}.pdf"'
+
+            response = HttpResponse(pdf_content, content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="pedido_{pedido.guia_remision or pedido.id}.pdf"'
             return response
-        else:
-            return Response({"error": "El servicio de impresión no está disponible temporalmente."},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(
+            {"error": "El servicio de impresión no está disponible temporalmente."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     @staticmethod
     def _detalles_pedido_completo(pedido):
-        items = []
-        for d in pedido.detalles.select_related('producto').all():
-            items.append({
+        return [
+            {
                 "producto_descripcion": d.producto.descripcion,
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
                 "precio_unitario": float(d.precio_unitario),
-                "incluye_iva": d.incluye_iva
-            })
-        return items
+                "incluye_iva": d.incluye_iva,
+            }
+            for d in pedido.detalles.select_related("producto").all()
+        ]
 
     @staticmethod
     def _detalles_desde_historial(pedido, historial_id):
@@ -428,26 +386,29 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         from inventory.models import DetalleHistorialDespacho
 
         despachado_por_producto: dict = {}
-        for fila in (DetalleHistorialDespacho.objects
-                     .filter(historial_id=historial_id, pedido=pedido, es_devolucion=False)
-                     .values('producto_id')
-                     .annotate(peso_total=Sum('peso'))):
-            despachado_por_producto[fila['producto_id']] = fila['peso_total']
+        for fila in (
+            DetalleHistorialDespacho.objects.filter(historial_id=historial_id, pedido=pedido, es_devolucion=False)
+            .values("producto_id")
+            .annotate(peso_total=Sum("peso"))
+        ):
+            despachado_por_producto[fila["producto_id"]] = fila["peso_total"]
 
         items = []
-        for d in pedido.detalles.select_related('producto').all():
+        for d in pedido.detalles.select_related("producto").all():
             peso_despachado = despachado_por_producto.get(d.producto_id)
             if not peso_despachado:
                 continue
-            proporcion = (peso_despachado / d.peso) if d.peso else Decimal('0')
-            items.append({
-                "producto_descripcion": d.producto.descripcion,
-                "cantidad": float((Decimal(d.cantidad) * proporcion).to_integral_value()),
-                "piezas": int((Decimal(d.piezas) * proporcion).to_integral_value()),
-                "peso": float(peso_despachado),
-                "precio_unitario": float(d.precio_unitario),
-                "incluye_iva": d.incluye_iva
-            })
+            proporcion = (peso_despachado / d.peso) if d.peso else Decimal("0")
+            items.append(
+                {
+                    "producto_descripcion": d.producto.descripcion,
+                    "cantidad": float((Decimal(d.cantidad) * proporcion).to_integral_value()),
+                    "piezas": int((Decimal(d.piezas) * proporcion).to_integral_value()),
+                    "peso": float(peso_despachado),
+                    "precio_unitario": float(d.precio_unitario),
+                    "incluye_iva": d.incluye_iva,
+                }
+            )
         return items
 
     def perform_create(self, serializer):
@@ -456,35 +417,29 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
         try:
             # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
-            if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-                save_kwargs['vendedor_asignado'] = user
+            if user.groups.filter(name="vendedor").exists() and not user.is_superuser:
+                save_kwargs["vendedor_asignado"] = user
 
-            # Auto-asignar sede del usuario si no se proporcionó una explícitamente
-            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-                save_kwargs['sede'] = user.sede
+            # El pedido pertenece a la sede de su cliente (antes se aceptaba una
+            # `sede` arbitraria del payload).
+            cliente = serializer.validated_data.get("cliente")
+            validar_visible(_clientes_visibles(user), cliente, "cliente")
+            save_kwargs["sede"] = (cliente.sede if cliente else None) or user.sede
 
             serializer.save(**save_kwargs)
             logger.info(
                 "Pedido de venta creado exitosamente",
-                extra={
-                    "sd": {
-                        "entity": "PedidoVenta",
-                        "id": serializer.instance.id,
-                        "user": user.username}})
+                extra={"sd": {"entity": "PedidoVenta", "id": serializer.instance.id, "user": user.username}},
+            )
 
-            # Trigger Reconciliation
-            # Note: serializer.save() returns the instance, but
-            # perform_create doesn't return anything by default in DRF
-            # ViewSet logic unless overridden in standard create()
-            # However, serializer.instance is populated.
-
+            # Reconcilia con la instancia ya guardada (serializer.instance)
             if serializer.instance:
                 PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
         except Exception as e:
-            logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
+            logger.exception("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
             raise
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def anular(self, request, pk=None):
         """
         Anula un pedido en estado 'pendiente'.
@@ -494,24 +449,24 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         pedido = self.get_object()
         user = request.user
 
-        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        allowed_groups = ["vendedor", "jefe_area", "jefe_planta", "admin_sede", "admin_sistemas"]
         if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
             return Response({"error": "No tienes permisos para anular pedidos."}, status=status.HTTP_403_FORBIDDEN)
 
         if pedido.anulado:
             return Response({"error": "Este pedido ya fue anulado."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if pedido.estado != 'pendiente':
+        if pedido.estado != "pendiente":
             return Response(
                 {"error": f"Solo se pueden anular pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         serializer = AnulacionPedidoSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        motivo = serializer.validated_data['motivo_anulacion']
+        motivo = serializer.validated_data["motivo_anulacion"]
 
         try:
             with transaction.atomic():
@@ -521,18 +476,20 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 pedido.fecha_anulacion = timezone.now()
                 pedido.save()
 
-                from gestion.models import AuditLog
                 from django.contrib.contenttypes.models import ContentType
+
                 from gestion.middleware import _local
+                from gestion.models import AuditLog
+
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
+                    ip_address=getattr(_local, "ip_address", "0.0.0.0"),  # noqa: S104 — IP desconocida en el log, no un bind
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
-                    accion='UPDATE',
-                    valor_anterior={'anulado': False, 'estado': pedido.estado},
-                    valor_nuevo={'anulado': True, 'motivo_anulacion': motivo},
+                    accion="UPDATE",
+                    valor_anterior={"anulado": False, "estado": pedido.estado},
+                    valor_nuevo={"anulado": True, "motivo_anulacion": motivo},
                     justificacion=motivo,
                 )
 
@@ -541,23 +498,19 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
                 logger.info(
                     "Pedido de venta anulado",
-                    extra={'sd': {'entity': 'PedidoVenta', 'id': pedido.id, 'user': user.username}}
+                    extra={"sd": {"entity": "PedidoVenta", "id": pedido.id, "user": user.username}},
                 )
                 return Response({"message": "Pedido anulado correctamente."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
-                "Error al anular pedido",
-                extra={
-                    'sd': {
-                        'entity': 'PedidoVenta',
-                        'id': pk,
-                        'error': str(e)}},
-                exc_info=True)
-            return Response({"error": "Error inesperado al anular el pedido."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception(
+                "Error al anular pedido", extra={"sd": {"entity": "PedidoVenta", "id": pk, "error": str(e)}}
+            )
+            return Response(
+                {"error": "Error inesperado al anular el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=True, methods=['patch'])
+    @action(detail=True, methods=["patch"])
     def modificar(self, request, pk=None):
         """
         Modifica campos de un pedido en estado 'pendiente' y no anulado.
@@ -566,17 +519,17 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         pedido = self.get_object()
         user = request.user
 
-        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        allowed_groups = ["vendedor", "jefe_area", "jefe_planta", "admin_sede", "admin_sistemas"]
         if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
             return Response({"error": "No tienes permisos para modificar pedidos."}, status=status.HTTP_403_FORBIDDEN)
 
         if pedido.anulado:
             return Response({"error": "No se puede modificar un pedido anulado."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if pedido.estado != 'pendiente':
+        if pedido.estado != "pendiente":
             return Response(
                 {"error": f"Solo se pueden modificar pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         serializer = ModificacionPedidoSerializer(data=request.data)
@@ -584,7 +537,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        motivo = data.pop('motivo')
+        motivo = data.pop("motivo")
         campos_modificados = []
         valor_anterior = {}
 
@@ -602,16 +555,18 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
                 pedido.save()
 
-                from gestion.models import AuditLog
                 from django.contrib.contenttypes.models import ContentType
+
                 from gestion.middleware import _local
+                from gestion.models import AuditLog
+
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
+                    ip_address=getattr(_local, "ip_address", "0.0.0.0"),  # noqa: S104 — IP desconocida en el log, no un bind
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
-                    accion='UPDATE',
+                    accion="UPDATE",
                     valor_anterior=valor_anterior,
                     valor_nuevo={c: str(getattr(pedido, c)) for c in campos_modificados},
                     justificacion=motivo,
@@ -623,56 +578,79 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 logger.info(
                     "Pedido de venta modificado",
                     extra={
-                        'sd': {
-                            'entity': 'PedidoVenta',
-                            'id': pedido.id,
-                            'cambios': campos_modificados,
-                            'user': user.username}})
-                return Response({"message": "Pedido modificado correctamente.",
-                                "cambios": campos_modificados}, status=status.HTTP_200_OK)
+                        "sd": {
+                            "entity": "PedidoVenta",
+                            "id": pedido.id,
+                            "cambios": campos_modificados,
+                            "user": user.username,
+                        }
+                    },
+                )
+                return Response(
+                    {"message": "Pedido modificado correctamente.", "cambios": campos_modificados},
+                    status=status.HTTP_200_OK,
+                )
 
         except Exception as e:
-            logger.error(
-                "Error al modificar pedido",
-                extra={
-                    'sd': {
-                        'entity': 'PedidoVenta',
-                        'id': pk,
-                        'error': str(e)}},
-                exc_info=True)
-            return Response({"error": "Error inesperado al modificar el pedido."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception(
+                "Error al modificar pedido", extra={"sd": {"entity": "PedidoVenta", "id": pk, "error": str(e)}}
+            )
+            return Response(
+                {"error": "Error inesperado al modificar el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-
-class DetallePedidoViewSet(viewsets.ModelViewSet):
-    queryset = DetallePedido.objects.all()
-    serializer_class = DetallePedidoSerializer
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update']:
-            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
-        return [IsAuthenticated(), IsAdminSistemasOrSede()]
-
-    def _reconciliar_cliente(self, detalle):
+    @action(detail=True, methods=["post"], url_path="generar-orden-mto")
+    def generar_orden_mto(self, request, pk=None):
         """
-        P1-002: al cambiar los detalles cambia el valor del pedido — se
-        re-reconcilia para que anticipos existentes se apliquen de inmediato.
+        Genera una Orden de Producción MTO a partir de un DetallePedido del pedido.
+        POST /api/pedidos-venta/{id}/generar-orden-mto/
+        Body: { "detalle_pedido_id": 123, "prioridad": "alta", "peso_solicitado": 100.0 }
         """
-        if detalle.pedido_venta and detalle.pedido_venta.cliente:
-            PaymentReconciler.reconcile_client_orders(detalle.pedido_venta.cliente)
+        from django.core.exceptions import ValidationError as DjangoValidationError
 
-    def perform_create(self, serializer):
-        detalle = serializer.save()
-        self._reconciliar_cliente(detalle)
+        from inventory.services.reserva_service import ReservaService
 
-    def perform_update(self, serializer):
-        detalle = serializer.save()
-        self._reconciliar_cliente(detalle)
+        pedido = self.get_object()
+        detalle_id = request.data.get("detalle_pedido_id")
+        if not detalle_id:
+            return Response({"error": "Se requiere el campo detalle_pedido_id."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            detalle = pedido.detalles.get(pk=detalle_id)
+        except DetallePedido.DoesNotExist:
+            return Response(
+                {"error": f"El detalle #{detalle_id} no pertenece al pedido #{pedido.id}."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-    def perform_destroy(self, instance):
-        cliente = instance.pedido_venta.cliente if instance.pedido_venta else None
-        instance.delete()
-        if cliente:
-            PaymentReconciler.reconcile_client_orders(cliente)
+        try:
+            peso_sol = request.data.get("peso_solicitado")
+            if peso_sol is not None:
+                peso_sol = Decimal(str(peso_sol))
+            op = ReservaService.crear_orden_desde_pedido(
+                detalle_pedido=detalle,
+                user=request.user,
+                prioridad=request.data.get("prioridad", "alta"),
+                peso_solicitado=peso_sol,
+            )
+            return Response(
+                {
+                    "mensaje": f"Orden MTO {op.codigo} generada exitosamente.",
+                    "orden_id": op.id,
+                    "codigo": op.codigo,
+                    "peso_neto_requerido": str(op.peso_neto_requerido),
+                    "estado": op.estado,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except DjangoValidationError as e:
+            msg = e.messages if hasattr(e, "messages") else str(e)
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception(
+                "Error generando orden MTO para Pedido #%s: %s",
+                pedido.id,
+                e,
+            )
+            return Response(
+                {"error": "Error interno al generar la orden."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

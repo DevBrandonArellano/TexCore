@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): varias órdenes / órdenes de varios estados / órdenes de varias máquinas /
+ *   el formulario cerrado / áreas cargadas.
+ * - Análisis de valores límite (BVA): /areas/ sin resultados ni results / "Ir a página" vacio.
+ * - Transición de estados (STT): órdenes de varios estados.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
@@ -25,9 +32,11 @@ vi.mock('axios', () => {
 });
 import apiClient from '../../lib/axios';
 
+import { parcial } from '../../testing/parcial';
+
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args), success: vi.fn() },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args), success: vi.fn() },
 }));
 
 // Polyfills para Radix UI en jsdom
@@ -112,7 +121,7 @@ const defaultProps = {
   onOrdenCreate: vi.fn(),
   onOrdenUpdate: vi.fn(),
   onOrderStatusChange: vi.fn(),
-  onOrdenDelete: vi.fn(),
+  onOrdenDelete: vi.fn(() => Promise.resolve(true)),
   loading: false,
   onDataRefresh: vi.fn(),
 };
@@ -129,13 +138,13 @@ const renderComponent = () =>
 describe('ManageOrdenesProduccion — tabla', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('renderiza los códigos y máquinas de todas las órdenes', () => {
+  it('dado varias órdenes cuando renderiza entonces muestra los códigos y máquinas de todas', () => {
     renderComponent();
     expect(screen.getByText('OP-001')).toBeInTheDocument();
     expect(screen.getByText('OP-002')).toBeInTheDocument();
@@ -143,7 +152,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.getByText('Jigger 1')).toBeInTheDocument();
   });
 
-  it('filtra por estado: al seleccionar Pendiente solo muestra OP-002', async () => {
+  it('dado órdenes de varios estados cuando filtra por Pendiente entonces solo muestra OP-002', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -157,7 +166,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.queryByText('OP-001')).not.toBeInTheDocument();
   });
 
-  it('filtra por máquina: al seleccionar Jet 1 solo muestra OP-001', async () => {
+  it('dado órdenes de varias máquinas cuando filtra por Jet 1 entonces solo muestra OP-001', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -177,13 +186,13 @@ describe('ManageOrdenesProduccion — tabla', () => {
 describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('al abrir el diálogo hace GET /areas/ para obtener áreas frescas', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces hace GET /areas/ para tener áreas frescas', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -194,7 +203,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('tras abrir el diálogo el placeholder del área cambia a "Selecciona el área de destino"', async () => {
+  it('dado áreas cargadas cuando abre el diálogo entonces el placeholder del área es "Selecciona el área de destino"', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -207,7 +216,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('el diálogo muestra el input de Código', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces muestra el input de Código', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -238,14 +247,14 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('al hacer clic en una fila el Sheet se abre mostrando el código de la orden', async () => {
+  it('dado una orden en la tabla cuando hace clic en su fila entonces el Sheet muestra su código', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -258,7 +267,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre del área desde el catálogo (no del campo _nombre)', async () => {
+  it('dado el Sheet abierto cuando muestra el área entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -270,7 +279,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre de la sede desde el catálogo', async () => {
+  it('dado el Sheet abierto cuando muestra la sede entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -282,7 +291,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet NO muestra los labels "Máquina" ni "Operario" dentro del panel', async () => {
+  it('dado el Sheet abierto cuando se renderiza entonces no muestra los labels "Máquina" ni "Operario"', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -301,7 +310,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     expect(inSheet.queryByText('Operario')).not.toBeInTheDocument();
   });
 
-  it('el botón Editar del Sheet abre el formulario de edición', async () => {
+  it('dado el Sheet abierto cuando hace clic en Editar entonces abre el formulario de edición', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -323,7 +332,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('al presionar Escape con el Sheet abierto entonces limpia la orden seleccionada', async () => {
+  it('dado el Sheet abierto cuando presiona Escape entonces limpia la orden seleccionada', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -345,14 +354,14 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
 describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('dado que /areas/ responde en formato paginado {results} entonces usa .results', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+  it('dado /areas/ paginado con results cuando abre el diálogo entonces usa .results', async () => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: { results: mockAreas } });
       return Promise.resolve({ data: [] });
     });
@@ -364,8 +373,8 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     });
   });
 
-  it('dado que /areas/ responde sin resultados ni results entonces usa un arreglo vacio', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+  it('dado /areas/ sin resultados ni results cuando abre el diálogo entonces usa un arreglo vacio', async () => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: {} });
       return Promise.resolve({ data: [] });
     });
@@ -377,7 +386,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     });
   });
 
-  it('dado ?page=0 en la URL entonces normaliza a la pagina 1', () => {
+  it('dado ?page=0 en la URL cuando renderiza entonces normaliza a la pagina 1', () => {
     render(
       <MemoryRouter initialEntries={['/?page=0']}>
         <ManageOrdenesProduccion {...defaultProps} />
@@ -386,7 +395,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     expect(screen.getByText(/Página 1 de/)).toBeInTheDocument();
   });
 
-  it('al presionar Escape en el dialogo de nueva orden entonces se cierra y resetea el formulario', async () => {
+  it('dado el dialogo de nueva orden abierto cuando presiona Escape entonces se cierra y resetea el formulario', async () => {
     const user = userEvent.setup();
     renderComponent();
     await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
@@ -400,7 +409,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado el dialogo de nueva orden abierto cuando areasProp cambia entonces no sincroniza hasta cerrar', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return new Promise(() => {});
       return Promise.resolve({ data: [] });
     });
@@ -438,7 +447,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado una orden con campos ausentes cuando edita entonces usa los valores por defecto y muestra "Sin asignar" y "-"', async () => {
-    const mockOrdenSparse: any = {
+    const mockOrdenSparse = parcial<OrdenProduccion>({
       id: 3,
       codigo: 'OP-003',
       producto_nombre: 'Producto X',
@@ -449,7 +458,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
       fecha_creacion: '2026-05-03',
       fecha_modificacion: '2026-05-03',
       inventario_descontado: true,
-    };
+    });
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/']}>
@@ -474,12 +483,12 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado una orden vencida cuando renderiza entonces resalta la fecha en rojo', () => {
-    const ordenVencida: any = {
+    const ordenVencida = parcial<OrdenProduccion>({
       ...mockOrdenes[0],
       id: 4,
       codigo: 'OP-004',
       fecha_fin_planificada: '2020-01-01',
-    };
+    });
     render(
       <MemoryRouter initialEntries={['/']}>
         <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenVencida]} />
@@ -491,12 +500,12 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
 
   it('dado una orden que vence hoy cuando renderiza entonces resalta la fecha en ambar', () => {
     const hoy = new Date().toISOString().split('T')[0];
-    const ordenHoy: any = {
+    const ordenHoy = parcial<OrdenProduccion>({
       ...mockOrdenes[0],
       id: 5,
       codigo: 'OP-005',
       fecha_fin_planificada: hoy,
-    };
+    });
     render(
       <MemoryRouter initialEntries={['/']}>
         <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenHoy]} />
@@ -525,7 +534,7 @@ describe('ManageOrdenesProduccion — paginación con muchas órdenes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });

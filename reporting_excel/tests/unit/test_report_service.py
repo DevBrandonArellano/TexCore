@@ -3,10 +3,15 @@ Tests unitarios del ReportService.
 Usa un mock de OutputFormatter para aislar la lógica del servicio — ya no
 depende de un repositorio (ver auditoría de performance 2026-08-31: el
 backend Django manda los datos ya resueltos, este servicio solo formatea).
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): rows con datos / rows none / rows vacio / llamada / formato desconocido.
+- Análisis de valores límite (BVA): rows vacio.
 """
-import pytest
-import pandas as pd
+
 from unittest.mock import MagicMock
+
+import pytest
 from fastapi import Response
 
 from src.services.report_service import ReportService
@@ -82,3 +87,11 @@ class TestReportService_Concurrencia:
         coro = service.generate_from_rows([{"col": 1}], "reporte")
         assert inspect.isawaitable(coro)
         await coro
+
+
+class TestReportFactory:
+    def test_create_dado_formato_desconocido_cuando_crear_entonces_value_error(self):
+        from src.services.report_factory import ReportFactory
+
+        with pytest.raises(ValueError, match="pdf"):
+            ReportFactory.create("pdf")

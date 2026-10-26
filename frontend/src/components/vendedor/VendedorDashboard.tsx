@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, AlertCircle, Factory } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -23,12 +23,15 @@ import { AnularPedidoModal } from './AnularPedidoModal';
 import { EditarPedidoModal } from './EditarPedidoModal';
 import { HistorialPedidoModal } from './HistorialPedidoModal';
 import { PagoReversionModal } from './PagoReversionModal';
+import { SeguimientoPedidoMTOModal } from './SeguimientoPedidoMTOModal';
 import { NuevaVentaDialog } from './NuevaVentaDialog';
 import { ClienteDetailDialog } from './ClienteDetailDialog';
 import { useClientesVendedor } from './useClientesVendedor';
 import { usePedidosVendedor } from './usePedidosVendedor';
 import { usePagosCliente } from './usePagosCliente';
 import { useReportesVendedor } from './useReportesVendedor';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { estadoHttp } from '../../lib/apiError';
 
 export function VendedorDashboard() {
   const { profile } = useAuth();
@@ -42,34 +45,45 @@ export function VendedorDashboard() {
   const searchTerm = searchParams.get('search') || '';
   const orderSearchTerm = searchParams.get('orderSearch') || '';
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [clientesRes, pedidosRes, productosRes] = await Promise.all([
+  // Carga inicial: `loading` ya arranca en true y el estado se actualiza en los
+  // callbacks de la promesa. Las recargas (`fetchData`) vienen de eventos.
+  const cargarDatos = useCallback(
+    () =>
+      Promise.all([
         apiClient.get('/clientes/'),
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
-        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
-      ]);
-      setClientes(toArray<Cliente>(clientesRes.data));
-      setPedidos(toArray<PedidoVenta>(pedidosRes.data));
-      setProductos(toArray<Producto>(productosRes.data));
-    } catch (error: any) {
-      if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar la información del vendedor');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } }),
+      ])
+        .then(
+          ([clientesRes, pedidosRes, productosRes]) => {
+            setClientes(toArray<Cliente>(clientesRes.data));
+            setPedidos(toArray<PedidoVenta>(pedidosRes.data));
+            setProductos(toArray<Producto>(productosRes.data));
+          },
+          (error: unknown) => {
+            if (estadoHttp(error) === 401) return; // sesión expirada — manejado globalmente
+            console.error('Error fetching data:', error);
+            toast.error('Error al cargar la información del vendedor');
+          },
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    return cargarDatos();
+  }, [cargarDatos]);
 
   const clientesHook = useClientesVendedor(clientes, searchTerm, fetchData);
   const pedidosHook = usePedidosVendedor(pedidos, orderSearchTerm, fetchData);
   const pagosHook = usePagosCliente(clientesHook.selectedCliente, clientesHook.setSelectedCliente, fetchData);
   const reportesHook = useReportesVendedor(vendedorId);
+  const [pedidoSeguimientoMTO, setPedidoSeguimientoMTO] = useState<PedidoVenta | null>(null);
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -126,7 +140,7 @@ export function VendedorDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Nivel de Precio</Label>
-                    <Select value={clientesHook.formData.nivel_precio} onValueChange={(v: any) => clientesHook.setFormData({ ...clientesHook.formData, nivel_precio: v })}>
+                    <Select value={clientesHook.formData.nivel_precio} onValueChange={(v) => clientesHook.setFormData({ ...clientesHook.formData, nivel_precio: v === 'mayorista' ? 'mayorista' : 'normal' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">Normal</SelectItem>
@@ -157,7 +171,7 @@ export function VendedorDashboard() {
                     <Label className="text-base">Tiene Beneficios</Label>
                     <p className="text-sm text-muted-foreground">Activar descuentos especiales.</p>
                   </div>
-                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={clientesHook.formData.tiene_beneficio} onCheckedChange={v => clientesHook.setFormData({ ...clientesHook.formData, tiene_beneficio: v })} />
+                  <Switch className="scale-75 shadow-xs data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={clientesHook.formData.tiene_beneficio} onCheckedChange={v => clientesHook.setFormData({ ...clientesHook.formData, tiene_beneficio: v })} />
                 </div>
                 {clientesHook.editingCliente && (
                   <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
@@ -182,7 +196,7 @@ export function VendedorDashboard() {
         </div>
       </div>
 
-      {/* Summary Stats */}
+      {/* Estadísticas de resumen */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-primary/5 border-primary/20">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -261,7 +275,7 @@ export function VendedorDashboard() {
             <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
               <div className="flex-1 overflow-auto rounded-md border relative">
                 <Table className="min-w-max">
-                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
                     <TableRow>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Estado Cuenta</TableHead>
@@ -364,52 +378,12 @@ export function VendedorDashboard() {
                 </Table>
               </div>
               {!loading && clientesHook.filteredClientes.length > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm text-muted-foreground">
-                    Página {clientesHook.currentClientesPage} de {clientesHook.totalClientesPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => clientesHook.setCurrentClientesPage(Math.max(1, clientesHook.currentClientesPage - 1))}
-                      disabled={clientesHook.currentClientesPage === 1}
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Anterior
-                    </Button>
-                    <span className="flex items-center gap-1 text-sm">
-                      <span className="text-muted-foreground">Ir a</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={clientesHook.totalClientesPages}
-                        defaultValue={clientesHook.currentClientesPage}
-                        key={clientesHook.currentClientesPage}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
-                        }}
-                        className="w-14 h-8 text-center py-0 px-1"
-                      />
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => clientesHook.setCurrentClientesPage(Math.min(clientesHook.totalClientesPages, clientesHook.currentClientesPage + 1))}
-                      disabled={clientesHook.currentClientesPage === clientesHook.totalClientesPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+                <ControlesPaginacion
+                  currentPage={clientesHook.currentClientesPage}
+                  totalPages={clientesHook.totalClientesPages}
+                  setCurrentPage={clientesHook.setCurrentClientesPage}
+                  className="mt-4"
+                />
               )}
             </CardContent>
           </Card>
@@ -436,7 +410,7 @@ export function VendedorDashboard() {
             <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
               <div className="flex-1 overflow-auto rounded-md border relative">
                 <Table className="min-w-max">
-                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
                     <TableRow>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Cliente</TableHead>
@@ -468,15 +442,15 @@ export function VendedorDashboard() {
                                   className={
                                     p.esta_pagado
                                       ? "text-green-600 border-green-200 bg-green-50 w-fit"
-                                      : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                      : parseFloat(String(p.porcentaje_pagado ?? 0)) > 0
                                         ? "text-amber-700 border-amber-200 bg-amber-50 w-fit"
                                         : "w-fit"
                                   }
                                 >
                                   {p.esta_pagado
                                     ? "Pagado"
-                                    : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
-                                      ? `Abonado ${parseFloat(String((p as any).porcentaje_pagado)).toFixed(0)}%`
+                                    : parseFloat(String(p.porcentaje_pagado ?? 0)) > 0
+                                      ? `Abonado ${parseFloat(String(p.porcentaje_pagado)).toFixed(0)}%`
                                       : "Pendiente pago"}
                                 </Badge>
                               )}
@@ -485,7 +459,7 @@ export function VendedorDashboard() {
                           <TableCell className="text-right font-bold">
                             <span className={p.anulado ? 'line-through text-muted-foreground' : ''}>
                               ${(
-                                (p.detalles?.reduce((sum: number, det: any) => {
+                                (p.detalles?.reduce((sum: number, det) => {
                                   const subtotal = det.peso * det.precio_unitario;
                                   const iva = det.incluye_iva ? subtotal * 0.15 : 0;
                                   return sum + subtotal + iva;
@@ -496,6 +470,15 @@ export function VendedorDashboard() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Seguimiento de Fabricación MTO"
+                                className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                onClick={() => setPedidoSeguimientoMTO(p)}
+                              >
+                                <Factory className="w-4 h-4" />
+                              </Button>
                               <Button variant="ghost" size="icon" title="Imprimir PDF" onClick={() => pedidosHook.handlePrintOrder(p)}>
                                 <Printer className="w-4 h-4" />
                               </Button>
@@ -523,52 +506,12 @@ export function VendedorDashboard() {
                 </Table>
               </div>
               {pedidosHook.filteredPedidos.length > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm text-muted-foreground">
-                    Página {pedidosHook.currentPedidosPage} de {pedidosHook.totalPedidosPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.max(1, pedidosHook.currentPedidosPage - 1))}
-                      disabled={pedidosHook.currentPedidosPage === 1}
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Anterior
-                    </Button>
-                    <span className="flex items-center gap-1 text-sm">
-                      <span className="text-muted-foreground">Ir a</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={pedidosHook.totalPedidosPages}
-                        defaultValue={pedidosHook.currentPedidosPage}
-                        key={pedidosHook.currentPedidosPage}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
-                        }}
-                        className="w-14 h-8 text-center py-0 px-1"
-                      />
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.min(pedidosHook.totalPedidosPages, pedidosHook.currentPedidosPage + 1))}
-                      disabled={pedidosHook.currentPedidosPage === pedidosHook.totalPedidosPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+                <ControlesPaginacion
+                  currentPage={pedidosHook.currentPedidosPage}
+                  totalPages={pedidosHook.totalPedidosPages}
+                  setCurrentPage={pedidosHook.setCurrentPedidosPage}
+                  className="mt-4"
+                />
               )}
             </CardContent>
           </Card>
@@ -660,6 +603,12 @@ export function VendedorDashboard() {
           pedidosHook.setPedidoEditar(null);
           fetchData();
         }}
+      />
+      <SeguimientoPedidoMTOModal
+        pedido={pedidoSeguimientoMTO}
+        isOpen={!!pedidoSeguimientoMTO}
+        onClose={() => setPedidoSeguimientoMTO(null)}
+        onOrderUpdated={fetchData}
       />
       <HistorialPedidoModal
         pedido={pedidosHook.pedidoHistorial}

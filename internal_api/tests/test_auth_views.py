@@ -1,4 +1,10 @@
-"""Tests para endpoints de autenticación de servicios. EP + STT."""
+"""Tests para endpoints de autenticación de servicios. EP + STT.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): credenciales validas / secreto incorrecto / servicio inactivo / servicio
+  inexistente / ip publica.
+"""
+
 import jwt
 from django.conf import settings
 from django.core.cache import cache

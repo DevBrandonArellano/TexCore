@@ -1,16 +1,21 @@
 """
 Tests unitarios para src/schemas/report_params.py.
 EP + BVA sobre validadores Pydantic de cada schema.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): parametros minimos / formato csv / formato invalido / todos los campos /
+  fechas validas.
 """
-import pytest
+
 from datetime import date
+
+import pytest
 from pydantic import ValidationError
 
-from src.schemas.report_params import KardexParams, RangoFechaParams, VendedorParams, StockParams
+from src.schemas.report_params import KardexParams, RangoFechaParams, StockParams, VendedorParams
 
 
 class TestKardexParams:
-
     def test_kardex_dado_parametros_minimos_cuando_crea_entonces_ok(self):
         p = KardexParams(bodega_id=1)
         assert p.bodega_id == 1
@@ -39,7 +44,6 @@ class TestKardexParams:
 
 
 class TestRangoFechaParams:
-
     def test_rango_dado_fechas_validas_cuando_crea_entonces_ok(self):
         p = RangoFechaParams(fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 3, 31))
         assert p.format == "xlsx"
@@ -71,7 +75,6 @@ class TestRangoFechaParams:
 
 
 class TestVendedorParams:
-
     def test_vendedor_dado_parametros_validos_cuando_crea_entonces_ok(self):
         p = VendedorParams(
             vendedor_id=5,
@@ -96,7 +99,6 @@ class TestVendedorParams:
 
 
 class TestStockParams:
-
     def test_stock_dado_bodega_id_cuando_crea_entonces_ok(self):
         p = StockParams(bodega_id=3)
         assert p.bodega_id == 3

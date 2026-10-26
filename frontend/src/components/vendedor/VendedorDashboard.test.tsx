@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario de nuevo cliente / el switch de retención activo / un error
+ *   401 / un error distinto de 401 / clientes con saldo string, alto porcentaje de credito, beneficio y mora
+ *   sin fecha.
+ * - Transición de estados (STT): pedidos anulados, pagados, abonados y pendientes sin guia ni retencion / un
+ *   pedido no anulado en estado distinto de pendiente.
+ * - Caja blanca (CB): ramas de error — un error 401 / un error distinto de 401.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -32,7 +41,7 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() }
 }));
 
-// Mock ResizeObserver for Radix Dialogs
+// Mock de ResizeObserver para Radix Dialogs
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
@@ -46,15 +55,15 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         
-        // Mocking API responses
-        (apiClient.get as any).mockImplementation((url: string) => {
+        // Mock de las respuestas de la API
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({ data: [{
                     id: 1, 
                     nombre_razon_social: 'Cliente 1', 
                     limite_credito: 1000, 
                     saldo_pendiente: 0, 
-                    plazo_credito_dias: 30, // By default tested 30
+                    plazo_credito_dias: 30, // Por defecto se prueba 30
                     ruc_cedula: "1234567890",
                     direccion_envio: "Test Dir",
                     nivel_precio: "normal",
@@ -76,7 +85,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         </BrowserRouter>
     );
 
-    it('Valida que contenga plazos de credito seleccionables al abrir crear nuevo cliente', async () => {
+    it('dado el formulario de nuevo cliente cuando lo abre entonces ofrece plazos de credito seleccionables', async () => {
         const user = userEvent.setup();
         renderComponent();
         
@@ -92,15 +101,12 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
             expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument();
         });
 
-        // Find the "Plazo Crédito" select trigger value to verify 8, 30, 45, 60
-        // Because it's Radix UI Select, we can assert existence or simulate interaction, 
-        // Here we verify it opened properly and contains '0' as default default 'Contado (0 Días)'
         expect(screen.getByText('Contado (0 Días)')).toBeInTheDocument();
         
-        // We know it drops down 8, 30, 45, 60 days
+        // Sabemos que despliega 8, 30, 45 y 60 días
     });
 
-    it('Debe desplegar el input manual de retención cuando el switch esta activo y validar negativo / exceso de monto', async () => {
+    it('dado el switch de retención activo cuando escribe el monto entonces despliega el input y valida negativos y excesos', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         renderComponent();
         
@@ -118,7 +124,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
 
         // Seleccionar Producto
         const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
-        // Find the product combobox within the dialog (first is client, second is product)
+        // El primer combobox es el cliente; el segundo, el producto
         const dialogComboboxes = Array.from(dialog.querySelectorAll('[role="combobox"]'));
         await user.click(dialogComboboxes[1] as HTMLElement);
         const opcionProducto = await screen.findByText('Tela Algodon Premium');
@@ -140,7 +146,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         await user.click(btnAdd);
 
         // Subtotal = 10 * 10 = 100, + 15% IVA = 115.000
-        // NOTE: JSX renders "$" and "{value}" as separate text nodes, so we check via DOM textContent
+        // NOTA: JSX separa "$" y "{value}" en nodos de texto distintos; se revisa textContent
         await waitFor(() => {
             const totalRow = dialog.querySelector('tr.bg-primary\\/5');
             expect(totalRow).not.toBeNull();
@@ -148,8 +154,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         });
 
         // Activamos la opción "El cliente te emite retencion"
-        // Since there is no aria-label on the switch linking to the text, we query by role and index or use container selector.
-        // There are multiple switches. The retencion one is the last one if items > 0.
+        // El switch no tiene aria-label: se busca por rol e índice
         const switches = screen.getAllByRole('switch');
         const toggleRetencion = switches[switches.length - 2]; // El último es el de pago en caja. El penúltimo es retención.
         
@@ -194,25 +199,25 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         expect(totalCobrar!.textContent).toContain('100.000');
     });
 
-    it('dado un error 401 al consultar entonces no muestra toast de error (sesion manejada globalmente)', async () => {
+    it('dado un error 401 cuando consulta entonces no muestra toast porque la sesión se maneja globalmente', async () => {
         const { toast } = await import('sonner');
-        (apiClient.get as any).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
+        (apiClient.get as Mock).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
         renderComponent();
 
         await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
         expect(toast.error).not.toHaveBeenCalled();
     });
 
-    it('dado un error distinto de 401 al consultar entonces muestra un toast de error', async () => {
+    it('dado un error distinto de 401 cuando consulta entonces muestra un toast de error', async () => {
         const { toast } = await import('sonner');
-        (apiClient.get as any).mockImplementation(() => Promise.reject(new Error('network error')));
+        (apiClient.get as Mock).mockImplementation(() => Promise.reject(new Error('network error')));
         renderComponent();
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error al cargar la información del vendedor'));
     });
 
     it('dado clientes con saldo string, alto porcentaje de credito, beneficio y mora sin fecha cuando renderiza entonces muestra las ramas correspondientes', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({
                     data: [{
@@ -244,7 +249,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado un cliente pagado sin cartera vencida ni ultima compra cuando renderiza entonces muestra Pagado, Regular y Sin ventas', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({
                     data: [{
@@ -276,7 +281,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado pedidos anulados, pagados, abonados y pendientes sin guia ni retencion cuando renderiza entonces muestra los badges y montos correctos', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') return Promise.resolve({ data: [] });
             if (url.includes('/pedidos-venta/')) {
                 return Promise.resolve({
@@ -328,7 +333,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado un pedido no anulado en estado distinto de pendiente cuando renderiza entonces no muestra editar ni anular', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') return Promise.resolve({ data: [] });
             if (url.includes('/pedidos-venta/')) {
                 return Promise.resolve({

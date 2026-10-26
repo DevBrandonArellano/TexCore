@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } from '../../lib/types';
 import apiClient from '../../lib/axios';
 import { createLogger } from '../../lib/logger';
@@ -6,22 +6,21 @@ import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
+import { PlanProduccionMTS } from './PlanProduccionMTS';
+import { useAuth } from '../../lib/auth';
+import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search } from 'lucide-react';
 
-interface UsuarioBasico {
-  id: number;
-  username: string;
-  first_name: string;
-  last_name: string;
-  sede: number | null;
-}
+import { toArray } from '../../lib/collections';
+import { OrdenPayload } from './ordenUtils';
 
 // UX-1: semáforo de severidad para la eficiencia global (producido/requerido) —
 // 90%+ en línea con el plan, 70-89% requiere atención, <70% crítico.
@@ -35,6 +34,7 @@ function claseSeveridadEficiencia(pct: number): string {
 const logger = createLogger('JefePlantaDashboard');
 
 export function JefePlantaDashboard() {
+  const { profile } = useAuth();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
@@ -42,8 +42,6 @@ export function JefePlantaDashboard() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
-  const [operarios, setOperarios] = useState<UsuarioBasico[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isExportingAvance, setIsExportingAvance] = useState(false);
   const [isExportingBalance, setIsExportingBalance] = useState(false);
   const [searchParams] = useSearchParams();
@@ -54,47 +52,55 @@ export function JefePlantaDashboard() {
     wip_estancado: 0,
   });
   
-  const [ordenesCount, setOrdenesCount] = useState(0);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const params = Object.fromEntries(searchParams.entries());
-      const queryStr = new URLSearchParams(params).toString();
-      const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, usuariosRes, pulsoRes] = await Promise.all([
-        apiClient.get(`/ordenes-produccion/?${queryStr}`),
-        apiClient.get('/productos/'),
-        apiClient.get('/formula-colors/'),
-        apiClient.get('/sedes/'),
-        apiClient.get('/maquinas/'),
-        apiClient.get('/areas/'),
-        apiClient.get('/bodegas/'),
-        apiClient.get('/users/'),
-        apiClient.get('/produccion/pulso-diario/'),
-      ]);
-      setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-      setOrdenesCount((ordenesRes.data as any).count || 0);
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
-      setSedes(Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || []);
-      setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-      setAreas(Array.isArray(areasRes.data) ? areasRes.data : (areasRes.data as any).results || []);
-      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
-      setOperarios(Array.isArray(usuariosRes.data) ? usuariosRes.data : (usuariosRes.data as any).results || []);
-      setPulsoDiario(pulsoRes.data);
-    } catch (error) {
-      logger.error('Fallo al cargar el panel de Jefe de Planta', {
-        operacion: 'fetchData',
-      });
-      toast.error(getApiErrorMessage(error, 'Error al cargar los datos del panel.'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  // `loading` se deriva de si la última carga terminada es la de la URL y la
+  // recarga vigentes: el efecto solo toca el estado cuando llega la respuesta.
+  const queryStr = new URLSearchParams(Object.fromEntries(searchParams.entries())).toString();
+  const [recarga, setRecarga] = useState(0);
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const loading = cargadoPara !== `${queryStr}|${recarga}`;
 
   useEffect(() => {
-    fetchData();
-  }, [searchParams]);
+    let vigente = true;
+    const clave = `${queryStr}|${recarga}`;
+    const cargar = async () => {
+      try {
+        const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, pulsoRes] = await Promise.all([
+          apiClient.get(`/ordenes-produccion/?${queryStr}`),
+          apiClient.get('/productos/'),
+          apiClient.get('/formula-colors/'),
+          apiClient.get('/sedes/'),
+          apiClient.get('/maquinas/'),
+          apiClient.get('/areas/'),
+          apiClient.get('/bodegas/'),
+          apiClient.get('/produccion/pulso-diario/'),
+        ]);
+        if (!vigente) return;
+        setOrdenes(toArray(ordenesRes.data));
+        setProductos(toArray(productosRes.data));
+        setFormulas(toArray(formulasRes.data));
+        setSedes(toArray(sedesRes.data));
+        setMaquinas(toArray(maquinasRes.data));
+        setAreas(toArray(areasRes.data));
+        setBodegas(toArray(bodegasRes.data));
+        setPulsoDiario(pulsoRes.data);
+      } catch (error) {
+        if (!vigente) return;
+        logger.error('Fallo al cargar el panel de Jefe de Planta', {
+          operacion: 'fetchData',
+        });
+        toast.error(getApiErrorMessage(error, 'Error al cargar los datos del panel.'));
+      } finally {
+        if (vigente) setCargadoPara(clave);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [queryStr, recarga]);
+
+  const fetchData = useCallback(() => setRecarga((n) => n + 1), []);
 
   // ── Exportación PDF — Reporte de Avance Operativo ────────────────────────
   /**
@@ -173,7 +179,7 @@ export function JefePlantaDashboard() {
     ? ((pulsoDiario.kg_merma_hoy / pulsoDiario.kg_producidos_hoy) * 100).toFixed(2)
     : "0.00";
 
-  const handleOrdenCreate = async (data: any): Promise<boolean> => {
+  const handleOrdenCreate = async (data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.post<OrdenProduccion>('/ordenes-produccion/', data);
       setOrdenes(prev => [response.data, ...prev]);
@@ -186,7 +192,7 @@ export function JefePlantaDashboard() {
     }
   };
 
-  const handleOrdenUpdate = async (id: number, data: any): Promise<boolean> => {
+  const handleOrdenUpdate = async (id: number, data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.patch<OrdenProduccion>(`/ordenes-produccion/${id}/`, data);
       setOrdenes(prev => prev.map(o => (o.id === id ? response.data : o)));
@@ -201,18 +207,19 @@ export function JefePlantaDashboard() {
     }
   };
 
-  const handleOrdenDelete = async (id: number) => {
-    if (window.confirm('¿Eliminar esta orden de producción? Esta acción no se puede deshacer.')) {
-      try {
-        await apiClient.delete(`/ordenes-produccion/${id}/`);
-        setOrdenes(prev => prev.filter(o => o.id !== id));
-        toast.success('Orden eliminada');
-      } catch (error) {
-        logger.warning('Fallo al eliminar orden de producción', {
-          operacion: 'handleOrdenDelete', orden_id: id,
-        });
-        toast.error(getApiErrorMessage(error, 'Error al eliminar la orden'));
-      }
+  // El backend exige la justificación (ISO 9001) y la guarda en el AuditLog.
+  const handleOrdenDelete = async (id: number, justificacion: string): Promise<boolean> => {
+    try {
+      await apiClient.delete(`/ordenes-produccion/${id}/`, { data: { justificacion } });
+      setOrdenes(prev => prev.filter(o => o.id !== id));
+      toast.success('Orden eliminada');
+      return true;
+    } catch (error) {
+      logger.warning('Fallo al eliminar orden de producción', {
+        operacion: 'handleOrdenDelete', orden_id: id,
+      });
+      toast.error(getApiErrorMessage(error, 'Error al eliminar la orden'));
+      return false;
     }
   };
 
@@ -235,7 +242,7 @@ export function JefePlantaDashboard() {
       logger.warning('Fallo al cambiar estado de orden', {
         operacion: 'handleOrderStatusChange', orden_id: id, estado_destino: newStatus,
       });
-      const axiosError = error as AxiosError<any>;
+      const axiosError = error as AxiosError<{ estado?: string[] }>;
       if (axiosError.response?.status === 400) {
         const msg = axiosError.response.data?.estado?.[0] || getApiErrorMessage(error);
         toast.error('No se puede cambiar el estado', { description: msg });
@@ -282,7 +289,7 @@ export function JefePlantaDashboard() {
         </div>
 
         {/* ── Botones de exportación PDF ───────────────────────── */}
-        <div className="flex gap-2 flex-shrink-0 items-center">
+        <div className="flex gap-2 shrink-0 items-center">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
@@ -312,7 +319,7 @@ export function JefePlantaDashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {controlTowerCards.map(card => (
-            <Card key={card.label} className={`border ${card.color} shadow-sm transition-all hover:shadow-md`}>
+            <Card key={card.label} className={`border ${card.color} shadow-xs transition-all hover:shadow-md`}>
               <CardContent className="pt-6 pb-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-slate-600 uppercase tracking-wider">{card.label}</span>
@@ -325,25 +332,68 @@ export function JefePlantaDashboard() {
         </div>
       )}
 
-      <ManageOrdenesProduccion
-        ordenes={ordenes}
-        productos={productos}
-        formulas={formulas}
-        sedes={sedes}
-        maquinas={maquinas}
-        areas={areas}
-        bodegas={bodegas}
-        onOrdenCreate={handleOrdenCreate}
-        onOrdenUpdate={handleOrdenUpdate}
-        onOrderStatusChange={handleOrderStatusChange}
-        onOrdenDelete={handleOrdenDelete}
-        loading={loading}
-        onDataRefresh={fetchData}
-      />
+      <Tabs defaultValue="ordenes" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto p-1 bg-muted/60">
+          <TabsTrigger value="ordenes" className="gap-2 py-2">
+            <Factory className="w-4 h-4" />
+            <span>Órdenes de Trabajo (OP)</span>
+          </TabsTrigger>
+          <TabsTrigger value="plan_mts" className="gap-2 py-2">
+            <TrendingUp className="w-4 h-4" />
+            <span>Plan Maestro (MTS)</span>
+          </TabsTrigger>
+          <TabsTrigger value="corridas_mes" className="gap-2 py-2">
+            <Play className="w-4 h-4" />
+            <span>Corridas Continuas (MES)</span>
+          </TabsTrigger>
+          <TabsTrigger value="transferencias" className="gap-2 py-2">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Transferencias Interárea</span>
+          </TabsTrigger>
+          <TabsTrigger value="lotes" className="gap-2 py-2">
+            <Search className="w-4 h-4" />
+            <span>Buscador de Lotes</span>
+          </TabsTrigger>
+        </TabsList>
 
-      <TransferenciasInterarea />
+        <TabsContent value="ordenes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <ManageOrdenesProduccion
+            ordenes={ordenes}
+            productos={productos}
+            formulas={formulas}
+            sedes={sedes}
+            maquinas={maquinas}
+            areas={areas}
+            bodegas={bodegas}
+            onOrdenCreate={handleOrdenCreate}
+            onOrdenUpdate={handleOrdenUpdate}
+            onOrderStatusChange={handleOrderStatusChange}
+            onOrdenDelete={handleOrdenDelete}
+            loading={loading}
+            onDataRefresh={fetchData}
+          />
+        </TabsContent>
 
-      <BuscadorLotes />
+        <TabsContent value="plan_mts" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <PlanProduccionMTS
+            sedeNombre={sedes.find((s) => s.id === profile?.user?.sede)?.nombre}
+            bodegas={bodegas}
+            maquinas={maquinas}
+          />
+        </TabsContent>
+
+        <TabsContent value="corridas_mes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <CorridaContinuaDashboard />
+        </TabsContent>
+
+        <TabsContent value="transferencias" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <TransferenciasInterarea />
+        </TabsContent>
+
+        <TabsContent value="lotes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <BuscadorLotes />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

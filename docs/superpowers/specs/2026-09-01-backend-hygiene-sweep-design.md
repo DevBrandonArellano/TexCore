@@ -16,7 +16,7 @@ Eliminar código muerto, corregir comentarios/docstrings y documentación desact
 - **ISTQB + TDD** (`CLAUDE.md`): todo fix de *comportamiento* (no solo housekeeping) lleva un test `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]` que falla antes del fix y pasa después.
 - **Verificación con graphify antes de tocar algo**: para cada eliminación/refactor, `graphify query "<símbolo>"` / `graphify explain "<símbolo>"` (o `graphify path` si hay que confirmar que dos nodos no quedan huérfanos) antes de editar, para no romper referencias que el grep pudo no capturar (imports dinámicos, `apps.get_model`, señales). `graphify update .` al cerrar cada fase.
 - **YAGNI**: si un hallazgo de "mejora" requiere una decisión de producto/datos (no solo de código), se deja marcado como **[DECISIÓN REQUERIDA]** en vez de implementarse a ciegas.
-- Cada fase = un commit independiente y revertible (mismo criterio que `docs/superpowers/plans/2026-08-19-division-archivos-dios-backend.md`). Brandon revisa y commitea — Claude no hace `git commit`/`push`.
+- Cada fase = un commit independiente y revertible (el mismo criterio que la división de los archivos dios del backend). Brandon revisa y commitea — Claude no hace `git commit`/`push`.
 
 ## 3. Fuera de alcance
 

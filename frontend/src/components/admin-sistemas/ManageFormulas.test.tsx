@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin formulas / formulas existentes / loading en true / busqueda por codigo
+ *   / busqueda por nombre de color.
+ * - Transición de estados (STT): formula aprobada con justificacion.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -10,8 +16,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -24,7 +30,6 @@ const FORMULA_1: FormulaColor = {
   version: 1,
   estado: 'en_pruebas',
   observaciones: 'Nota de laboratorio',
-  detalles: [{ id: 1, producto: 5, cantidad: '10.00' }],
 };
 
 const FORMULA_2: FormulaColor = {
@@ -36,7 +41,6 @@ const FORMULA_2: FormulaColor = {
   version: 1,
   estado: 'aprobada',
   observaciones: '',
-  detalles: [],
 };
 
 function renderComponent(props: Partial<React.ComponentProps<typeof ManageFormulas>> = {}) {
@@ -177,8 +181,9 @@ describe('ManageFormulas', () => {
       tipo_sustrato: 'algodon',
       estado: 'en_pruebas',
       observaciones: '',
-      detalles: [],
     })));
+    // `detalles` es el campo legacy anterior a las fases (Fase 2): ya no se envía.
+    expect(onFormulaCreate.mock.calls[0][0]).not.toHaveProperty('detalles');
   });
 
   it('dado creacion exitosa cuando se completa entonces cierra el dialogo', async () => {
@@ -221,7 +226,7 @@ describe('ManageFormulas', () => {
     expect(onFormulaUpdate).not.toHaveBeenCalled();
   });
 
-  it('dado editar con justificacion cuando actualiza entonces llama a onFormulaUpdate con el id y preserva detalles', async () => {
+  it('dado editar con justificacion cuando actualiza entonces llama a onFormulaUpdate con el id y sin tocar la receta', async () => {
     const onFormulaUpdate = vi.fn().mockResolvedValue(true);
     renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
 
@@ -240,10 +245,28 @@ describe('ManageFormulas', () => {
       description: 'Color base rojo',
       _justificacion_auditoria: 'Ajuste de fórmula por prueba de laboratorio',
       tipo_sustrato: 'algodon',
-      estado: 'en_pruebas',
       observaciones: 'Nota de laboratorio',
-      detalles: FORMULA_1.detalles,
     })));
+    const payload = onFormulaUpdate.mock.calls[0][1];
+    // Ni `fases` ni el campo legacy `detalles`: el PATCH conserva la receta tal cual.
+    expect(payload).not.toHaveProperty('fases');
+    expect(payload).not.toHaveProperty('detalles');
+    expect(payload).not.toHaveProperty('motivo');
+  });
+
+  it('dado formula aprobada con justificacion cuando actualiza entonces envia solo la justificacion sin motivo', async () => {
+    // D7: editar una fórmula aprobada ya no crea versión; se versiona aparte desde el panel del tintorero.
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_2], onFormulaUpdate });
+    const [editButton] = within(getRow('AZL-002')).getAllByRole('button');
+    await userEvent.click(editButton);
+    await userEvent.type(screen.getByLabelText(/Justificación de auditoría/), 'Ajuste');
+    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
+
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(2, expect.objectContaining({
+      _justificacion_auditoria: 'Ajuste',
+    })));
+    expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
   });
 
   it('dado click en eliminar cuando se hace click entonces llama a onFormulaDelete con el id de la formula', async () => {

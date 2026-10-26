@@ -174,7 +174,7 @@ el roadmap:
 
 ## R4 — OEE completo (implementado, 2026-07-21)
 
-**Modelo `ParoMaquina`** (`gestion/models.py`, migración `0076_paromaquina`): registro de downtime
+**Modelo `ParoMaquina`** (hoy en `gestion/models/maquina.py`; las migraciones se consolidaron en `gestion/0001_initial`): registro de downtime
 de máquina con *reason code* = las **Seis Grandes Pérdidas** (*OEE for Operators*):
 
 | Dimensión OEE | Categorías (`categoria`) |

@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): carga inicial / codigo existente / codigo inexistente / error de servidor.
+ * - Caja blanca (CB): ramas de error — error de servidor.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -6,7 +11,7 @@ import { TrazabilidadPorCodigoPage } from './TrazabilidadPorCodigoPage';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const NIVEL = {

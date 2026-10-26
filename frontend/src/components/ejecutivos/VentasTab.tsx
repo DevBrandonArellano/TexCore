@@ -17,6 +17,8 @@ import {
 } from './DrillDownModals';
 import { fmt } from './utils';
 import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { VendedorResumen } from '../../types/indicadores';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface VentasTabProps {
   pedidos: PedidoVenta[];
@@ -44,6 +46,10 @@ interface VentasTabProps {
   exportVentas: () => void;
   exportTopClientes: () => void;
   exportDeudores: () => void;
+  /** Filtro de pedidos por vendedor; sin vendedores (rol sin acceso) no se muestra. */
+  vendedores?: VendedorResumen[];
+  filtroVendedorId?: string;
+  onFiltroVendedorChange?: (vendedorId: string) => void;
 }
 
 function VentasTabImpl({
@@ -72,9 +78,29 @@ function VentasTabImpl({
   exportVentas,
   exportTopClientes,
   exportDeudores,
+  vendedores = [],
+  filtroVendedorId = 'todos',
+  onFiltroVendedorChange,
 }: VentasTabProps) {
   return (
     <TabsContent value="ventas" className="space-y-6 mt-4">
+      {vendedores.length > 0 && onFiltroVendedorChange && (
+        <div className="flex items-center gap-2">
+          <Label htmlFor="filtro-vendedor">Vendedor</Label>
+          <Select value={filtroVendedorId} onValueChange={onFiltroVendedorChange}>
+            <SelectTrigger id="filtro-vendedor" className="w-56"><SelectValue placeholder="Todos los vendedores" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los vendedores</SelectItem>
+              {vendedores.map((v) => (
+                <SelectItem key={v.id} value={v.id.toString()}>
+                  {[v.first_name, v.last_name].filter(Boolean).join(' ') || v.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground">Filtra los pedidos de esta pestaña.</span>
+        </div>
+      )}
       {/* KPIs */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         <KpiCard titulo="Cuentas por Cobrar" valor={`$${fmt(cuentasPorCobrar)}`} icon={<DollarSign className="w-4 h-4" />} subtitulo="Saldo pendiente total" />
@@ -87,7 +113,7 @@ function VentasTabImpl({
           subtitulo={alertaCartera ? `${fmt((carteraVencida / limiteCartera) * 100, 0)}% del límite` : ''}
         />
         <KpiCard titulo="Total Ventas Período" valor={`$${fmt(totalVentas)}`} icon={<ShoppingBag className="w-4 h-4" />} subtitulo={`${pedidos.length} pedidos`} />
-        <KpiCard titulo="Clientes Activos" valor={clientes.filter(c => (c as any).is_active !== false).length} icon={<Users className="w-4 h-4" />} subtitulo={`${clientes.filter(c => (c as any).tiene_beneficio).length} con beneficio`} />
+        <KpiCard titulo="Clientes Activos" valor={clientes.filter(c => c.is_active !== false).length} icon={<Users className="w-4 h-4" />} subtitulo={`${clientes.filter(c => c.tiene_beneficio).length} con beneficio`} />
       </div>
 
       {/* Funnel de pedidos */}
@@ -295,7 +321,7 @@ function VentasTabImpl({
       <ClienteDeudorModal
         clienteNombre={modalClienteDeudor}
         onClose={() => setModalClienteDeudor(null)}
-        topDeudores={topDeudores as any}
+        topDeudores={topDeudores}
       />
     </TabsContent>
   );

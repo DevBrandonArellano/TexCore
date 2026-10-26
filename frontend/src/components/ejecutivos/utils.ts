@@ -1,3 +1,5 @@
+import { format } from 'date-fns';
+
 export const fmt = (n: number, dec = 2) =>
   n.toLocaleString('es-EC', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
@@ -11,11 +13,15 @@ export const toNum = (v: unknown): number => {
 };
 
 /** Total de un pedido: usa `total` si viene calculado, o lo deriva de sus detalles. */
-export const getPedidoTotal = (p: { total?: unknown; detalles?: any[] }) =>
+export const getPedidoTotal = (p: { total?: unknown; detalles?: { peso?: unknown; precio_unitario?: unknown }[] }) =>
   toNum(p.total) || (p.detalles?.reduce(
-    (s: number, d: any) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
+    (s: number, d) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
   ) ?? 0);
 
 // Re-exportado desde src/lib/collections.ts — punto único de verdad,
 // usado también fuera del módulo ejecutivos (jefe-area, vendedor, shared).
 export { toArray } from '../../lib/collections';
+
+/** Fecha de la última ejecución del MRP, o «Sin ejecutar» si nunca se calculó. */
+export const fechaUltimaEjecucion = (iso: string | null | undefined) =>
+  (iso ? format(new Date(iso), 'dd/MM/yyyy HH:mm') : 'Sin ejecutar');

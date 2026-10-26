@@ -1,8 +1,9 @@
-from django.db import models
-from django.conf import settings
 from decimal import Decimal
 
-from .core import Sede, AuditableModelMixin, SedeResolvableMixin
+from django.conf import settings
+from django.db import models
+
+from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 from .maquina import Maquina
 from .produccion import LoteProduccion
 
@@ -15,13 +16,14 @@ from .produccion import LoteProduccion
 
 class TarifaOperario(models.Model):
     """Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin."""
+
     TIPO_CONTRATO_CHOICES = [
-        ('tiempo', 'Por Tiempo'),
-        ('pieza', 'Por Pieza'),
+        ("tiempo", "Por Tiempo"),
+        ("pieza", "Por Pieza"),
     ]
 
-    operario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tarifas')
-    tipo_contrato = models.CharField(max_length=20, choices=TIPO_CONTRATO_CHOICES, default='tiempo')
+    operario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tarifas")
+    tipo_contrato = models.CharField(max_length=20, choices=TIPO_CONTRATO_CHOICES, default="tiempo")
     tarifa_hora = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     tarifa_pieza = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     vigente_desde = models.DateField()
@@ -29,35 +31,36 @@ class TarifaOperario(models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
 
     class Meta:
-        unique_together = ('operario', 'vigente_desde', 'sede')
-        verbose_name = 'Tarifa de Operario'
+        unique_together = ("operario", "vigente_desde", "sede")
+        verbose_name = "Tarifa de Operario"
 
     def __str__(self):
         return (
-            f'{self.operario.get_full_name() or self.operario.username} - '
-            f'{self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})'
+            f"{self.operario.get_full_name() or self.operario.username} - "
+            f"{self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})"
         )
 
 
 class CostoHoraMaquina(models.Model):
     """Costo operativo por hora de maquina (amortizacion + energia + mantto)."""
-    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='costos_hora')
+
+    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name="costos_hora")
     costo_hora = models.DecimalField(max_digits=8, decimal_places=2)
     vigente_desde = models.DateField()
     vigente_hasta = models.DateField(null=True, blank=True)
 
     class Meta:
-        unique_together = ('maquina', 'vigente_desde')
-        verbose_name = 'Costo Hora Maquina'
+        unique_together = ("maquina", "vigente_desde")
+        verbose_name = "Costo Hora Maquina"
 
     def __str__(self):
-        return f'{self.maquina.nombre} - {self.costo_hora}/h'
+        return f"{self.maquina.nombre} - {self.costo_hora}/h"
 
 
 class CostoLoteProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
-    campos_auditables = ['costo_materia_prima', 'costo_quimicos', 'costo_operario', 'costo_maquina', 'total_costo']
+    campos_auditables = ["costo_materia_prima", "costo_quimicos", "costo_operario", "costo_maquina", "total_costo"]
 
-    lote_produccion = models.OneToOneField(LoteProduccion, on_delete=models.CASCADE, related_name='costo')
+    lote_produccion = models.OneToOneField(LoteProduccion, on_delete=models.CASCADE, related_name="costo")
 
     # Desglose de costos
     costo_materia_prima = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -76,11 +79,11 @@ class CostoLoteProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
     recalculado_en = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        verbose_name = 'Costo Lote Produccion'
-        ordering = ['-calculado_en']
+        verbose_name = "Costo Lote Produccion"
+        ordering = ["-calculado_en"]
 
     def __str__(self):
-        return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
+        return f"Costo {self.lote_produccion.codigo_lote}: {self.total_costo}"
 
     def get_audit_sede_id(self):
         orden = self.lote_produccion.orden_produccion if self.lote_produccion else None
@@ -93,5 +96,5 @@ class CostoLoteProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
         if self.precio_venta_esperado:
             self.margen_bruto = self.precio_venta_esperado - self.total_costo
             if self.precio_venta_esperado > 0:
-                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal('0.01'))
-            self.save(update_fields=['precio_venta_esperado', 'margen_bruto', 'margen_bruto_pct'])
+                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal("0.01"))
+            self.save(update_fields=["precio_venta_esperado", "margen_bruto", "margen_bruto_pct"])

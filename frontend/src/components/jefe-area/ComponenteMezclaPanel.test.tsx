@@ -1,6 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin componentes / componentes que suman 100% / un componente / modo
+ *   readonly / boton agregar deshabilitado.
+ * - Caja blanca (CB): ramas de error — error de validacion del backend / error al eliminar.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ComponenteMezclaPanel } from './ComponenteMezclaPanel';
@@ -11,9 +17,9 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -21,22 +27,22 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -64,7 +70,7 @@ function renderComponent(props: Partial<{ ordenId: number; pesoNeto: number; rea
   );
 }
 
-function mockFetch(componentes: any[] = []) {
+function mockFetch(componentes: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/componentes-mezcla/')) return Promise.resolve({ data: { results: componentes } });
     if (url === '/productos/') return Promise.resolve({ data: { results: [PRODUCTO] } });
@@ -148,9 +154,11 @@ describe('ComponenteMezclaPanel', () => {
     expect(toastSuccessMock).toHaveBeenCalledWith('Componente agregado');
   });
 
-  it('dado error del backend con non_field_errors cuando agrega entonces muestra ese mensaje', async () => {
+  it('dado error de validacion del backend cuando agrega entonces muestra su mensaje', async () => {
     mockFetch([]);
-    mockPost.mockRejectedValueOnce({ response: { data: { non_field_errors: ['La suma supera el 100%.'] } } });
+    mockPost.mockRejectedValueOnce({ response: { status: 400, data: {
+      success: false, error: { code: 400, message: 'porcentaje: La mezcla supera el 100 %.' },
+    } } });
     renderComponent();
     await waitFor(() => expect(screen.getByText(/Sin componentes/)).toBeInTheDocument());
 
@@ -159,31 +167,42 @@ describe('ComponenteMezclaPanel', () => {
     await userEvent.type(screen.getByPlaceholderText('50'), '150');
     await userEvent.click(screen.getByText('+'));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('La suma supera el 100%.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('porcentaje: La mezcla supera el 100 %.'));
   });
 
-  it('dado eliminar un componente cuando se hace click entonces llama a la API con la justificacion', async () => {
+  it('dado eliminar un componente cuando escribe la justificacion y confirma entonces la envia a la API', async () => {
     mockFetch([COMPONENTE_1]);
     mockDelete.mockResolvedValueOnce({});
     renderComponent();
     await waitFor(() => expect(screen.getAllByText('QUIM-A')[0]).toBeInTheDocument());
 
     await userEvent.click(screen.getByText('✕'));
+    expect(mockDelete).not.toHaveBeenCalled();
+    const dialogo = await screen.findByRole('dialog');
+    await userEvent.type(within(dialogo).getByLabelText('Justificación'), 'Cambio de proveedor del hilo');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar componente' }));
 
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/componentes-mezcla/10/', {
-      data: { justificacion: 'Eliminado por jefe de área' },
+      data: { justificacion: 'Cambio de proveedor del hilo' },
     }));
     expect(toastSuccessMock).toHaveBeenCalledWith('Componente eliminado');
   });
 
-  it('dado error al eliminar cuando falla la API entonces muestra toast de error', async () => {
+  it('dado error al eliminar cuando falla la API entonces muestra el mensaje y no cierra el dialogo', async () => {
     mockFetch([COMPONENTE_1]);
-    mockDelete.mockRejectedValueOnce(new Error('500'));
+    mockDelete.mockRejectedValueOnce({ response: { status: 400, data: {
+      success: false, error: { code: 400, message: 'orden: Los componentes de mezcla solo se modifican con la orden pendiente.' },
+    } } });
     renderComponent();
     await waitFor(() => expect(screen.getAllByText('QUIM-A')[0]).toBeInTheDocument());
 
     await userEvent.click(screen.getByText('✕'));
+    const dialogo = await screen.findByRole('dialog');
+    await userEvent.type(within(dialogo).getByLabelText('Justificación'), 'Cambio de proveedor del hilo');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar componente' }));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(
+      'orden: Los componentes de mezcla solo se modifican con la orden pendiente.'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

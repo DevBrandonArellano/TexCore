@@ -1,14 +1,55 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { toArray } from '../../lib/collections';
 import type {
   User, Area, Producto, Quimico, Bodega,
-  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
+  OrdenProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor,
+  PayloadBodega, PayloadCliente, PayloadFormula, PayloadProducto, PayloadProveedor, PayloadQuimico, PayloadUsuario,
 } from '../../lib/types';
 import { showApiError } from './sedeUtils';
+import {
+  syncAddChemicalToProducts,
+  syncUpdateChemicalInProducts,
+  syncAddProductToChemicals,
+  syncUpdateProductInChemicals,
+  syncRemoveItemById,
+} from '../../lib/catalogSync';
 
 const getData = <T,>(res: { data?: unknown } | undefined): T[] => toArray<T>(res?.data);
+
+/** Catálogos de una sede, pedidos en paralelo con el filtro `sede_id`. */
+async function cargarDatosDeSede(sedeId: string) {
+  const params = { params: { sede_id: sedeId } };
+  const [
+    usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
+    ordenesRes, formulasRes, pedidosRes,
+    clientesRes, provRes
+  ] = await Promise.all([
+    apiClient.get<User[]>('/users/', params),
+    apiClient.get<Area[]>('/areas/', params),
+    apiClient.get<Producto[]>('/productos/', params),
+    apiClient.get<Quimico[]>('/chemicals/', params),
+    apiClient.get<Bodega[]>('/bodegas/', params),
+    apiClient.get<OrdenProduccion[]>('/ordenes-produccion/', params),
+    apiClient.get<FormulaColor[]>('/formula-colors/', params),
+    apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
+    apiClient.get<Cliente[]>('/clientes/', params),
+    apiClient.get<Proveedor[]>('/proveedores/', params),
+  ]);
+  return {
+    users: getData<User>(usersRes),
+    areas: getData<Area>(areasRes),
+    productos: getData<Producto>(productosRes),
+    quimicos: getData<Quimico>(quimicosRes),
+    bodegas: getData<Bodega>(bodegasRes),
+    ordenesProduccion: getData<OrdenProduccion>(ordenesRes),
+    formulasColor: getData<FormulaColor>(formulasRes),
+    pedidosVenta: getData<PedidoVenta>(pedidosRes),
+    clientes: getData<Cliente>(clientesRes),
+    proveedores: getData<Proveedor>(provRes),
+  };
+}
 
 // `areas` vive en el componente padre (no aquí) porque también lo mutan los
 // handlers de useSedesYGrupos (handleAreaCreate/Update/Delete) — se recibe
@@ -19,69 +60,57 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [ordenesProduccion, setOrdenesProduccion] = useState<OrdenProduccion[]>([]);
-  const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
   const [formulasColor, setFormulasColor] = useState<FormulaColor[]>([]);
   const [pedidosVenta, setPedidosVenta] = useState<PedidoVenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchSedeSpecificData = async () => {
-    if (!selectedSedeId) return;
-    setLoading(true);
-
-    // Solo cargamos lo necesario para la pestaña activa si es posible,
-    // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
-    const params = { params: { sede_id: selectedSedeId } };
-
-    try {
-      // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
-      const [
-        usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
-        ordenesRes, lotesRes, formulasRes, pedidosRes,
-        clientesRes, provRes
-      ] = await Promise.all([
-        apiClient.get<User[]>('/users/', params),
-        apiClient.get<Area[]>('/areas/', params),
-        apiClient.get<Producto[]>('/productos/', params),
-        apiClient.get<Quimico[]>('/chemicals/', params),
-        apiClient.get<Bodega[]>('/bodegas/', params),
-        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/', params),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
-        apiClient.get<FormulaColor[]>('/formula-colors/', params),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
-        apiClient.get<Cliente[]>('/clientes/', params),
-        apiClient.get<Proveedor[]>('/proveedores/', params),
-      ]);
-
-      setUsers(getData(usersRes));
-      setAreas(getData(areasRes));
-      setProductos(getData(productosRes));
-      setQuimicos(getData(quimicosRes));
-      setBodegas(getData(bodegasRes));
-      setOrdenesProduccion(getData(ordenesRes));
-      setLotesProduccion(getData(lotesRes));
-      setFormulasColor(getData(formulasRes));
-      setPedidosVenta(getData(pedidosRes));
-      setClientes(getData(clientesRes));
-      setProveedores(getData(provRes));
-
-    } catch (error) {
-      console.error('Error fetching sede specific data:', error);
-      toast.error('Error al cargar datos de la sede');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // `loading` se deriva de si la última carga terminada es la de la sede y la
+  // recarga vigentes: el efecto solo toca el estado cuando llega la respuesta.
+  const [recarga, setRecarga] = useState(0);
+  // `setAreas` viene del padre: se lee desde una ref para no recargar si cambia su identidad.
+  const setAreasRef = useRef(setAreas);
+  useLayoutEffect(() => {
+    setAreasRef.current = setAreas;
+  });
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const claveVigente = `${selectedSedeId}|${recarga}`;
+  const loading = cargadoPara !== claveVigente;
 
   useEffect(() => {
-    if (selectedSedeId) {
-      fetchSedeSpecificData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSedeId]);
+    if (!selectedSedeId) return;
+    let vigente = true;
+    const clave = `${selectedSedeId}|${recarga}`;
+    cargarDatosDeSede(selectedSedeId).then(
+      (d) => {
+        if (!vigente) return;
+        setUsers(d.users);
+        setAreasRef.current(d.areas);
+        setProductos(d.productos);
+        setQuimicos(d.quimicos);
+        setBodegas(d.bodegas);
+        setOrdenesProduccion(d.ordenesProduccion);
+        setFormulasColor(d.formulasColor);
+        setPedidosVenta(d.pedidosVenta);
+        setClientes(d.clientes);
+        setProveedores(d.proveedores);
+        setCargadoPara(clave);
+      },
+      (error: unknown) => {
+        if (!vigente) return;
+        console.error('Error fetching sede specific data:', error);
+        toast.error('Error al cargar datos de la sede');
+        setCargadoPara(clave);
+      },
+    );
+    return () => {
+      vigente = false;
+    };
+  }, [selectedSedeId, recarga]);
 
-  const handleUserCreate = async (userData: any): Promise<boolean> => {
+  const fetchSedeSpecificData = useCallback(() => setRecarga((n) => n + 1), []);
+
+  const handleUserCreate = async (userData: PayloadUsuario): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un usuario');
@@ -102,7 +131,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleUserUpdate = async (userId: number, userData: any): Promise<boolean> => {
+  const handleUserUpdate = async (userId: number, userData: PayloadUsuario): Promise<boolean> => {
     try {
       const response = await apiClient.patch<User>(`/users/${userId}/`, userData);
       setUsers(prevUsers => prevUsers.map(u => u.id === userId ? response.data : u));
@@ -128,7 +157,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleClienteCreate = async (clienteData: any): Promise<boolean> => {
+  const handleClienteCreate = async (clienteData: PayloadCliente): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un cliente');
@@ -149,7 +178,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleClienteUpdate = async (clienteId: number, clienteData: any): Promise<boolean> => {
+  const handleClienteUpdate = async (clienteId: number, clienteData: PayloadCliente): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Cliente>(`/clientes/${clienteId}/`, clienteData);
       setClientes(prev => prev.map(c => c.id === clienteId ? response.data : c));
@@ -175,7 +204,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleBodegaCreate = async (bodegaData: any): Promise<boolean> => {
+  const handleBodegaCreate = async (bodegaData: PayloadBodega): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear una bodega');
@@ -196,7 +225,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleBodegaUpdate = async (bodegaId: number, bodegaData: any): Promise<boolean> => {
+  const handleBodegaUpdate = async (bodegaId: number, bodegaData: PayloadBodega): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Bodega>(`/bodegas/${bodegaId}/`, bodegaData);
       setBodegas(prev => prev.map(b => b.id === bodegaId ? response.data : b));
@@ -222,7 +251,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleFormulaCreate = async (formulaData: any): Promise<boolean> => {
+  const handleFormulaCreate = async (formulaData: PayloadFormula): Promise<boolean> => {
     try {
       const payload = {
         ...formulaData,
@@ -239,7 +268,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleFormulaUpdate = async (formulaId: number, formulaData: any): Promise<boolean> => {
+  const handleFormulaUpdate = async (formulaId: number, formulaData: PayloadFormula): Promise<boolean> => {
     try {
       const response = await apiClient.patch<FormulaColor>(`/formula-colors/${formulaId}/`, formulaData);
       setFormulasColor(prev => prev.map(f => f.id === formulaId ? response.data : f));
@@ -265,7 +294,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleChemicalCreate = async (chemicalData: any): Promise<boolean> => {
+  const handleChemicalCreate = async (chemicalData: PayloadQuimico): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un químico');
@@ -278,11 +307,12 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         unidad_medida: chemicalData.unidad_medida ?? 'kg',
         stock_minimo: 0,
         precio_base: Number(chemicalData.precio_base) || 0,
-        presentacion: chemicalData.presentacion?.trim() || null,
+        presentacion: chemicalData.presentacion?.trim() || '',
         sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
       const response = await apiClient.post<Quimico>('/chemicals/', payload);
       setQuimicos(prev => [...prev, response.data]);
+      setProductos(prev => syncAddChemicalToProducts(prev, response.data));
       toast.success('Químico creado exitosamente');
       return true;
     } catch (error) {
@@ -292,18 +322,19 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleChemicalUpdate = async (chemicalId: number, chemicalData: any): Promise<boolean> => {
+  const handleChemicalUpdate = async (chemicalId: number, chemicalData: PayloadQuimico): Promise<boolean> => {
     try {
       const payload: Record<string, unknown> = {
         codigo: String(chemicalData.codigo ?? '').trim(),
         descripcion: String(chemicalData.descripcion ?? '').trim(),
         tipo: 'quimico',
         unidad_medida: chemicalData.unidad_medida ?? 'kg',
-        presentacion: chemicalData.presentacion?.trim() || null,
+        presentacion: chemicalData.presentacion?.trim() || '',
         precio_base: Number(chemicalData.precio_base) || 0,
       };
       const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, payload);
       setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));
+      setProductos(prev => syncUpdateChemicalInProducts(prev, chemicalId, response.data));
       toast.success('Químico actualizado exitosamente');
       return true;
     } catch (error) {
@@ -317,7 +348,8 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     if (window.confirm('¿Estás seguro de eliminar este químico?')) {
       try {
         await apiClient.delete(`/chemicals/${chemicalId}/`);
-        setQuimicos(prev => prev.filter(q => q.id !== chemicalId));
+        setQuimicos(prev => syncRemoveItemById(prev, chemicalId));
+        setProductos(prev => syncRemoveItemById(prev, chemicalId));
         toast.success('Químico eliminado exitosamente');
       } catch (error) {
         showApiError(error, 'delete', 'el químico');
@@ -326,7 +358,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleProductCreate = async (productData: any): Promise<boolean> => {
+  const handleProductCreate = async (productData: PayloadProducto): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un producto');
@@ -340,13 +372,14 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         unidad_medida: productData.unidad_medida ?? 'kg',
         stock_minimo: Number(productData.stock_minimo) || 0,
         precio_base: Number(productData.precio_base) || 0,
-        presentacion: productData.presentacion?.trim() || null,
-        pais_origen: productData.pais_origen?.trim() || null,
-        calidad: productData.calidad?.trim() || null,
+        presentacion: productData.presentacion?.trim() || '',
+        pais_origen: productData.pais_origen?.trim() || '',
+        calidad: productData.calidad?.trim() || '',
         sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
       const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
+      setQuimicos(prev => syncAddProductToChemicals(prev, response.data));
       toast.success('Producto creado exitosamente');
       return true;
     } catch (error) {
@@ -356,7 +389,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleProductUpdate = async (productId: number, productData: any): Promise<boolean> => {
+  const handleProductUpdate = async (productId: number, productData: PayloadProducto): Promise<boolean> => {
     try {
       const payload: Record<string, unknown> = {
         codigo: String(productData.codigo ?? '').trim(),
@@ -364,15 +397,16 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         tipo: productData.tipo ?? 'hilo',
         unidad_medida: productData.unidad_medida ?? 'kg',
         stock_minimo: Number(productData.stock_minimo) || 0,
-        presentacion: productData.presentacion?.trim() || null,
-        pais_origen: productData.pais_origen?.trim() || null,
-        calidad: productData.calidad?.trim() || null,
+        presentacion: productData.presentacion?.trim() || '',
+        pais_origen: productData.pais_origen?.trim() || '',
+        calidad: productData.calidad?.trim() || '',
       };
       if (productData.precio_base != null && !Number.isNaN(Number(productData.precio_base))) {
         payload.precio_base = Number(productData.precio_base);
       }
       const response = await apiClient.patch<Producto>(`/productos/${productId}/`, payload);
       setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
+      setQuimicos(prev => syncUpdateProductInChemicals(prev, productId, response.data));
       toast.success('Producto actualizado exitosamente');
       return true;
     } catch (error) {
@@ -386,7 +420,8 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
       try {
         await apiClient.delete(`/productos/${productId}/`);
-        setProductos(prev => prev.filter(p => p.id !== productId));
+        setProductos(prev => syncRemoveItemById(prev, productId));
+        setQuimicos(prev => syncRemoveItemById(prev, productId));
         toast.success('Producto eliminado exitosamente');
       } catch (error) {
         showApiError(error, 'delete', 'el producto');
@@ -395,7 +430,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
+  const handleProveedorCreate = async (proveedorData: PayloadProveedor): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedesLength > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un proveedor');
@@ -416,7 +451,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
     }
   };
 
-  const handleProveedorUpdate = async (proveedorId: number, proveedorData: any): Promise<boolean> => {
+  const handleProveedorUpdate = async (proveedorId: number, proveedorData: PayloadProveedor): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Proveedor>(`/proveedores/${proveedorId}/`, proveedorData);
       setProveedores(prev => prev.map(p => p.id === proveedorId ? response.data : p));
@@ -444,7 +479,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
 
   return {
     users, productos, quimicos, bodegas,
-    ordenesProduccion, lotesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
+    ordenesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
     loading,
     fetchSedeSpecificData,
     handleUserCreate, handleUserUpdate, handleUserDelete,

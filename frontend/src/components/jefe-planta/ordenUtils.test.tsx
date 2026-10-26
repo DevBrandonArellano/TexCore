@@ -1,3 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una fecha / fecha fin en el pasado y estado no finalizada / fecha fin hoy
+ *   y estado no finalizada / orden finalizada / sin fecha fin planificada.
+ * - Análisis de valores límite (BVA): justificacion vacia / campos opcionales vacios / fechas vacias /
+ *   formulario vacio en modo creacion.
+ * - Transición de estados (STT): fecha fin en el pasado y estado no finalizada / fecha fin hoy y estado no
+ *   finalizada / orden finalizada / estado %s.
+ */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import {
@@ -33,7 +42,7 @@ describe('getOrdenVencimientoStatus', () => {
   });
 
   it('dado sin fecha fin planificada cuando evalua entonces no marca ni vencida ni vence hoy', () => {
-    const { isOverdue, isToday } = getOrdenVencimientoStatus({ estado: 'pendiente', fecha_fin_planificada: null as any });
+    const { isOverdue, isToday } = getOrdenVencimientoStatus({ estado: 'pendiente', fecha_fin_planificada: null as never });
     expect(isOverdue).toBeFalsy();
     expect(isToday).toBeFalsy();
   });
@@ -89,6 +98,16 @@ describe('buildOrdenPayload', () => {
     expect(payload.maquina_asignada).toBe(9);
   });
 
+  it('dado justificacion vacia cuando construye el payload entonces no la envia', () => {
+    const payload = buildOrdenPayload({ ...formData, justificacion: '   ' });
+    expect(payload).not.toHaveProperty('justificacion');
+  });
+
+  it('dado justificacion escrita cuando construye el payload entonces la envia recortada', () => {
+    const payload = buildOrdenPayload({ ...formData, justificacion: '  Cambio de peso por pedido  ' });
+    expect(payload.justificacion).toBe('Cambio de peso por pedido');
+  });
+
   it('dado campos opcionales vacios cuando construye el payload entonces los deja en null', () => {
     const payload = buildOrdenPayload({ ...formData, bodega_entrada: '', formula_color: '', sede: '', area: '', bodega_quimicos: '', maquina_asignada: '' });
     expect(payload.bodega_entrada).toBeNull();
@@ -140,5 +159,21 @@ describe('validateOrdenForm', () => {
       producto_entrada: '1', producto_salida: '2',
     }, true);
     expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  const valido = { ...EMPTY_ORDEN_FORM_DATA, codigo: 'OP-1', area: '1', peso_neto_requerido: '100' };
+
+  // EP sobre la justificación cuando la orden ya tiene químicos descontados.
+  it('dado quimicos descontados y justificacion vacia o con espacios cuando valida entonces la exige', () => {
+    expect(validateOrdenForm({ ...valido, justificacion: '' }, false, true).justificacion).toBeDefined();
+    expect(validateOrdenForm({ ...valido, justificacion: '   ' }, false, true).justificacion).toBeDefined();
+  });
+
+  it('dado quimicos descontados y justificacion escrita cuando valida entonces no marca error', () => {
+    expect(validateOrdenForm({ ...valido, justificacion: 'Cambio de peso' }, false, true).justificacion).toBeUndefined();
+  });
+
+  it('dado sin quimicos descontados cuando valida entonces no exige justificacion', () => {
+    expect(validateOrdenForm(valido, false, false).justificacion).toBeUndefined();
   });
 });

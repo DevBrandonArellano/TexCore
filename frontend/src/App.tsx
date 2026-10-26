@@ -1,5 +1,6 @@
 import React from 'react';
-import { AuthProvider, useAuth } from './lib/auth';
+import { useAuth } from './lib/auth';
+import { AuthProvider } from './lib/AuthProvider';
 import { Login } from './components/Login';
 import { Layout } from './components/Layout';
 import { OperarioDashboard } from './components/operario/OperarioDashboard';
@@ -17,7 +18,6 @@ import { TintoreroDashboard } from './components/tintura/TintoreroDashboard';
 import { TrazabilidadPorCodigoPage } from './components/produccion/TrazabilidadPorCodigoPage';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
-import { PackagePlus } from 'lucide-react';
 
 function AppContent() {
   const { profile, isAuthenticated } = useAuth();

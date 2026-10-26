@@ -1,11 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Cliente, PedidoVenta } from '../../lib/types';
-import { abreviar, toNum } from './utils';
-
-const getPedidoTotal = (p: PedidoVenta) =>
-  toNum(p.total) || (p.detalles?.reduce(
-    (s: number, d: any) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
-  ) ?? 0);
+import { abreviar, getPedidoTotal, toNum } from './utils';
 
 export function useVentasEjecutivo() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -18,7 +13,7 @@ export function useVentasEjecutivo() {
   const ventasPorVendedor = useMemo(() => {
     const map = new Map<string, number>();
     pedidos.forEach((p) => {
-      const v = (p as any).vendedor_nombre || 'Sin asignar';
+      const v = p.vendedor_nombre || 'Sin asignar';
       map.set(v, (map.get(v) ?? 0) + getPedidoTotal(p));
     });
     return Array.from(map.entries())
@@ -29,7 +24,7 @@ export function useVentasEjecutivo() {
   const topClientesGerencial = useMemo(() => {
     const map = new Map<string, number>();
     pedidos.forEach((p) => {
-      const c = (p as any).cliente_nombre || 'Sin nombre';
+      const c = p.cliente_nombre || 'Sin nombre';
       map.set(c, (map.get(c) ?? 0) + getPedidoTotal(p));
     });
     return Array.from(map.entries())
@@ -69,8 +64,8 @@ export function useVentasEjecutivo() {
 
   const totalVentas = useMemo(() => pedidos.reduce((a, p) => a + getPedidoTotal(p), 0), [pedidos]);
   const cuentasPorCobrar = useMemo(() => clientes.reduce((a, c) => a + toNum(c.saldo_pendiente), 0), [clientes]);
-  const carteraVencida = useMemo(() => clientes.reduce((a, c) => a + toNum((c as any).cartera_vencida), 0), [clientes]);
-  const limiteCartera = useMemo(() => clientes.reduce((a, c) => a + toNum((c as any).limite_credito), 0), [clientes]);
+  const carteraVencida = useMemo(() => clientes.reduce((a, c) => a + toNum(c.cartera_vencida), 0), [clientes]);
+  const limiteCartera = useMemo(() => clientes.reduce((a, c) => a + toNum(c.limite_credito), 0), [clientes]);
 
   // Semáforo: cartera vencida supera el 40% del límite de crédito total
   const alertaCartera = limiteCartera > 0 && carteraVencida / limiteCartera > 0.4;

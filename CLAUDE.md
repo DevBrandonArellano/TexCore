@@ -36,7 +36,7 @@ Rules:
   - Packaging equivalences (e.g. Yarns: 1 baño = 15 fundas = 225 conos; Fabrics: 1 baño = 600m) are **configurable reference examples per sede**, not system-wide hardcoded constants.
   - Fabrics use `DECIMAL(12, 4)` in `cantidad_metros`.
   - Native T-SQL CHECK constraints (`database/V2__optimize_sqlserver2022_texcore.sql`).
-- **Stored Procedures & Master Seeding**:
-  - Stored procedures are maintained in `database/V3__optimize_stored_procedures_texcore.sql`.
+- **Reporting, Queries & Master Seeding**:
+  - Reporting queries are served via Django ORM and `internal_api` with native SQL Server indexes (V2, V4, V5); legacy stored procedures were eliminated as dead code.
   - Execute queries in Read Committed Snapshot Isolation (RCSI) mode.
   - `python manage.py seed_production_masters` creates RBAC groups, permissions and initial `admin` account without pre-creating fake Sedes or Areas. The **System Administrator** creates real Sedes and Areas upon initial system startup.

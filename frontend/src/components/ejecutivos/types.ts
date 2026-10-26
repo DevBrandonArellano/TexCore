@@ -18,10 +18,12 @@ export interface KpiEjecutivo {
     tiempo_promedio_lote_min: number;
   };
   mrp: {
-    ocs_pendientes: number;
-    ocs_aprobadas: number;
-    ocs_rechazadas: number;
-    productos_en_deficit: number;
+    /** Sugerencias de compra vigentes (informativas). */
+    sugerencias_compra: number;
+    /** De la última ejecución completada de cada sede. */
+    productos_a_producir: number;
+    /** Fecha ISO de la ejecución más reciente, o null si nunca se calculó. */
+    ultima_ejecucion: string | null;
   };
   stock: { productos_bajo_minimo: number };
   cartera: {

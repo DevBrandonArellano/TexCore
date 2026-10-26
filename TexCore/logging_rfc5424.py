@@ -22,13 +22,13 @@ from __future__ import annotations
 import logging
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # ---------------------------------------------------------------------------
 # Constantes de protocolo
 # ---------------------------------------------------------------------------
 
-# Private Enterprise Number placeholder (IANA not registered — uso interno)
+# Marcador de Private Enterprise Number (IANA no registrado — uso interno)
 SD_ID = "texcore@32473"
 
 # Facility 16 = local0 → backend Django principal
@@ -42,7 +42,7 @@ _SEVERITY: dict[int, int] = {
     logging.INFO: 6,  # INFORMATIONAL — mensaje informativo
     logging.DEBUG: 7,  # DEBUG         — mensaje de debug
 }
-_SEVERITY_DEFAULT = 5    # NOTICE — para niveles no mapeados
+_SEVERITY_DEFAULT = 5  # NOTICE — para niveles no mapeados
 
 # Valores de cabecera resueltos una sola vez al importar el módulo
 _HOSTNAME: str = socket.gethostname()[:255]
@@ -52,6 +52,7 @@ _PROCID: str = str(os.getpid())
 # ---------------------------------------------------------------------------
 # Formatter principal
 # ---------------------------------------------------------------------------
+
 
 class RFC5424Formatter(logging.Formatter):
     """
@@ -73,10 +74,9 @@ class RFC5424Formatter(logging.Formatter):
     ) -> None:
         super().__init__()
         self._facility = facility
-        self._app_name = (
-            app_name
-            or os.environ.get("APP_NAME", "texcore-backend")
-        )[:48]  # RFC 5424 §6.2.5 — max 48 chars
+        self._app_name = (app_name or os.environ.get("APP_NAME") or "texcore-backend")[
+            :48
+        ]  # RFC 5424 §6.2.5 — máx. 48 caracteres
 
     # ------------------------------------------------------------------
     # Interfaz pública
@@ -90,10 +90,7 @@ class RFC5424Formatter(logging.Formatter):
         sd = self._structured_data(record)
         msg = self._message(record)
 
-        return (
-            f"<{pri}>1 {timestamp} {_HOSTNAME} {self._app_name} "
-            f"{_PROCID} {msgid} {sd} {msg}"
-        )
+        return f"<{pri}>1 {timestamp} {_HOSTNAME} {self._app_name} {_PROCID} {msgid} {sd} {msg}"
 
     # ------------------------------------------------------------------
     # Métodos privados
@@ -107,7 +104,7 @@ class RFC5424Formatter(logging.Formatter):
     @staticmethod
     def _timestamp(created: float) -> str:
         """ISO 8601 UTC con precisión de milisegundos — RFC 5424 §6.2.3."""
-        dt = datetime.fromtimestamp(created, tz=timezone.utc)
+        dt = datetime.fromtimestamp(created, tz=UTC)
         return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
     @staticmethod

@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Skeleton } from '../ui/skeleton';
-import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { createLogger } from '../../lib/logger';
 import { getApiErrorMessage } from '../../lib/apiError';
-import type { OrdenProduccion } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+import type { OrdenProduccion, RequisitoMaterial, RequisitosOrden } from '../../lib/types';
 
-const logger = createLogger('ManageOrdenesProduccion');
+/** Cantidad en formato de Ecuador, sin ceros de relleno: '60.000' → '60', '0.600' → '0,6'. */
+const cantidad = (valor: number | string) => Number(valor).toLocaleString('es-EC', { maximumFractionDigits: 3 });
+
+const peso = (valor: number | string | null) => (valor === null ? 'Sin peso requerido' : `${cantidad(valor)} kg`);
 
 interface RequisitosMaterialesDialogProps {
   open: boolean;
@@ -19,40 +23,36 @@ interface RequisitosMaterialesDialogProps {
   orden: OrdenProduccion | null;
 }
 
+/**
+ * TEX-28: materiales que necesita la orden para completarse, con el mismo cálculo que el
+ * MRP. Muestra el stock libre en la bodega de la orden y señala lo que falta (CA-2); los
+ * químicos descargados al crearla aparecen como ya descontados.
+ */
 function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: RequisitosMaterialesDialogProps) {
-  const [loading, setLoading] = useState(false);
-  const [requisitos, setRequisitos] = useState<any>(null);
+  const { datos: requisitos, cargando, error } = useCargaRemota<RequisitosOrden>(
+    async () => (await apiClient.get(`/ordenes-produccion/${orden?.id}/requisitos_materiales/`)).data,
+    orden?.id ?? null,
+    {
+      habilitado: open && !!orden,
+      mensajeDeError: (err) => getApiErrorMessage(err, 'Error al cargar los requisitos de materiales.'),
+    },
+  );
 
   useEffect(() => {
-    if (open && orden) {
-      const fetchRequisitos = async () => {
-        setLoading(true);
-        try {
-          const response = await apiClient.get(`/ordenes-produccion/${orden.id}/requisitos_materiales/`);
-          setRequisitos(response.data);
-        } catch (error) {
-          logger.warning('Fallo al cargar requisitos de materiales', {
-            operacion: 'fetchRequisitosDialog', orden_id: orden.id,
-          });
-          toast.error(getApiErrorMessage(error, "Error al cargar los requisitos de materiales."));
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchRequisitos();
-    }
-  }, [open, orden]);
+    if (error) toast.error(error);
+  }, [error]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Requisitos de Materiales para OP: {orden?.codigo}</DialogTitle>
           <DialogDescription>
-            Cálculo detallado de insumos basados en la fórmula y peso requerido.
+            Lo que falta del producto de entrada y los químicos de la fórmula, con el stock libre en la bodega
+            de la orden.
           </DialogDescription>
         </DialogHeader>
-        {loading ? (
+        {cargando ? (
           <div className="space-y-4 py-4">
             <Skeleton className="h-20 w-full" />
             <Skeleton className="h-20 w-full" />
@@ -62,17 +62,25 @@ function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: Requisito
             <div className="grid grid-cols-2 gap-4">
               <Card className="bg-slate-50 border-none">
                 <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Peso Requerido</div>
-                  <div className="text-2xl font-bold">{requisitos.peso_total_op} Kg</div>
+                  <div className="text-sm text-muted-foreground">Peso requerido</div>
+                  <div className="text-2xl font-bold">{peso(requisitos.peso_total_op)}</div>
                 </CardContent>
               </Card>
               <Card className="bg-slate-50 border-none">
                 <CardContent className="pt-6">
-                  <div className="text-sm text-muted-foreground">Total Insumos</div>
-                  <div className="text-2xl font-bold">{requisitos.requisitos.length}</div>
+                  <div className="text-sm text-muted-foreground">Pendiente de producir</div>
+                  <div className="text-2xl font-bold">{peso(requisitos.peso_pendiente)}</div>
                 </CardContent>
               </Card>
             </div>
+
+            {requisitos.advertencias.length > 0 && (
+              <ul className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+                {requisitos.advertencias.map((a, i) => (
+                  <li key={i} className="flex gap-1"><AlertTriangle className="w-3.5 h-3.5 shrink-0" />{a}</li>
+                ))}
+              </ul>
+            )}
 
             <div className="border rounded-lg overflow-hidden">
               <Table>
@@ -80,21 +88,28 @@ function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: Requisito
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Cantidad</TableHead>
+                    <TableHead className="text-right">Requerido</TableHead>
+                    <TableHead className="text-right">Disponible</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {requisitos.requisitos.map((req: any, i: number) => (
-                    <TableRow key={i}>
-                      <TableCell className="font-medium">{req.producto_nombre}</TableCell>
+                  {requisitos.requisitos.map((req) => (
+                    <TableRow key={req.producto_id}>
                       <TableCell>
-                        <Badge variant={req.es_base ? "default" : "secondary"}>
-                          {req.tipo === 'quimico' ? '🧪 Químico' : '🧶 Materia Prima'}
+                        <div className="font-medium">{req.producto_nombre}</div>
+                        <div className="text-xs text-muted-foreground">{req.producto_codigo}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={req.es_base ? 'default' : 'secondary'}>
+                          {req.es_base ? 'Producto de entrada' : 'Químico'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {req.cantidad_requerida} {req.unidad}
+                        {cantidad(req.cantidad_requerida)} {req.unidad}
                       </TableCell>
+                      <TableCell className="text-right font-mono">{cantidad(req.stock_disponible)}</TableCell>
+                      <TableCell><EstadoRequisito requisito={req} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -108,6 +123,14 @@ function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: Requisito
       </DialogContent>
     </Dialog>
   );
+}
+
+function EstadoRequisito({ requisito }: { requisito: RequisitoMaterial }) {
+  if (requisito.ya_descontado) return <Badge variant="outline">Ya descontado</Badge>;
+  if (Number(requisito.faltante) > 0) {
+    return <Badge variant="destructive">Falta {cantidad(requisito.faltante)} {requisito.unidad}</Badge>;
+  }
+  return <Badge variant="outline" className="border-green-600 text-green-700">Suficiente</Badge>;
 }
 
 export const RequisitosMaterialesDialog = React.memo(RequisitosMaterialesDialogImpl);

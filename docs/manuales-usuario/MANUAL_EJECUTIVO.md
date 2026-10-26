@@ -20,19 +20,31 @@ En la cabecera del panel pueden ajustarse dos filtros que aplican a la mayoría 
 KPIs consolidados en tarjetas: producción, MRP, stock e inventario, y cartera vencida — la fotografía general del negocio.
 
 ### Producción
-Estado de las Órdenes de Producción por sede y una gráfica de la serie temporal de kilogramos producidos por día.
+Estado de las Órdenes de Producción por sede, una gráfica de los kilogramos producidos por día (con el selector **Últimos 7 / 15 / 30 / 90 días** o un rango de fechas) y la producción por producto (código, número de lotes y kg).
 
 ### MRP
-Requerimientos de materiales pendientes y las órdenes de compra sugeridas por el sistema.
+**Planificación de Materiales (MRP)**, con tres indicadores: **Sugerencias de compra**, **Productos a producir** y **Última ejecución MRP**. Usa el selector de sede del panel: con *Todas las sedes*, **Ejecutar MRP (todas las sedes)** calcula cada sede; con una sede elegida, solo esa.
+
+El MRP se calcula **por sede**. El botón **Ejecutar MRP** recalcula todo con las órdenes de producción abiertas, los pedidos pendientes y el stock actual, y en segundos muestra el resultado:
+
+- **Última ejecución**: fecha, quién la lanzó, cuántas sugerencias y productos a producir dejó y sus **advertencias** (por ejemplo, las corridas continuas, que no tienen peso requerido y no se calculan).
+- **Sugerencias de compra**: por cada material comprado (materia prima, químicos), lo que piden las órdenes abiertas, su stock mínimo, lo disponible y lo **a comprar** (requerido + mínimo − disponible). Son **informativas**: la compra se gestiona fuera del sistema. Los químicos que ya se descontaron al crear una orden no se vuelven a pedir.
+- **Requerimientos por orden**: qué orden pide cada material, cuánto y para qué fecha.
+- **Necesidad de producción**: los productos fabricados (hilo, tela) que hay que producir para cubrir los pedidos pendientes, lo que piden otras órdenes y el stock mínimo, descontando lo disponible y lo que ya está en producción. El Jefe de Planta la usa en el Plan Maestro (MTS).
 
 ### Stock
-Stock actual e historial de alertas de stock bajo mínimo — a diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes, no solo las asignadas.
+Cuatro indicadores: **Productos** y **Bodegas** con existencias, **Stock Total** y **Alertas de Stock**. Debajo, **Stock por Bodega** y **Productos con mayor déficit de stock** (actual, mínimo y faltante), con buscador. A diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes (o las de la sede elegida en el filtro).
+
+Al hacer clic en una barra de **Stock por Bodega** se abre el detalle de esa bodega: producto, lote y cantidad, paginado. Los totales los calcula el servidor, así que el panel responde igual con años de operación.
 
 ### Ventas
-Pedidos, estado de la cartera y el listado completo de clientes, sin la restricción por vendedor que tiene un Vendedor normal.
+Pedidos, estado de la cartera y el listado completo de clientes, sin la restricción por vendedor que tiene un Vendedor normal. El filtro **Vendedor** (por defecto, *Todos los vendedores*) acota los pedidos a los de un vendedor.
+
+### Ficha de lote
+Al abrir un lote se ven, además del resumen y los movimientos, sus **Consumos** (lotes de origen consumidos), sus **Materias primas y costos** y su **Costo** (formato F0-002, con el total).
 
 ### Reportes
-Permite descargar 6 reportes gerenciales en Excel para el período seleccionado:
+Elija **Fecha inicio** y **Fecha fin** (aplican a todos los reportes con fecha) y pulse **Descargar** en el reporte que necesite. Son 6 reportes gerenciales en Excel:
 1. **Ventas del período**
 2. **Top clientes**
 3. **Deudores / cartera**
@@ -44,7 +56,7 @@ Mientras se genera una descarga, todos los botones de exportación quedan deshab
 
 ## 5. Reglas que debe conocer
 
-- El acceso de este rol es **exclusivamente de lectura** — no se mostrarán botones para crear, editar o eliminar en ninguna pestaña.
+- El acceso de este rol es **de lectura**: no hay botones para crear, editar o eliminar registros. La única acción disponible es **Ejecutar MRP**, que solo recalcula las sugerencias de compra y la necesidad de producción.
 - Puede consultarse información de todas las sedes, no solo de una en particular.
 
 ## 6. Preguntas frecuentes

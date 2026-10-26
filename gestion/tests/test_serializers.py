@@ -24,40 +24,40 @@ class AreaNombreValidatorTestCase(TestCase):
 
     def test_nombre_dado_letras_y_acentos_cuando_valida_entonces_ok(self):
         # EP válida: letras, Ñ, acentos y espacios
-        s = AreaSerializer(data={'nombre': 'Tintorería Ñañez', 'sede': self.sede.id})
+        s = AreaSerializer(data={"nombre": "Tintorería Ñañez", "sede": self.sede.id})
         self.assertTrue(s.is_valid(), s.errors)
 
     def test_nombre_dado_alfanumerico_cuando_valida_entonces_ok(self):
-        s = AreaSerializer(data={'nombre': 'Area 12', 'sede': self.sede.id})
+        s = AreaSerializer(data={"nombre": "Area 12", "sede": self.sede.id})
         self.assertTrue(s.is_valid(), s.errors)
 
     def test_nombre_dado_emoji_cuando_valida_entonces_invalido(self):
         # EP inválida: caracteres fuera del set permitido
-        s = AreaSerializer(data={'nombre': 'Area 🚀', 'sede': self.sede.id})
+        s = AreaSerializer(data={"nombre": "Area 🚀", "sede": self.sede.id})
         self.assertFalse(s.is_valid())
-        self.assertIn('nombre', s.errors)
+        self.assertIn("nombre", s.errors)
 
     def test_nombre_dado_simbolos_cuando_valida_entonces_invalido(self):
-        s = AreaSerializer(data={'nombre': 'Area@#$', 'sede': self.sede.id})
+        s = AreaSerializer(data={"nombre": "Area@#$", "sede": self.sede.id})
         self.assertFalse(s.is_valid())
-        self.assertIn('nombre', s.errors)
+        self.assertIn("nombre", s.errors)
 
 
 class DosificacionSerializerTestCase(TestCase):
-    """validate_kg_tela / validate_relacion_bano: deben ser > 0."""
+    """validate_peso / validate_litros: deben ser > 0 (spec 2026-09-24 D3)."""
 
     def test_dosificacion_dado_valores_positivos_cuando_valida_entonces_ok(self):
-        s = DosificacionSerializer(data={'kg_tela': '100.000', 'relacion_bano': '10.00'})
+        s = DosificacionSerializer(data={"peso": "100.000", "litros": "1000.00"})
         self.assertTrue(s.is_valid(), s.errors)
 
-    def test_dosificacion_dado_kg_tela_cero_cuando_valida_entonces_invalido(self):
-        # BVA: kg_tela = 0 (frontera) -> inválido
-        s = DosificacionSerializer(data={'kg_tela': '0.000', 'relacion_bano': '10.00'})
+    def test_dosificacion_dado_peso_cero_cuando_valida_entonces_invalido(self):
+        # BVA: peso = 0 (frontera) -> inválido
+        s = DosificacionSerializer(data={"peso": "0.000", "litros": "1000.00"})
         self.assertFalse(s.is_valid())
-        self.assertIn('kg_tela', s.errors)
+        self.assertIn("peso", s.errors)
 
-    def test_dosificacion_dado_relacion_cero_cuando_valida_entonces_invalido(self):
-        # BVA: relacion_bano = 0 (frontera) -> inválido
-        s = DosificacionSerializer(data={'kg_tela': '100.000', 'relacion_bano': '0.00'})
+    def test_dosificacion_dado_litros_cero_cuando_valida_entonces_invalido(self):
+        # BVA: litros = 0 (frontera) -> inválido
+        s = DosificacionSerializer(data={"peso": "100.000", "litros": "0.00"})
         self.assertFalse(s.is_valid())
-        self.assertIn('relacion_bano', s.errors)
+        self.assertIn("litros", s.errors)

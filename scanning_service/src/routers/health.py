@@ -2,6 +2,7 @@
 Router de health check.
 Verifica conectividad con Django Internal API con cliente HTTP reutilizable (connection pool).
 """
+
 import os
 
 import httpx
@@ -30,4 +31,4 @@ def health_check():
         raise HTTPException(
             status_code=503,
             detail=f"Django API unreachable: {exc}",
-        )
+        ) from exc

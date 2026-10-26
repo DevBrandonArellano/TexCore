@@ -1,542 +1,690 @@
 # =============================================================================
-# TexCore — Pipeline GitLab CI/CD
+# TEXCORE — PIPELINE DE GITLAB CI (plataforma principal; GitHub es solo un espejo)
+# La tesis (§5.3) lo define así: integración y análisis estático → pruebas con base de datos
+# efímera → construcción de imágenes hacia el GitLab Container Registry → staging →
+# producción con rollback manual de un clic. Decisión: docs/arquitectura/ADR/ADR_014.
+# Guía de instalación y variables: docs/arquitectura/GUIA_GITLAB.md.
 #
-# Estándares aplicados:
-#   · ISO/IEC 25010  — Calidad del software
-#   · ISO/IEC 27001  — Seguridad (SAST, SCA, image scanning)
-#   · OWASP DevSecOps Maturity Model — Shift-left security
+# Runners (infrastructure/gitlab/):
+#   sin etiqueta  texcore-ci       lint, pruebas, auditoría y escaneo; sin socket de Docker
+#   staging       texcore-staging  construcción y staging efímero; solo ramas protegidas
+#   produccion    texcore-produccion  en la VM de producción (ejecutor shell); solo master
 #
-# Orden del pipeline (buena práctica):
-#   lint → test → build → scan → deploy → health-check → rollback
-#
-# Principios aplicados:
-#   · SRP (SOLID): cada job tiene una responsabilidad única
-#   · Fail-fast: lint y tests bloquean el build si fallan
-#   · Inmutabilidad: imágenes identificadas por SHA de commit (no :latest mutable)
-#   · Rollback explícito con verificación previa
+# Variables (Settings > CI/CD > Variables; las secretas, protegidas y enmascaradas):
+#   COSIGN_PRIVATE_KEY (archivo) y COSIGN_PASSWORD · GITLAB_CA_CRT (archivo, CA del servidor)
+#   PRODUCCION_HOST y TEXCORE_DIR · GITLAB_TOKEN (read_api) · DEPLOY_NOTIFY_WEBHOOK (opcional)
 # =============================================================================
 
 stages:
-  - lint        # Análisis estático — falla rápido antes de consumir recursos
-  - test        # Tests unitarios e integración — todos los servicios
-  - build       # Build de imágenes Docker — solo si tests pasaron
-  - scan        # Escaneo de seguridad en imágenes (Trivy)
-  - deploy      # Despliegue en servidor on-premise
-  - health-check
+  - lint
+  - test
+  - build
+  - scan
+  - staging
+  - deploy
   - rollback
 
-# =============================================================================
-# VARIABLES GLOBALES
-# =============================================================================
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  # Imágenes de los jobs fijadas por digest (nunca `latest`): una actualización es una decisión.
+  image: python:3.12-bookworm@sha256:5560e9ab8709f459489e5b8aa696eda8a07ef821e14bb122be62d91234bfa98b
+  interruptible: true
+
 variables:
-  DOCKER_IMAGE_BACKEND:       "$CI_REGISTRY_IMAGE/backend"
-  DOCKER_IMAGE_NGINX:         "$CI_REGISTRY_IMAGE/nginx"
-  DOCKER_IMAGE_REPORTING:     "$CI_REGISTRY_IMAGE/reporting_excel"
-  DOCKER_IMAGE_PRINTING:      "$CI_REGISTRY_IMAGE/printing_service"
-  DOCKER_IMAGE_SCANNING:      "$CI_REGISTRY_IMAGE/scanning_service"
-  PIP_CACHE_DIR:              "$CI_PROJECT_DIR/.cache/pip"
-  PYTHON_VERSION:             "3.12"
-  NODE_VERSION:               "20"
-  # Umbral de severidad para Trivy (CRITICAL,HIGH bloquean el deploy)
-  TRIVY_SEVERITY:             "CRITICAL,HIGH"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  GIT_DEPTH: "1"
 
-# =============================================================================
-# CACHÉ GLOBAL
-# =============================================================================
 cache:
-  key: "$CI_COMMIT_REF_SLUG"
+  key:
+    files:
+      - requirements.txt
   paths:
-    - .cache/pip/
-    - frontend/node_modules/
+    - .cache/pip
+
+# Integración: ramas y merge requests; si la rama tiene un MR abierto corre el del MR.
+.reglas_ci: &reglas_ci
+  - if: $CI_PIPELINE_SOURCE == "schedule"
+    when: never
+  - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+    when: never
+  - if: $CI_COMMIT_BRANCH
+
+# Claves de cifrado de prueba (RS-19): solo para la suite; no protegen nada real.
+.entorno_django_test: &entorno_django_test
+  DJANGO_SETTINGS_MODULE: TexCore.settings_test
+  DEBUG: "0"
+  SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" # pragma: allowlist secret
+  FIELD_ENCRYPTION_KEYS: "XlejxlU-TjcZMY6ub4Qy9Y2sSvQcp17J3DBw0uh6fv8=" # pragma: allowlist secret
+  BLIND_INDEX_KEY: "-xCQ08_ZmqAiZIQIPIOegGJZj1XY09_QZJX7LNuqzfM" # pragma: allowlist secret
+
+# La imagen de herramientas (docker, compose, cosign, jq, bash) se construye en el equipo del
+# runner: bash infrastructure/gitlab/construir_ci_tools.sh
+.imagen_herramientas: &imagen_herramientas
+  image: texcore/ci-tools:1
+
+.script_pip_audit: &script_pip_audit
+  - pip install pip-audit==2.10.1
+  - mkdir -p reports
+  - |
+    estado=0
+    for req in requirements.txt reporting_excel/requirements.txt \
+               printing_service/requirements.txt scanning_service/requirements.txt; do
+      echo "--- pip-audit $req"
+      informe="reports/pip-audit-$(dirname "$req" | tr './' '_').json"
+      pip-audit -r "$req" --progress-spinner off --format json -o "$informe" || estado=1
+      pip-audit -r "$req" --progress-spinner off || true
+    done
+    exit "$estado"
+
+.script_npm_audit: &script_npm_audit
+  - cd frontend
+  - npm audit --omit=dev --audit-level=moderate
+  - npm audit --audit-level=high || echo "AVISO - hay vulnerabilidades HIGH en dependencias de desarrollo"
+  - npm audit --audit-level=critical
 
 # =============================================================================
-# ANCHORS — Reutilización de configuración (DRY)
+# LINT — análisis estático (Build & Linting, §5.3 fase 1)
 # =============================================================================
-.python_base: &python_base
-  image: python:3.12-slim
-  before_script:
-    - pip install --upgrade pip --quiet
 
-.docker_base: &docker_base
-  image: docker:26.1.4
-  services:
-    - docker:26.1.4-dind
-  variables:
-    DOCKER_TLS_CERTDIR: "/certs"
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-
-.only_deployable: &only_deployable
-  only:
-    - main
-
-.on_all_branches: &on_all_branches
-  only:
-    - main
-    - staging
-    - merge_requests
-
-# =============================================================================
-# STAGE: LINT
-# =============================================================================
-lint:backend:
-  <<: *python_base
-  <<: *on_all_branches
+ramas:politica:
   stage: lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
   script:
-    - pip install flake8==7.2.0 bandit==1.8.3 detect-secrets==1.5.0 --quiet
-    - echo "--- flake8: Estilo PEP 8 ---"
+    - '[ "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" = "staging" ] || { echo "master solo acepta MR desde staging (origen $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME)."; exit 1; }'
+
+lint:pipeline:
+  stage: lint
+  rules: *reglas_ci
+  script:
+    - pip install yamllint==1.35.1 shellcheck-py==0.11.0.1
+    - 'yamllint -d "{extends: relaxed, rules: {line-length: disable}}" .gitlab-ci.yml'
+    - python -c "import json; json.load(open('renovate.json'))"
+    - shellcheck -S warning scripts/*.sh infrastructure/gitlab/*.sh infrastructure/docker/entrypoint.sh infrastructure/docker/preparar_bd.sh
+
+lint:backend:
+  stage: lint
+  rules: *reglas_ci
+  script:
+    - pip install -r requirements.txt ruff==0.16.10 detect-secrets==1.5.0 mypy==1.15.0 django-stubs==5.2.0 djangorestframework-stubs==3.16.0
+    - mkdir -p reports
+    # Ruff reemplaza a flake8 y bandit (ADR-015): estilo, errores y reglas de seguridad `S`.
+    - ruff check --output-format=gitlab --output-file=gl-code-quality-report.json --exit-zero .
+    - ruff check .
+    - ruff format --check --diff .
+    - git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
     - |
-      flake8 gestion/ inventory/ TexCore/ \
-        --max-line-length=120 \
-        --extend-ignore=E203,W503 \
-        --exclude=migrations/ \
-        --statistics \
-        --count
-    - echo "--- bandit: SAST seguridad ---"
-    - |
-      bandit -r gestion/ inventory/ reporting_excel/src/ \
-        --severity-level medium \
-        --confidence-level medium \
-        -x gestion/migrations,inventory/migrations \
-        --format txt
-    - echo "--- detect-secrets: credenciales hardcodeadas ---"
-    - detect-secrets scan --baseline .secrets.baseline
+      python - <<'PY'
+      import json
+      import sys
+      resultados = json.load(open(".secrets.baseline", encoding="utf-8"))["results"]
+      pendientes = [
+          f"{archivo}:{h['line_number']}"
+          for archivo, hallazgos in resultados.items()
+          for h in hallazgos
+          if h.get("is_secret") is not False
+      ]
+      for p in pendientes:
+          print(f"Hallazgo sin auditar o marcado como secreto real: {p}")
+      sys.exit(1 if pendientes else 0)
+      PY
+    - mypy --pretty gestion/ inventory/ internal_api/
   artifacts:
     when: always
     reports:
-      # GitLab puede mostrar el reporte en el MR si usas el formato correcto
-      codequality: reports/bandit-gl.json
-    paths:
-      - reports/
+      codequality: gl-code-quality-report.json
     expire_in: 30 days
 
-lint:frontend:
-  <<: *on_all_branches
+lint:istqb:
   stage: lint
-  image: node:20-alpine
-  cache:
-    key: "node-$CI_COMMIT_REF_SLUG"
-    paths:
-      - frontend/node_modules/
+  rules: *reglas_ci
   script:
-    - cd frontend
-    - npm ci --prefer-offline
-    - echo "--- TypeScript: verificación de tipos ---"
-    - npx tsc --noEmit
-    - echo "--- ESLint: análisis estático ---"
-    - npx eslint src/ --ext .ts,.tsx --max-warnings=0
+    # Convención de nombres ISTQB y técnicas declaradas en cada archivo de prueba (§5.3, p. 78).
+    - python scripts/auditar_convencion_pruebas.py
+
+lint:permisos:
+  stage: lint
+  rules: *reglas_ci
+  variables:
+    <<: *entorno_django_test
+    DJANGO_SETTINGS_MODULE: TexCore.settings_test_local
+  script:
+    # RNF-02: cada ruta con su permiso; falla si una ruta es pública fuera de la lista blanca.
+    - pip install -r requirements.txt
+    - python scripts/auditar_permisos_backend.py > permisos_rutas.csv
+  artifacts:
+    paths:
+      - permisos_rutas.csv
+    expire_in: 90 days
+
+sast:semgrep:
+  stage: lint
+  image:
+    name: semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b
+    entrypoint: [""]
+  rules: *reglas_ci
+  cache: []
+  script:
+    - semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt --metrics=off --gitlab-sast --output gl-sast-report.json .
+    - semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt --metrics=off --severity ERROR --error .
+  artifacts:
+    when: always
+    reports:
+      sast: gl-sast-report.json
+    expire_in: 30 days
 
 # =============================================================================
-# STAGE: TEST
+# TEST — base de datos efímera (§5.3 fase 2)
 # =============================================================================
+
 test:backend:
-  <<: *python_base
-  <<: *on_all_branches
   stage: test
+  rules: *reglas_ci
   needs: [lint:backend]
   services:
-    - name: mcr.microsoft.com/mssql/server:2022-latest
+    - name: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718
       alias: sqlserver
+      variables:
+        ACCEPT_EULA: "Y"
+        MSSQL_SA_PASSWORD: "CI_Pass1234!" # pragma: allowlist secret
+        MSSQL_PID: "Developer"
+        # Sin tope, SQL Server reserva hasta el 80 % de la memoria del equipo, y este runner
+        # comparte equipo con GitLab y con el stack de TexCore (el OOM del 20-oct cerró el escritorio).
+        MSSQL_MEMORY_LIMIT_MB: "1024"
   variables:
-    # SQL Server service — GitLab CI pasa estas vars automáticamente al contenedor del servicio
-    ACCEPT_EULA: "Y"
-    MSSQL_SA_PASSWORD: "CI_Pass1234!"
-    MSSQL_PID: "Developer"
-    # Django
-    DJANGO_SETTINGS_MODULE: "TexCore.settings_test"
-    DEBUG: "0"
-    SECRET_KEY: "ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx"
+    <<: *entorno_django_test
+    ALLOWED_HOSTS: "localhost,127.0.0.1"
     CORS_ALLOWED_ORIGINS: "http://localhost:3000"
     CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
-    # Conexión BD — hostname = alias del service container
     DB_ENGINE: "mssql"
     DB_NAME: "texcore_ci"
     DB_USER: "sa"
-    DB_PASSWORD: "CI_Pass1234!"
+    DB_PASSWORD: "CI_Pass1234!" # pragma: allowlist secret
     DB_HOST: "sqlserver"
     DB_PORT: "1433"
     DB_DRIVER: "ODBC Driver 18 for SQL Server"
   script:
-    - echo "--- Instalando ODBC Driver 18 para SQL Server ---"
-    - apt-get update -q && apt-get install -y -q curl gnupg apt-transport-https
-    - |
-      curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-        | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-    - |
-      . /etc/os-release
-      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
-        | tee /etc/apt/sources.list.d/mssql-release.list
-    - apt-get update -q && ACCEPT_EULA=Y apt-get install -y -q msodbcsql18
-    - pip install -r requirements.txt --quiet
-    - mkdir -p reports
-    # Claves RSA de prueba (INTERNAL_JWT): las vistas que generan tokens de servicio
-    # (reporting_proxy, internal_api) las requieren; sin ellas jwt.encode(RS256) falla
-    # y los tests devuelven HTTP 500. Se reutilizan las versionadas en .env.test
-    # (mismo patrón POSIX que scripts/run_backend_tests.sh).
+    - apt-get update -q && apt-get install -y -q --no-install-recommends curl gnupg unixodbc unixodbc-dev
+    - curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+    - echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list
+    - apt-get update -q && ACCEPT_EULA=Y apt-get install -y -q --no-install-recommends msodbcsql18
+    - pip install -r requirements.txt
     - export INTERNAL_JWT_PRIVATE_KEY="$(grep '^INTERNAL_JWT_PRIVATE_KEY=' .env.test | cut -d= -f2- | sed 's/^"//; s/"$//')"
     - export INTERNAL_JWT_PUBLIC_KEY="$(grep '^INTERNAL_JWT_PUBLIC_KEY=' .env.test | cut -d= -f2- | sed 's/^"//; s/"$//')"
-    - echo "--- Esperando a que SQL Server esté listo ---"
+    - mkdir -p reports
     - |
-      for attempt in $(seq 1 30); do
-        if python3 -c "import pyodbc; pyodbc.connect('DRIVER=ODBC Driver 18 for SQL Server;SERVER=sqlserver,1433;UID=sa;PWD=CI_Pass1234!;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=3').close()" 2>/dev/null; then
-          echo "SQL Server listo (intento $attempt)"; break
+      for intento in $(seq 1 30); do
+        if python -c "import pyodbc; pyodbc.connect('DRIVER=ODBC Driver 18 for SQL Server;SERVER=sqlserver,1433;UID=sa;PWD=CI_Pass1234!;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=3').close()" 2>/dev/null; then
+          echo "SQL Server listo (intento $intento)"; break
         fi
-        echo "Intento $attempt/30 — esperando 3s..."; sleep 3
-        [ "$attempt" -eq 30 ] && { echo "Timeout: SQL Server no disponible"; exit 1; }
+        [ "$intento" -eq 30 ] && { echo "SQL Server no responde"; exit 1; }
+        sleep 3
       done
-    - echo "--- Django tests: gestion + inventory + internal_api ---"
-    # Usar las apps completas (no solo .tests) para descubrir también los
-    # tests de raíz (tests_integrados.py, tests_jefe_area.py, etc.).
-    - |
-      coverage run --rcfile=.coveragerc manage.py test \
-        gestion \
-        inventory \
-        internal_api \
-        --verbosity=2
-    - echo "--- Cobertura (umbral ≥89%, objetivo 90%) ---"
+    - coverage run --rcfile=.coveragerc manage.py test gestion inventory internal_api --verbosity=2 --failfast
+    # El umbral (fail_under) vive en .coveragerc: ISO/IEC 25010 y el 75 % mínimo de la tesis.
     - coverage report --rcfile=.coveragerc
-    - coverage xml --rcfile=.coveragerc
-    - coverage html --rcfile=.coveragerc
-  coverage: '/TOTAL.*\s+(\d+%)$/'
+    - coverage xml --rcfile=.coveragerc --fail-under=0
+    - coverage html --rcfile=.coveragerc --fail-under=0
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+(?:\.\d+)?)%/'
   artifacts:
     when: always
+    paths:
+      - reports/coverage_html/
     reports:
       coverage_report:
         coverage_format: cobertura
         path: reports/coverage.xml
-    paths:
-      - reports/coverage.xml
-      - reports/coverage_html/
-    expire_in: 30 days
+    expire_in: 14 days
 
-test:reporting-excel:
-  <<: *python_base
-  <<: *on_all_branches
+test:scanning:
   stage: test
-  needs: [lint:backend]
+  rules: *reglas_ci
+  variables:
+    PYTHONPATH: "."
+    DJANGO_INTERNAL_URL: "http://mock-django:8000"
+    SERVICE_NAME: "scanning_ci"
+    SERVICE_SECRET: "ci-test-secret-not-for-production" # pragma: allowlist secret
+    INTERNAL_JWT_PUBLIC_KEY: "ci-test-placeholder"
   script:
-    - pip install -r reporting_excel/requirements.txt --quiet
-    - pip install pytest pytest-cov httpx --quiet
-    - cd reporting_excel
-    - |
-      pytest tests/ -v \
-        --tb=short \
-        --cov=src \
-        --cov-report=term-missing \
-        --cov-fail-under=90
+    - pip install -r scanning_service/requirements.txt
+    - cd scanning_service && pytest -v
+  coverage: '/Total coverage: (\d+(?:\.\d+)?)%/'
 
-test:printing-service:
-  <<: *python_base
-  <<: *on_all_branches
+test:printing:
   stage: test
-  needs: [lint:backend]
+  rules: *reglas_ci
+  variables:
+    PYTHONPATH: "."
   script:
-    - pip install -r printing_service/requirements.txt --quiet
-    - pip install pytest pytest-cov httpx --quiet
-    - cd printing_service
-    - |
-      pytest tests/ -v \
-        --tb=short \
-        --cov=src \
-        --cov-report=term-missing \
-        --cov-fail-under=95
+    - grep -v -i '^weasyprint' printing_service/requirements.txt > printing_service/requirements-ci.txt
+    - pip install -r printing_service/requirements-ci.txt pytest pytest-cov
+    - cd printing_service && pytest -v
+  coverage: '/Total coverage: (\d+(?:\.\d+)?)%/'
 
-test:scanning-service:
-  <<: *python_base
-  <<: *on_all_branches
+test:reporting:
   stage: test
-  needs: [lint:backend]
+  rules: *reglas_ci
+  variables:
+    PYTHONPATH: "."
   script:
-    - |
-      pip install \
-        fastapi==0.109.2 \
-        pydantic==2.6.2 \
-        sqlalchemy==2.0.27 \
-        httpx \
-        pytest \
-        --quiet
-    - cd scanning_service
-    - pytest tests/ -v --tb=short
+    - pip install -r reporting_excel/requirements.txt pytest pytest-cov pytest-asyncio
+    - cd reporting_excel && pytest -v
+  coverage: '/Total coverage: (\d+(?:\.\d+)?)%/'
 
 test:frontend:
-  <<: *on_all_branches
   stage: test
-  needs: [lint:frontend]
-  image: node:20-alpine
+  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  rules: *reglas_ci
+  variables:
+    # Vitest llegó a usar 3 GB en este equipo compartido: se acota el heap de Node a 1,5 GB.
+    NODE_OPTIONS: "--max-old-space-size=1536"
   cache:
-    key: "node-$CI_COMMIT_REF_SLUG"
+    key:
+      files:
+        - frontend/package-lock.json
     paths:
-      - frontend/node_modules/
+      - frontend/.npm
   script:
     - cd frontend
-    - npm ci --prefer-offline
-    - echo "--- Vitest: tests unitarios + cobertura ---"
-    - npm run test:coverage
-    - echo "--- Build de producción ---"
+    - npm ci --cache .npm --prefer-offline
+    - npx tsc --noEmit
+    - npm run typecheck:tests
+    - npm run lint
+    # 2 procesos: sin límite, Vitest lanza uno por núcleo (16 aquí) y en el runner compartido
+    # las pruebas de interfaz excedían el tiempo máximo y usaban 3 GB. Con 2 tarda más, pero
+    # deja memoria libre para GitLab y el stack de TexCore.
+    - npx vitest run --coverage --maxWorkers=2
     - npm run build
+  coverage: '/All files\s*\|\s*(\d+(?:\.\d+)?)/'
   artifacts:
-    when: always
     paths:
       - frontend/dist/
-      - frontend/coverage/
     expire_in: 7 days
 
-test:dependency-audit:python:
-  <<: *python_base
-  <<: *on_all_branches
+audit:dependencias:
   stage: test
-  allow_failure: true  # Warning sin bloquear — puede haber CVEs sin fix disponible aún
-  script:
-    - pip install pip-audit --quiet
-    - mkdir -p reports
-    - echo "--- pip-audit: vulnerabilidades Python ---"
-    - pip-audit -r requirements.txt --format json -o reports/pip-audit.json || true
-    - pip-audit -r requirements.txt
+  rules: *reglas_ci
+  script: *script_pip_audit
   artifacts:
     when: always
     paths:
-      - reports/pip-audit.json
+      - reports/pip-audit-*.json
     expire_in: 30 days
 
-test:dependency-audit:node:
-  <<: *on_all_branches
+audit:npm:
   stage: test
-  allow_failure: true  # Warning sin bloquear — puede haber CVEs sin fix disponible aún
-  image: node:20-alpine
-  cache:
-    key: "node-$CI_COMMIT_REF_SLUG"
-    paths:
-      - frontend/node_modules/
-  script:
-    - cd frontend
-    - npm ci --prefer-offline
-    - echo "--- npm audit: vulnerabilidades Node ---"
-    - npm audit --audit-level=high
+  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  rules: *reglas_ci
+  script: *script_npm_audit
 
 # =============================================================================
-# STAGE: BUILD
-# (Solo en main — después de pasar todos los tests)
+# BUILD — las 6 imágenes desde cero hacia el GitLab Container Registry (§5.3 fase 3)
 # =============================================================================
-build:backend:
-  <<: *docker_base
-  <<: *only_deployable
+
+build:validacion:
   stage: build
+  <<: *imagen_herramientas
+  tags: [staging]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "staging"
+  needs: [lint:backend, test:backend]
+  script:
+    # Misma construcción que el release, sin publicar: el MR a master llega ya validado.
+    - docker build -f infrastructure/docker/Dockerfile.prod -t texcore/backend:ci-validate .
+    - docker build -f nginx/Dockerfile -t texcore/nginx:ci-validate .
+
+build:imagenes:
+  stage: build
+  <<: *imagen_herramientas
+  tags: [staging]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
   needs:
+    - lint:backend
+    - lint:istqb
+    - lint:permisos
+    - sast:semgrep
     - test:backend
-    - test:reporting-excel
-    - test:printing-service
-    - test:scanning-service
+    - test:scanning
+    - test:printing
+    - test:reporting
     - test:frontend
-  script:
-    - |
-      docker build \
-        -t "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA" \
-        -t "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_REF_SLUG" \
-        -f Dockerfile.prod \
-        --label "git-commit=$CI_COMMIT_SHA" \
-        --label "built-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        .
-    - docker push "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
-    - docker push "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_REF_SLUG"
-
-build:nginx:
-  <<: *docker_base
-  <<: *only_deployable
-  stage: build
-  needs:
-    - test:backend
-    - test:frontend
-  script:
-    - |
-      docker build \
-        -t "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA" \
-        -t "$DOCKER_IMAGE_NGINX:$CI_COMMIT_REF_SLUG" \
-        -f nginx/Dockerfile \
-        --label "git-commit=$CI_COMMIT_SHA" \
-        --label "built-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        .
-    - docker push "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
-    - docker push "$DOCKER_IMAGE_NGINX:$CI_COMMIT_REF_SLUG"
-
-build:reporting-excel:
-  <<: *docker_base
-  <<: *only_deployable
-  stage: build
-  needs: [test:reporting-excel]
-  script:
-    - |
-      docker build \
-        -t "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA" \
-        -f reporting_excel/Dockerfile \
-        reporting_excel/
-    - docker push "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA"
-
-build:printing-service:
-  <<: *docker_base
-  <<: *only_deployable
-  stage: build
-  needs: [test:printing-service]
-  script:
-    - |
-      docker build \
-        -t "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA" \
-        -f printing_service/Dockerfile \
-        printing_service/
-    - docker push "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA"
-
-build:scanning-service:
-  <<: *docker_base
-  <<: *only_deployable
-  stage: build
-  needs: [test:scanning-service]
-  script:
-    - |
-      docker build \
-        -t "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA" \
-        -f scanning_service/Dockerfile \
-        scanning_service/
-    - docker push "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA"
-
-# =============================================================================
-# STAGE: SCAN — Escaneo de vulnerabilidades en imágenes
-# ISO/IEC 27001 A.12.6.1 — Gestión de vulnerabilidades técnicas
-# =============================================================================
-scan:images:
-  <<: *only_deployable
-  stage: scan
-  needs:
-    - build:backend
-    - build:nginx
-  image:
-    name: aquasec/trivy:latest
-    entrypoint: [""]
+    - audit:dependencias
+    - audit:npm
+  parallel:
+    matrix:
+      - SERVICIO: db
+        IMAGEN: db
+        DOCKERFILE: database/Dockerfile
+        CONTEXTO: .
+      - SERVICIO: backend
+        IMAGEN: backend
+        DOCKERFILE: infrastructure/docker/Dockerfile.prod
+        CONTEXTO: .
+      - SERVICIO: nginx
+        IMAGEN: nginx
+        DOCKERFILE: nginx/Dockerfile
+        CONTEXTO: .
+      - SERVICIO: printing
+        IMAGEN: printing_service
+        DOCKERFILE: printing_service/Dockerfile
+        CONTEXTO: printing_service
+      - SERVICIO: scanning
+        IMAGEN: scanning_service
+        DOCKERFILE: scanning_service/Dockerfile
+        CONTEXTO: scanning_service
+      - SERVICIO: reporting_excel
+        IMAGEN: reporting_excel
+        DOCKERFILE: reporting_excel/Dockerfile
+        CONTEXTO: reporting_excel
   variables:
-    GIT_STRATEGY: none
+    SSL_CERT_FILE: $GITLAB_CA_CRT
   script:
-    - echo "--- Trivy: escaneo imagen backend ---"
-    - |
-      trivy image \
-        --exit-code 1 \
-        --severity "$TRIVY_SEVERITY" \
-        --no-progress \
-        --format table \
-        "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
-    - echo "--- Trivy: escaneo imagen nginx ---"
-    - |
-      trivy image \
-        --exit-code 1 \
-        --severity "$TRIVY_SEVERITY" \
-        --no-progress \
-        --format table \
-        "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
-  allow_failure: false  # CVEs CRITICAL/HIGH bloquean el deploy
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - REF="$CI_REGISTRY_IMAGE/$IMAGEN"
+    # Desde cero: nada de capas de otra rama; las bases ya van fijadas por digest en los Dockerfile.
+    - >
+      docker build --no-cache --pull -f "$DOCKERFILE"
+      --label "org.opencontainers.image.title=TexCore $IMAGEN"
+      --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      -t "$REF:$CI_COMMIT_SHA" -t "$REF:latest" "$CONTEXTO"
+    - docker push "$REF:$CI_COMMIT_SHA"
+    - docker push "$REF:latest"
+    - REFERENCIA="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$REF:$CI_COMMIT_SHA" | grep "^$REF@" | head -n 1)"
+    - test -n "$REFERENCIA" || { echo "No se obtuvo el digest de $REF"; exit 1; }
+    # Procedencia (predicado SLSA) y firma con el par de claves del proyecto. No hay registro
+    # público de transparencia: el servidor es interno (ADR-014).
+    - >
+      jq -n --arg uri "$CI_PROJECT_URL" --arg sha "$CI_COMMIT_SHA" --arg id "$CI_PIPELINE_URL" --arg ini "$CI_PIPELINE_CREATED_AT"
+      '{builder: {id: $id}, buildType: "https://docs.gitlab.com/ee/ci/", invocation: {configSource: {uri: $uri, digest: {sha1: $sha}, entryPoint: ".gitlab-ci.yml"}}, metadata: {buildInvocationId: $id, buildStartedOn: $ini}}'
+      > provenance.json
+    - cosign attest --yes --key "$COSIGN_PRIVATE_KEY" --tlog-upload=false --type slsaprovenance --predicate provenance.json "$REFERENCIA"
+    - cosign sign --yes --key "$COSIGN_PRIVATE_KEY" --tlog-upload=false "$REFERENCIA"
+    - echo "$SERVICIO=$REFERENCIA" > "imagen-$SERVICIO.env"
+  artifacts:
+    paths:
+      - imagen-$SERVICIO.env
+    expire_in: 90 days
+
+imagenes:unir:
+  stage: build
+  <<: *imagen_herramientas
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+  needs:
+    - job: build:imagenes
+      artifacts: true
+  script:
+    # Las 6 imágenes por digest: lo leen scan, staging y deploy.
+    - cat imagen-*.env > imagenes.env
+    - test "$(wc -l < imagenes.env)" -eq 6 || { echo "Se esperaban 6 imágenes"; cat imagenes.env; exit 1; }
+  artifacts:
+    paths:
+      - imagenes.env
+    expire_in: 90 days
 
 # =============================================================================
-# STAGE: DEPLOY
+# SCAN — Trivy sobre cada digest, antes de staging
 # =============================================================================
-deploy:
-  <<: *only_deployable
-  stage: deploy
-  tags:
-    - production  # Runner on-premise
+
+scan:trivy:
+  stage: scan
+  image:
+    name: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
   needs:
-    - scan:images
-    - build:reporting-excel
-    - build:printing-service
-    - build:scanning-service
+    - job: imagenes:unir
+      artifacts: true
+  cache: []
+  variables:
+    SSL_CERT_FILE: $GITLAB_CA_CRT
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
+  script:
+    - |
+      estado=0
+      while IFS='=' read -r servicio referencia; do
+        # backend y nginx en modo estricto; db y satélites ignoran lo que aún no tiene parche
+        # (los CVE de paquetes base Debian sin corrección publicada no se pueden arreglar).
+        opciones="--ignore-unfixed"
+        case "$servicio" in backend|nginx) opciones="" ;; esac
+        echo "--- Trivy $servicio"
+        # shellcheck disable=SC2086
+        trivy image --severity CRITICAL,HIGH --exit-code 1 $opciones --format json --output "trivy-$servicio.json" "$referencia" || estado=1
+      done < imagenes.env
+      exit "$estado"
+  artifacts:
+    when: always
+    paths:
+      - trivy-*.json
+    expire_in: 30 days
+
+# =============================================================================
+# STAGING — las 6 imágenes + SQL Server desechable + pruebas de humo (§5.3 fase 4)
+# =============================================================================
+
+staging:efimero:
+  stage: staging
+  <<: *imagen_herramientas
+  tags: [staging]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+  needs:
+    - job: imagenes:unir
+      artifacts: true
+    - scan:trivy
+  environment:
+    name: staging
+  variables:
+    SSL_CERT_FILE: $GITLAB_CA_CRT
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # Levanta, migra desde cero, siembra y prueba; al terminar borra todo. Si falla, no se despliega.
+    - bash scripts/staging_efimero.sh imagenes.env
+
+# =============================================================================
+# DEPLOY — producción, con un clic manual de un Maintainer (§5.3 fase 4)
+# =============================================================================
+
+deploy:produccion:
+  stage: deploy
+  tags: [produccion]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+      when: manual
+  allow_failure: false
+  needs:
+    - job: imagenes:unir
+      artifacts: true
+    - staging:efimero
   environment:
     name: production
-    url: http://$DEPLOY_HOST
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-  script:
-    - echo "Iniciando despliegue de versión $CI_COMMIT_SHA..."
-
-    # Crear backup del estado actual (imagen con SHA en lugar de solo :backup mutable)
-    - |
-      PREV_SHA=$(docker inspect --format='{{index .RepoTags 0}}' "$DOCKER_IMAGE_BACKEND:latest" 2>/dev/null | grep -oP '(?<=:)[a-f0-9]+' || echo "none")
-      echo "SHA previo: $PREV_SHA"
-      echo "$PREV_SHA" > /tmp/previous_sha.txt
-
-    - docker tag "$DOCKER_IMAGE_BACKEND:latest" "$DOCKER_IMAGE_BACKEND:backup" 2>/dev/null || true
-    - docker tag "$DOCKER_IMAGE_NGINX:latest"   "$DOCKER_IMAGE_NGINX:backup"   2>/dev/null || true
-
-    # Pull de nuevas imágenes
-    - docker pull "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
-    - docker pull "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
-    - docker pull "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA"
-    - docker pull "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA"
-    - docker pull "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA"
-
-    # Despliegue con rolling update
-    - export TAG="$CI_COMMIT_SHA"
-    - docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans
-
-    # Promover a :latest solo tras despliegue exitoso
-    - docker tag "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA" "$DOCKER_IMAGE_BACKEND:latest"
-    - docker tag "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"   "$DOCKER_IMAGE_NGINX:latest"
-
-    - echo "Despliegue de $CI_COMMIT_SHA completado."
-
-# =============================================================================
-# STAGE: HEALTH-CHECK — Verificación post-deploy con reintentos
-# =============================================================================
-health-check:
-  <<: *only_deployable
-  stage: health-check
-  needs: [deploy]
-  image: curlimages/curl:latest
+    url: https://$PRODUCCION_HOST
   variables:
-    GIT_STRATEGY: none
-    HEALTH_URL: "http://${DEPLOY_HOST:-localhost}/api/health/"
-    MAX_RETRIES: "12"
-    RETRY_INTERVAL: "10"
+    IMAGE_BASE: $CI_REGISTRY_IMAGE
+    SSL_CERT_FILE: $GITLAB_CA_CRT
   script:
-    - echo "Verificando salud del servicio en $HEALTH_URL..."
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - |
-      attempt=0
-      until curl -sf --max-time 5 "$HEALTH_URL" > /dev/null; do
-        attempt=$((attempt + 1))
-        if [ "$attempt" -ge "$MAX_RETRIES" ]; then
-          echo "❌ Health check fallido después de $((MAX_RETRIES * RETRY_INTERVAL))s"
-          exit 1
+      while IFS='=' read -r servicio referencia; do
+        echo "Verificando la firma de $servicio: $referencia"
+        cosign verify --key cosign.pub --insecure-ignore-tlog=true "$referencia" > /dev/null
+      done < imagenes.env
+    - bash scripts/desplegar_release.sh imagenes.env
+    - |
+      for intento in $(seq 1 15); do
+        if curl -skf --max-time 8 https://localhost/api/health/ | grep -q '"ok"' \
+           && curl -skf --max-time 8 https://localhost/api/scanning/health > /dev/null; then
+          echo "Producción saludable (intento $intento)."; exit 0
         fi
-        echo "  Intento $attempt/$MAX_RETRIES — esperando ${RETRY_INTERVAL}s..."
-        sleep "$RETRY_INTERVAL"
+        sleep 10
       done
-      echo "✅ Servicio respondiendo correctamente ($attempt intentos)."
-
-# =============================================================================
-# STAGE: ROLLBACK — Solo manual, verificando existencia de backup
-# =============================================================================
-rollback:
-  <<: *only_deployable
-  stage: rollback
-  tags:
-    - production
-  when: manual
-  variables:
-    GIT_STRATEGY: none
-  before_script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
-  script:
-    - echo "Iniciando rollback a imagen :backup..."
-
-    # Verificar que la imagen de backup existe antes de intentar rollback
+      echo "Producción no responde sana. Rollback: job rollback:produccion de este pipeline."
+      exit 1
+  after_script:
     - |
-      if ! docker inspect "$DOCKER_IMAGE_BACKEND:backup" > /dev/null 2>&1; then
-        echo "❌ No existe imagen de backup para el backend. Rollback abortado."
-        exit 1
+      if [ -n "${DEPLOY_NOTIFY_WEBHOOK:-}" ]; then
+        jq -n --arg r "$CI_JOB_STATUS" --arg s "$CI_COMMIT_SHORT_SHA" --arg a "$GITLAB_USER_LOGIN" --arg u "$CI_PIPELINE_URL" \
+          '{text: ("Despliegue de producción " + $r + " · " + $s + " · " + $a + " · " + $u)}' \
+          | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$DEPLOY_NOTIFY_WEBHOOK" || true
       fi
 
-    - export TAG=backup
-    - docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans
-    - echo "✅ Rollback completado. Verificando estado del servicio..."
+# =============================================================================
+# ROLLBACK — reversión manual en un clic (§5.3 fase 4)
+# =============================================================================
 
-    # Health check post-rollback
+rollback:produccion:
+  stage: rollback
+  tags: [produccion]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+      when: manual
+  allow_failure: true
+  needs: []
+  environment:
+    name: production
+    url: https://$PRODUCCION_HOST
+    action: access
+  variables:
+    IMAGE_BASE: $CI_REGISTRY_IMAGE
+    SSL_CERT_FILE: $GITLAB_CA_CRT
+    # Al lanzar el job: ROLLBACK_SHA (opcional; vacío = las imágenes :backup) y ROLLBACK_MOTIVO.
+    ROLLBACK_SHA: ""
+    ROLLBACK_MOTIVO: "sin motivo indicado"
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # El motivo lo escribe una persona: solo se usa como argumento de jq, nunca dentro de un script.
     - |
-      sleep 15
-      curl -sf --max-time 10 "http://${DEPLOY_HOST:-localhost}/api/health/" \
-        && echo "✅ Servicio recuperado tras rollback." \
-        || echo "⚠️  Servicio no responde tras rollback — intervención manual requerida."
+      jq -n --arg motivo "$ROLLBACK_MOTIVO" --arg sha "$ROLLBACK_SHA" --arg quien "$GITLAB_USER_LOGIN" \
+        '{rollback: {motivo: $motivo, sha: $sha, quien: $quien}}'
+    - |
+      set -eu
+      SERVICIOS="db:db backend:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel"
+      if [ -n "$ROLLBACK_SHA" ]; then
+        ETIQUETA="$ROLLBACK_SHA"
+        echo "==> Rollback a ${ETIQUETA}: verificando firma y descargando"
+        for par in $SERVICIOS; do
+          referencia="${IMAGE_BASE}/${par#*:}:${ETIQUETA}"
+          cosign verify --key cosign.pub --insecure-ignore-tlog=true "$referencia" > /dev/null
+          docker pull -q "$referencia"
+        done
+      else
+        ETIQUETA="backup"
+        echo "==> Rollback a :backup (las imágenes que corrían antes del último release)"
+        for par in $SERVICIOS; do
+          docker image inspect "${IMAGE_BASE}/${par#*:}:backup" > /dev/null \
+            || { echo "No existe ${IMAGE_BASE}/${par#*:}:backup. Usa un SHA concreto."; exit 1; }
+        done
+      fi
+      # Solo cambia las imágenes: no toca .env.prod ni migra. Las migraciones siguen la política
+      # expand/contract (la versión N-1 funciona con el esquema N); si hace falta volver también
+      # el esquema, se restaura el respaldo previo al release (GUIA_DESPLIEGUE §4.3).
+      OVERRIDE="$(mktemp --suffix=.yml)"
+      {
+        echo "services:"
+        for par in $SERVICIOS; do
+          printf '  %s:\n    image: %s\n' "${par%%:*}" "${IMAGE_BASE}/${par#*:}:${ETIQUETA}"
+          if [ "${par%%:*}" = "nginx" ]; then
+            printf '    volumes: !override\n      - %s/nginx/certs:/etc/nginx/certs:ro\n      - prod_django_static:/var/www/django_static:ro\n' "$TEXCORE_DIR"
+          fi
+        done
+      } > "$OVERRIDE"
+      docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml -f "$OVERRIDE" \
+        --env-file "$TEXCORE_DIR/.env.prod" up -d --wait --wait-timeout 900 --remove-orphans
+      rm -f "$OVERRIDE"
+      echo "Rollback aplicado. Versión activa: ${ETIQUETA}"
+    - |
+      for intento in $(seq 1 12); do
+        if curl -skf --max-time 8 https://localhost/api/health/ | grep -q '"ok"'; then
+          echo "Servicio recuperado (intento $intento)."; exit 0
+        fi
+        sleep 10
+      done
+      echo "El servicio NO responde tras el rollback. Intervención manual urgente."
+      exit 1
+  after_script:
+    - |
+      if [ -n "${DEPLOY_NOTIFY_WEBHOOK:-}" ]; then
+        jq -n --arg r "$CI_JOB_STATUS" --arg m "$ROLLBACK_MOTIVO" --arg a "$GITLAB_USER_LOGIN" --arg u "$CI_PIPELINE_URL" \
+          '{text: ("Rollback de producción " + $r + " · " + $m + " · " + $a + " · " + $u)}' \
+          | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$DEPLOY_NOTIFY_WEBHOOK" || true
+      fi
+
+# =============================================================================
+# PIPELINES PROGRAMADOS (CI/CD > Programaciones): semanal, lunes
+# =============================================================================
+
+seguridad:dependencias:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script: *script_pip_audit
+
+seguridad:npm:
+  stage: test
+  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script: *script_npm_audit
+
+seguridad:contenedores:
+  stage: scan
+  image:
+    name: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+    entrypoint: [""]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  cache: []
+  variables:
+    SSL_CERT_FILE: $GITLAB_CA_CRT
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
+  script:
+    - |
+      estado=0
+      for imagen in db backend nginx printing_service scanning_service reporting_excel; do
+        echo "--- Trivy $imagen:latest"
+        trivy image --severity CRITICAL,HIGH --exit-code 1 --ignore-unfixed "$CI_REGISTRY_IMAGE/$imagen:latest" || estado=1
+      done
+      exit "$estado"
+
+gobierno:dora:
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  variables:
+    GITLAB_CA_FILE: $GITLAB_CA_CRT
+  script:
+    # Despliegues de `production` y jobs rollback:produccion de los últimos 28 días.
+    - test -n "$GITLAB_TOKEN" || { echo "Falta la variable GITLAB_TOKEN (token de proyecto con read_api)."; exit 1; }
+    - python3 scripts/metricas_dora.py "$CI_PROJECT_PATH" --dias 28 | tee metricas_dora.md
+  artifacts:
+    paths:
+      - metricas_dora.md
+    expire_in: 90 days
+
+dependencias:renovate:
+  stage: test
+  image:
+    name: renovate/renovate:44.172.0@sha256:c0fb80c42b3e45ab1999f2560ca8af5bc394ed4513a33f32591d62678cb3e3e8
+    entrypoint: [""]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  cache: []
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: $CI_API_V4_URL
+    RENOVATE_TOKEN: $RENOVATE_TOKEN
+    RENOVATE_REPOSITORIES: $CI_PROJECT_PATH
+    NODE_EXTRA_CA_CERTS: $GITLAB_CA_CRT
+  script:
+    - renovate

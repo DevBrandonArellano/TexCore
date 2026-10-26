@@ -1,38 +1,45 @@
-from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.core.management.base import BaseCommand
+
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, ProcessStep, Bodega,
-    FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido,
-    TransformacionProducto
+    Area,
+    Bodega,
+    Cliente,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FormulaColor,
+    LoteProduccion,
+    OrdenProduccion,
+    PedidoVenta,
+    ProcessStep,
+    Producto,
+    Sede,
+    TransformacionProducto,
 )
 from inventory.models import (
-    StockBodega, MovimientoInventario, HistorialDespacho,
-    DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
 )
 
 
 class Command(BaseCommand):
-    help = 'Sets up initial groups and permissions for the application.'
+    help = "Sets up initial groups and permissions for the application."
 
     def handle(self, *args, **options):
-        self.stdout.write('Setting up groups and permissions...')
+        self.stdout.write("Setting up groups and permissions...")
 
-        # Define roles and their associated permissions for the current models
         permissions_map = {
-            'operario': {
-                'models': [
-                    LoteProduccion,
-                    TransformacionProducto,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+            "operario": {
+                "models": [LoteProduccion, TransformacionProducto, MovimientoInventario],
+                "perms": ["add", "change", "view"],
             },
-            'tintorero': {
-                'models': [
+            "tintorero": {
+                "models": [
                     FormulaColor,
                     DetalleFormula,
                     Producto,
@@ -40,25 +47,16 @@ class Command(BaseCommand):
                     LoteProduccion,
                     TransformacionProducto,
                     StockBodega,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+                    MovimientoInventario,
+                ],
+                "perms": ["add", "change", "view"],
             },
-            'empaquetado': {
-                'models': [
-                    LoteProduccion,
-                    OrdenProduccion,
-                    StockBodega,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+            "empaquetado": {
+                "models": [LoteProduccion, OrdenProduccion, StockBodega, MovimientoInventario],
+                "perms": ["add", "change", "view"],
             },
-            'despacho': {
-                'models': [
+            "despacho": {
+                "models": [
                     PedidoVenta,
                     DetallePedido,
                     LoteProduccion,
@@ -67,26 +65,16 @@ class Command(BaseCommand):
                     MovimientoInventario,
                     HistorialDespacho,
                     DetalleHistorialDespacho,
-                    DetalleHistorialDespachoPedido],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+                    DetalleHistorialDespachoPedido,
+                ],
+                "perms": ["add", "change", "view"],
             },
-            'bodeguero': {
-                'models': [
-                    StockBodega,
-                    MovimientoInventario,
-                    Producto,
-                    Bodega,
-                    LoteProduccion],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+            "bodeguero": {
+                "models": [StockBodega, MovimientoInventario, Producto, Bodega, LoteProduccion],
+                "perms": ["add", "change", "view"],
             },
-            'jefe_area': {
-                'models': [
+            "jefe_area": {
+                "models": [
                     Area,
                     Producto,
                     CustomUser,
@@ -94,14 +82,12 @@ class Command(BaseCommand):
                     MovimientoInventario,
                     OrdenProduccion,
                     LoteProduccion,
-                    TransformacionProducto],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+                    TransformacionProducto,
+                ],
+                "perms": ["add", "change", "view"],
             },
-            'jefe_planta': {
-                'models': [
+            "jefe_planta": {
+                "models": [
                     Area,
                     Producto,
                     Bodega,
@@ -111,15 +97,12 @@ class Command(BaseCommand):
                     LoteProduccion,
                     TransformacionProducto,
                     StockBodega,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view',
-                    'delete'],
+                    MovimientoInventario,
+                ],
+                "perms": ["add", "change", "view", "delete"],
             },
-            'admin_sede': {
-                'models': [
+            "admin_sede": {
+                "models": [
                     Sede,
                     Area,
                     CustomUser,
@@ -131,36 +114,20 @@ class Command(BaseCommand):
                     DetallePedido,
                     Cliente,
                     StockBodega,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view',
-                    'delete'],
+                    MovimientoInventario,
+                ],
+                "perms": ["add", "change", "view", "delete"],
             },
-            'ejecutivo': {
-                'models': [
-                    Producto,
-                    Cliente,
-                    PedidoVenta,
-                    DetallePedido,
-                    OrdenProduccion,
-                    StockBodega],
-                'perms': ['view'],
+            "ejecutivo": {
+                "models": [Producto, Cliente, PedidoVenta, DetallePedido, OrdenProduccion, StockBodega],
+                "perms": ["view"],
             },
-            'vendedor': {
-                'models': [
-                    Cliente,
-                    PedidoVenta,
-                    DetallePedido,
-                    Producto],
-                'perms': [
-                    'add',
-                    'change',
-                    'view'],
+            "vendedor": {
+                "models": [Cliente, PedidoVenta, DetallePedido, Producto],
+                "perms": ["add", "change", "view"],
             },
-            'admin_sistemas': {
-                'models': [
+            "admin_sistemas": {
+                "models": [
                     Sede,
                     Area,
                     CustomUser,
@@ -176,39 +143,35 @@ class Command(BaseCommand):
                     PedidoVenta,
                     DetallePedido,
                     StockBodega,
-                    MovimientoInventario],
-                'perms': [
-                    'add',
-                    'change',
-                    'view',
-                    'delete'],
+                    MovimientoInventario,
+                ],
+                "perms": ["add", "change", "view", "delete"],
             },
         }
 
         for role_name, config in permissions_map.items():
             group, created = Group.objects.get_or_create(name=role_name)
             if created:
-                self.stdout.write(self.style.SUCCESS(f'Created group: {role_name}'))
+                self.stdout.write(self.style.SUCCESS(f"Created group: {role_name}"))
             else:
-                self.stdout.write(self.style.WARNING(f'Group {role_name} already exists.'))
+                self.stdout.write(self.style.WARNING(f"Group {role_name} already exists."))
 
-            # Clear existing permissions for the group to avoid duplicates on re-run
+            # Limpia permisos previos para no duplicar al re-ejecutar
             group.permissions.clear()
 
-            for model_class in config['models']:
+            for model_class in config["models"]:
                 content_type = ContentType.objects.get_for_model(model_class)
-                for perm_type in config['perms']:
-                    codename = f'{perm_type}_{model_class._meta.model_name}'
+                for perm_type in config["perms"]:
+                    codename = f"{perm_type}_{model_class._meta.model_name}"
                     try:
                         permission = Permission.objects.get(content_type=content_type, codename=codename)
                         group.permissions.add(permission)
-                        self.stdout.write(self.style.SUCCESS(f'  Added permission {codename} to {role_name}'))
+                        self.stdout.write(self.style.SUCCESS(f"  Added permission {codename} to {role_name}"))
                     except Permission.DoesNotExist:
                         self.stdout.write(
                             self.style.ERROR(
-                                f'  Permission {codename} for '
-                                f'{model_class._meta.model_name} '
-                                f'does not exist. Skipping.'
-                            ))
+                                f"  Permission {codename} for {model_class._meta.model_name} does not exist. Skipping."
+                            )
+                        )
 
-        self.stdout.write(self.style.SUCCESS('Groups and permissions setup completed!'))
+        self.stdout.write(self.style.SUCCESS("Groups and permissions setup completed!"))

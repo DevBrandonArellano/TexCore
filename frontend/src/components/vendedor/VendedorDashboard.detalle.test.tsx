@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que la carga inicial de datos falla con un error genérico / un pedido
+ *   pendiente / que la API rechaza la edición / el modal de edición abierto / el modal de anulación abierto.
+ * - Transición de estados (STT): un pedido pendiente / el modal de reversión de pago abierto.
+ * - Caja blanca (CB): ramas de error — que la carga inicial de datos falla con un error genérico / que la API
+ *   rechaza la edición / un error con data.detail.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -31,6 +39,22 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 import { toast } from 'sonner';
+
+/**
+ * Ámbito de las consultas por rol: el último diálogo abierto o, si no hay, la pantalla.
+ * Con un diálogo modal abierto Radix oculta el resto (aria-hidden), así que el resultado
+ * es el mismo que `screen`, pero `*ByRole` con `name` ya no recorre todo el dashboard.
+ */
+const ambito = () => {
+  const dialogos = document.querySelectorAll<HTMLElement>('[role="dialog"]');
+  return dialogos.length ? within(dialogos[dialogos.length - 1]) : screen;
+};
+
+/** Controles de paginación de la pestaña visible (las inactivas no se montan). */
+const paginacion = () => screen.getByRole('navigation', { name: 'Paginación' });
+
+/** Opciones del Select abierto: viven en su propio portal (listbox), fuera del diálogo. */
+const opciones = async () => within(await screen.findByRole('listbox'));
 
 global.ResizeObserver = class {
   observe() {}
@@ -86,7 +110,7 @@ const PEDIDO_ANULADO = {
 };
 
 function mockApis({ clientes = [CLIENTE_1], pedidos = [PEDIDO_PENDIENTE], productos = [PRODUCTO_1] } = {}) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: clientes });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: pedidos });
     if (url.includes('/productos/')) return Promise.resolve({ data: productos });
@@ -114,13 +138,13 @@ async function navigateToPedidos(user: ReturnType<typeof userEvent.setup>) {
 
 async function abrirVentaNueva(user: ReturnType<typeof userEvent.setup>) {
   await esperarDirectorio();
-  await user.click(screen.getByRole('button', { name: /Venta Nueva/i }));
+  await user.click(ambito().getByRole('button', { name: /Venta Nueva/i }));
   await waitFor(() => expect(screen.getByText('Registrar Nueva Venta')).toBeInTheDocument());
 }
 
-async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: any) {
+async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: unknown) {
   await esperarDirectorio();
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
     if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -138,7 +162,7 @@ describe('VendedorDashboard — Carga inicial', () => {
   });
 
   it('dado que la carga inicial de datos falla con un error genérico cuando el dashboard se monta entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.reject({ response: { status: 500 } });
       return Promise.resolve({ data: [] });
     });
@@ -165,8 +189,8 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   }
 
   it('dado un pedido pendiente cuando se cambia la fecha de despacho y se guarda entonces el PATCH incluye fecha_despacho', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup();
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
 
@@ -176,7 +200,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
 
     const textarea = screen.getByPlaceholderText(/Describe el motivo de la modificación/);
     await user.type(textarea, 'se agenda fecha de despacho acordada');
-    await user.click(screen.getByRole('button', { name: /Guardar cambios/i }));
+    await user.click(ambito().getByRole('button', { name: /Guardar cambios/i }));
 
     await waitFor(() => {
       expect(apiClient.patch).toHaveBeenCalledWith(
@@ -187,8 +211,8 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado un pedido pendiente cuando se cambia el valor de retención y se guarda entonces el PATCH incluye valor_retencion parseado', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup();
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
 
@@ -198,7 +222,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
 
     const textarea = screen.getByPlaceholderText(/Describe el motivo de la modificación/);
     await user.type(textarea, 'cliente entregó retención tardía');
-    await user.click(screen.getByRole('button', { name: /Guardar cambios/i }));
+    await user.click(ambito().getByRole('button', { name: /Guardar cambios/i }));
 
     await waitFor(() => {
       expect(apiClient.patch).toHaveBeenCalledWith(
@@ -209,8 +233,8 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado un pedido pendiente cuando se marca como pagado y se guarda entonces el PATCH incluye esta_pagado true', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup();
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
 
@@ -219,7 +243,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
 
     const textarea = screen.getByPlaceholderText(/Describe el motivo de la modificación/);
     await user.type(textarea, 'cliente pagó en efectivo en oficina');
-    await user.click(screen.getByRole('button', { name: /Guardar cambios/i }));
+    await user.click(ambito().getByRole('button', { name: /Guardar cambios/i }));
 
     await waitFor(() => {
       expect(apiClient.patch).toHaveBeenCalledWith(
@@ -230,10 +254,10 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado que la API rechaza la edición cuando se guarda entonces muestra el toast de error del backend', async () => {
-    (apiClient.patch as any).mockRejectedValue({
+    (apiClient.patch as Mock).mockRejectedValue({
       response: { data: { error: 'No puedes modificar un pedido facturado.' } },
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
 
@@ -242,7 +266,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
     await user.type(guiaInput, 'GR-999');
     const textarea = screen.getByPlaceholderText(/Describe el motivo de la modificación/);
     await user.type(textarea, 'corrección solicitada por el cliente');
-    await user.click(screen.getByRole('button', { name: /Guardar cambios/i }));
+    await user.click(ambito().getByRole('button', { name: /Guardar cambios/i }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('No puedes modificar un pedido facturado.');
@@ -250,7 +274,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado el modal de edición abierto cuando se cierra con Escape sin guardar entonces no se envía ningún PATCH', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
 
@@ -269,7 +293,7 @@ describe('VendedorDashboard — Cierre de modales sin confirmar', () => {
   });
 
   it('dado el modal de anulación abierto cuando se cierra con Escape sin confirmar entonces no se envía ningún POST de anulación', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-001')).toBeInTheDocument());
@@ -284,21 +308,21 @@ describe('VendedorDashboard — Cierre de modales sin confirmar', () => {
 
   it('dado el modal de historial de anulación abierto cuando se hace clic en Cerrar entonces el modal se cierra', async () => {
     mockApis({ pedidos: [PEDIDO_ANULADO] });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-002')).toBeInTheDocument());
     await user.click(screen.getByTitle('Ver motivo de anulación'));
     await waitFor(() => expect(screen.getByText(/Detalle de anulación/i)).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^Cerrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Cerrar$/i }));
 
     await waitFor(() => expect(screen.queryByText(/Detalle de anulación/i)).not.toBeInTheDocument());
   });
 
   it('dado el modal de historial de anulación abierto cuando se cierra con Escape entonces también se cierra', async () => {
     mockApis({ pedidos: [PEDIDO_ANULADO] });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-002')).toBeInTheDocument());
@@ -311,7 +335,7 @@ describe('VendedorDashboard — Cierre de modales sin confirmar', () => {
   });
 
   it('dado el modal de reversión de pago abierto cuando se hace clic en Cancelar entonces se cierra sin llamar a la API', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, {
       ...CLIENTE_1,
@@ -323,14 +347,14 @@ describe('VendedorDashboard — Cierre de modales sin confirmar', () => {
     await user.click(screen.getByTitle('Revertir pago'));
     await waitFor(() => expect(screen.getByText('Revertir Pago')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^Cancelar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Cancelar$/i }));
 
     await waitFor(() => expect(screen.queryByText('Revertir Pago')).not.toBeInTheDocument());
     expect(apiClient.post).not.toHaveBeenCalledWith(expect.stringContaining('/revertir/'), expect.anything());
   });
 
   it('dado el modal de reversión de pago abierto cuando se cierra con Escape entonces también se cierra sin llamar a la API', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, {
       ...CLIENTE_1,
@@ -357,7 +381,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado el formulario de venta nueva cuando se ingresa una guía de remisión entonces el input refleja el valor escrito', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
 
@@ -368,7 +392,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado un item con el switch de IVA desactivado cuando se añade al pedido entonces el subtotal no incluye el 15% de IVA', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -378,7 +402,6 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
     const opcionProducto = await screen.findByText('Tela Algodon Premium');
     await user.click(opcionProducto);
 
-    const ivaSwitch = screen.getByRole('switch', { name: '' }) || document.getElementById('iva-mode');
     const ivaToggle = document.getElementById('iva-mode') as HTMLElement;
     await user.click(ivaToggle);
 
@@ -389,7 +412,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
     await user.type(inputPeso, '10');
     await user.clear(inputPrecio);
     await user.type(inputPrecio, '10');
-    await user.click(screen.getByRole('button', { name: /Añadir/i }));
+    await user.click(ambito().getByRole('button', { name: /Añadir/i }));
 
     await waitFor(() => {
       const totalRow = dialog.querySelector('tr.bg-primary\\/5');
@@ -398,7 +421,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado que se ingresa un peso con ceros a la izquierda cuando se escribe "010" entonces el valor se normaliza a "10"', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -412,7 +435,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado que se ingresa un precio con ceros a la izquierda cuando se escribe "010" entonces el valor se normaliza a "10"', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -425,8 +448,8 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
     expect(inputPrecio.value).toBe('10');
   });
 
-  it('dado que se escriben solo ceros en el peso entonces el valor se normaliza a un único "0"', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+  it('dado solo ceros en el peso cuando los escribe entonces el valor se normaliza a un único "0"', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -440,7 +463,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado el campo de retención con un valor cuando se borra y pierde el foco entonces se restablece a "0"', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -454,9 +477,9 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
     await user.type(allDialogInputs[0] as HTMLInputElement, '10');
     await user.clear(allDialogInputs[1] as HTMLInputElement);
     await user.type(allDialogInputs[1] as HTMLInputElement, '10');
-    await user.click(screen.getByRole('button', { name: /Añadir/i }));
+    await user.click(ambito().getByRole('button', { name: /Añadir/i }));
 
-    const switches = screen.getAllByRole('switch');
+    const switches = ambito().getAllByRole('switch');
     const toggleRetencion = switches[switches.length - 2];
     await user.click(toggleRetencion);
 
@@ -470,14 +493,14 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
 
   it('dado el switch "El cliente pagó en caja" cuando se activa entonces oculta la advertencia de venta al contado', async () => {
     mockApis({ clientes: [{ ...CLIENTE_1, plazo_credito_dias: 0 }] });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
 
     const dialogComboboxes = Array.from(dialog.querySelectorAll('[role="combobox"]'));
     await user.click(dialogComboboxes[0] as HTMLElement);
-    const opcionCliente = await screen.findByRole('option', { name: /Cliente Prueba/ });
+    const opcionCliente = (await opciones()).getByRole('option', { name: /Cliente Prueba/ });
     await user.click(opcionCliente);
 
     await waitFor(() => expect(screen.getByText(/Atención de Seguridad/)).toBeInTheDocument());
@@ -491,7 +514,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado el diálogo de venta nueva abierto cuando se hace clic en Cancelar entonces el diálogo se cierra', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
 
@@ -503,42 +526,42 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
   });
 
   it('dado un pedido con retención aplicada cuando se elimina un item y la retención supera el nuevo total entonces se muestra error al finalizar', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirVentaNueva(user);
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
 
     const dialogComboboxes = Array.from(dialog.querySelectorAll('[role="combobox"]'));
     await user.click(dialogComboboxes[0] as HTMLElement);
-    const opcionCliente = await screen.findByRole('option', { name: /Cliente Prueba/ });
+    const opcionCliente = (await opciones()).getByRole('option', { name: /Cliente Prueba/ });
     await user.click(opcionCliente);
 
     const dialogComboboxes2 = Array.from(dialog.querySelectorAll('[role="combobox"]'));
     await user.click(dialogComboboxes2[1] as HTMLElement);
-    await user.click((await screen.findAllByRole('option', { name: 'Tela Algodon Premium' })).at(-1)!);
+    await user.click(((await opciones()).getAllByRole('option', { name: 'Tela Algodon Premium' })).at(-1)!);
     let inputs = dialog.querySelectorAll('input[type="text"]');
     await user.clear(inputs[0] as HTMLInputElement);
     await user.type(inputs[0] as HTMLInputElement, '10');
     await user.clear(inputs[1] as HTMLInputElement);
     await user.type(inputs[1] as HTMLInputElement, '10');
-    await user.click(screen.getByRole('button', { name: /Añadir/i }));
+    await user.click(ambito().getByRole('button', { name: /Añadir/i }));
 
     const dialogComboboxes3 = Array.from(dialog.querySelectorAll('[role="combobox"]'));
     await user.click(dialogComboboxes3[1] as HTMLElement);
-    await user.click((await screen.findAllByRole('option', { name: 'Tela Algodon Premium' })).at(-1)!);
+    await user.click(((await opciones()).getAllByRole('option', { name: 'Tela Algodon Premium' })).at(-1)!);
     inputs = dialog.querySelectorAll('input[type="text"]');
     await user.clear(inputs[0] as HTMLInputElement);
     await user.type(inputs[0] as HTMLInputElement, '10');
     await user.clear(inputs[1] as HTMLInputElement);
     await user.type(inputs[1] as HTMLInputElement, '10');
-    await user.click(screen.getByRole('button', { name: /Añadir/i }));
+    await user.click(ambito().getByRole('button', { name: /Añadir/i }));
 
     await waitFor(() => {
       const totalRow = dialog.querySelector('tr.bg-primary\\/5');
       expect(totalRow!.textContent).toContain('230.000');
     });
 
-    const switches = screen.getAllByRole('switch');
+    const switches = ambito().getAllByRole('switch');
     const toggleRetencion = switches[switches.length - 2];
     await user.click(toggleRetencion);
     const inputRetencionWrapper = screen.getByText('Valor de Retención ($)').parentElement as HTMLElement;
@@ -555,7 +578,7 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
       expect(totalRow!.textContent).toContain('115.000');
     });
 
-    await user.click(screen.getByRole('button', { name: /Finalizar y Guardar/i }));
+    await user.click(ambito().getByRole('button', { name: /Finalizar y Guardar/i }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('El valor de retención no puede superar el total de la factura');
@@ -573,13 +596,13 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
 
   async function abrirNuevoCliente(user: ReturnType<typeof userEvent.setup>) {
     await esperarDirectorio();
-    await user.click(screen.getByRole('button', { name: /Nuevo Cliente/i }));
+    await user.click(ambito().getByRole('button', { name: /Nuevo Cliente/i }));
     await waitFor(() => expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument());
   }
 
   it('dado el formulario de nuevo cliente cuando se selecciona nivel de precio Mayorista y se registra entonces el POST incluye nivel_precio mayorista', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
 
@@ -592,7 +615,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
     await user.click(combos[0]);
     await user.click(await screen.findByText('Mayorista'));
 
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -603,8 +626,8 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se ingresa un límite de crédito y se registra entonces el POST incluye ese límite', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
 
@@ -615,7 +638,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
     await user.clear(limiteInput);
     await user.type(limiteInput, '2500');
 
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -626,8 +649,8 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se selecciona un plazo de crédito de 60 días y se registra entonces el POST incluye ese plazo', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
 
@@ -640,7 +663,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
     await user.click(combos[1]);
     await user.click(await screen.findByText('60 Días'));
 
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -651,8 +674,8 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se activa "Tiene Beneficios" y se registra entonces el POST incluye tiene_beneficio true', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
 
@@ -665,7 +688,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
     ) as HTMLElement;
     await user.click(beneficioSwitch);
 
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -684,19 +707,19 @@ describe('VendedorDashboard — Errores al guardar cliente', () => {
   });
 
   it('dado un error con data.detail cuando se crea un cliente entonces se muestra ese detalle como toast', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { detail: 'No tiene permisos para crear clientes.' } },
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
-    await user.click(screen.getByRole('button', { name: /Nuevo Cliente/i }));
+    await user.click(ambito().getByRole('button', { name: /Nuevo Cliente/i }));
     await waitFor(() => expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument());
 
     await user.type(screen.getByLabelText('RUC/Cédula'), '0999999999');
     await user.type(screen.getByLabelText('Nombre / Razón Social'), 'Cliente X');
     await user.type(screen.getByLabelText('Dirección'), 'Calle X');
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('No tiene permisos para crear clientes.');
@@ -704,17 +727,17 @@ describe('VendedorDashboard — Errores al guardar cliente', () => {
   });
 
   it('dado un error sin response.data cuando se crea un cliente entonces se muestra un toast de error de conexión', async () => {
-    (apiClient.post as any).mockRejectedValue(new Error('network down'));
-    const user = userEvent.setup();
+    (apiClient.post as Mock).mockRejectedValue(new Error('network down'));
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
-    await user.click(screen.getByRole('button', { name: /Nuevo Cliente/i }));
+    await user.click(ambito().getByRole('button', { name: /Nuevo Cliente/i }));
     await waitFor(() => expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument());
 
     await user.type(screen.getByLabelText('RUC/Cédula'), '0999999999');
     await user.type(screen.getByLabelText('Nombre / Razón Social'), 'Cliente Y');
     await user.type(screen.getByLabelText('Dirección'), 'Calle Y');
-    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Registrar$/i }));
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Error de conexión o servidor al guardar el cliente');
@@ -737,21 +760,21 @@ describe('VendedorDashboard — Paginación de clientes', () => {
   });
 
   it('dado más de 20 clientes en la página 2 cuando se hace clic en Anterior entonces vuelve a la página 1', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await user.click(within(paginacion()).getByRole('button', { name: /Siguiente/i }));
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /Anterior/i }));
+    await user.click(within(paginacion()).getByRole('button', { name: /Anterior/i }));
 
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
     expect(screen.getByText('Cliente 1')).toBeInTheDocument();
   });
 
   it('dado más de 20 clientes cuando se ingresa una página válida en "Ir a" y se presiona Enter entonces navega a esa página', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
@@ -764,7 +787,7 @@ describe('VendedorDashboard — Paginación de clientes', () => {
   });
 
   it('dado más de 20 clientes cuando el input "Ir a" pierde el foco con una página válida entonces navega a esa página', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
@@ -792,7 +815,7 @@ describe('VendedorDashboard — Búsqueda y paginación de pedidos', () => {
 
   it('dado el listado de pedidos cuando se busca por guía de remisión entonces filtra los resultados', async () => {
     mockApis({ pedidos: [PEDIDO_PENDIENTE, PEDIDO_ANULADO] });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-002')).toBeInTheDocument());
@@ -805,7 +828,7 @@ describe('VendedorDashboard — Búsqueda y paginación de pedidos', () => {
 
   it('dado un término de búsqueda de pedidos cuando se borra por completo entonces vuelve a mostrar todos los pedidos', async () => {
     mockApis({ pedidos: [PEDIDO_PENDIENTE, PEDIDO_ANULADO] });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-002')).toBeInTheDocument());
@@ -821,33 +844,33 @@ describe('VendedorDashboard — Búsqueda y paginación de pedidos', () => {
 
   it('dado más de 20 pedidos cuando se hace clic en Siguiente entonces navega a la página 2', async () => {
     mockApis({ pedidos: muchosPedidos });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await user.click(within(paginacion()).getByRole('button', { name: /Siguiente/i }));
 
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
   });
 
   it('dado más de 20 pedidos en la página 2 cuando se hace clic en Anterior entonces vuelve a la página 1', async () => {
     mockApis({ pedidos: muchosPedidos });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await user.click(within(paginacion()).getByRole('button', { name: /Siguiente/i }));
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /Anterior/i }));
+    await user.click(within(paginacion()).getByRole('button', { name: /Anterior/i }));
 
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
   });
 
   it('dado más de 20 pedidos cuando se ingresa una página válida en "Ir a" y se presiona Enter entonces navega a esa página', async () => {
     mockApis({ pedidos: muchosPedidos });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
@@ -861,7 +884,7 @@ describe('VendedorDashboard — Búsqueda y paginación de pedidos', () => {
 
   it('dado más de 20 pedidos cuando el input "Ir a" pierde el foco con una página válida entonces navega a esa página', async () => {
     mockApis({ pedidos: muchosPedidos });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
@@ -891,7 +914,7 @@ describe('VendedorDashboard — Total de pedido con detalles', () => {
       ],
     };
     mockApis({ pedidos: [pedidoConDetalles] });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await navigateToPedidos(user);
     await waitFor(() => expect(screen.getByText('GR-001')).toBeInTheDocument());
@@ -920,7 +943,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   }
 
   it('dado el formulario de reportes cuando se cambian las fechas de inicio y fin entonces los inputs reflejan los nuevos valores', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
@@ -938,18 +961,18 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un rango de fechas válido cuando se exporta el reporte de top clientes exitosamente entonces descarga el archivo', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       if (url.includes('/reporting/vendedores/1/top-clientes')) return Promise.resolve({ data: new Blob(['xlsx']) });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
-    const botones = screen.getAllByRole('button', { name: /Bajar Excel/i });
+    const botones = ambito().getAllByRole('button', { name: /Bajar Excel/i });
     await user.click(botones[1]);
 
     await waitFor(() => {
@@ -961,18 +984,18 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error no-404 al exportar top clientes cuando la API falla entonces muestra el mensaje genérico de exportación', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       if (url.includes('/reporting/vendedores/1/top-clientes')) return Promise.reject({ response: { status: 500 } });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
-    const botones = screen.getAllByRole('button', { name: /Bajar Excel/i });
+    const botones = ambito().getAllByRole('button', { name: /Bajar Excel/i });
     await user.click(botones[1]);
 
     await waitFor(() => {
@@ -981,18 +1004,18 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado que no existen deudores para los parámetros cuando se exporta el reporte entonces muestra el mensaje específico de deudores', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       if (url.includes('/reporting/vendedores/1/deudores')) return Promise.reject({ response: { status: 404 } });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
-    const botones = screen.getAllByRole('button', { name: /Bajar Excel/i });
+    const botones = ambito().getAllByRole('button', { name: /Bajar Excel/i });
     await user.click(botones[2]);
 
     await waitFor(() => {
@@ -1001,18 +1024,18 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error 422 al exportar ventas cuando la API responde entonces muestra el mensaje de parámetros inválidos', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       if (url.includes('/reporting/vendedores/1/ventas')) return Promise.reject({ response: { status: 422 } });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
-    const botones = screen.getAllByRole('button', { name: /Bajar Excel/i });
+    const botones = ambito().getAllByRole('button', { name: /Bajar Excel/i });
     await user.click(botones[0]);
 
     await waitFor(() => {
@@ -1021,18 +1044,18 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error no clasificado al exportar ventas cuando la API falla entonces muestra el mensaje genérico de exportación', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       if (url.includes('/reporting/vendedores/1/ventas')) return Promise.reject(new Error('network error'));
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await irAReportes(user);
 
-    const botones = screen.getAllByRole('button', { name: /Bajar Excel/i });
+    const botones = ambito().getAllByRole('button', { name: /Bajar Excel/i });
     await user.click(botones[0]);
 
     await waitFor(() => {
@@ -1049,11 +1072,11 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado el diálogo de abono abierto cuando se cambia el método de pago a Efectivo entonces el POST refleja el nuevo método', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
-    await user.click(screen.getByRole('button', { name: /Abonos/i }));
+    await user.click(ambito().getByRole('button', { name: /Abonos/i }));
     await waitFor(() => expect(screen.getByText('Registrar Abono / Pago')).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('0.00'), '100');
@@ -1061,7 +1084,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
     const metodoCombo = within(dialog).getAllByRole('combobox')[0];
     await user.click(metodoCombo);
     await user.click(await screen.findByText('Efectivo'));
-    await user.click(screen.getByRole('button', { name: /Confirmar Abono/i }));
+    await user.click(ambito().getByRole('button', { name: /Confirmar Abono/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -1072,16 +1095,16 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado el diálogo de abono abierto cuando se ingresa una referencia de comprobante entonces el POST la incluye', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
-    await user.click(screen.getByRole('button', { name: /Abonos/i }));
+    await user.click(ambito().getByRole('button', { name: /Abonos/i }));
     await waitFor(() => expect(screen.getByText('Registrar Abono / Pago')).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText('0.00'), '100');
     await user.type(screen.getByPlaceholderText('# Transacción'), 'TRX-555');
-    await user.click(screen.getByRole('button', { name: /Confirmar Abono/i }));
+    await user.click(ambito().getByRole('button', { name: /Confirmar Abono/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith(
@@ -1092,27 +1115,27 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado el diálogo de abono abierto cuando se hace clic en Cancelar entonces se cierra sin llamar a la API', async () => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
-    await user.click(screen.getByRole('button', { name: /Abonos/i }));
+    await user.click(ambito().getByRole('button', { name: /Abonos/i }));
     await waitFor(() => expect(screen.getByText('Registrar Abono / Pago')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^Cancelar$/i }));
+    await user.click(ambito().getByRole('button', { name: /^Cancelar$/i }));
 
     await waitFor(() => expect(screen.queryByText('Registrar Abono / Pago')).not.toBeInTheDocument());
     expect(apiClient.post).not.toHaveBeenCalledWith('/pagos-cliente/', expect.anything());
   });
 
   it('dado que falla la carga del detalle del cliente cuando se hace clic en su fila entonces usa el cliente de la lista como respaldo', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.reject(new Error('network error'));
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
 
@@ -1129,7 +1152,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
       pedidos: [{ id: 30, guia_remision: 'GR-030', fecha_pedido: '2026-05-01T10:00:00Z', total: 150 }],
       pagos: [],
     };
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
       if (url.includes('download_pdf')) return Promise.resolve({ data: new Blob(['pdf']) });
@@ -1137,7 +1160,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
       return Promise.resolve({ data: [] });
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
     await user.click(screen.getByText('Cliente Prueba'));

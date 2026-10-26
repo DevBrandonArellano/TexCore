@@ -79,7 +79,7 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 - [ ] ¿Se validan todos los inputs externos?
 - [ ] ¿Los errores al cliente son mensajes genéricos (sin stack traces)?
 - [ ] ¿Los secrets provienen de variables de entorno sin valor por defecto?
-- [ ] ¿Bandit no reporta hallazgos de severidad media o alta?
+- [ ] ¿Ruff (reglas de seguridad `S`) y Semgrep no reportan hallazgos?
 
 ---
 
@@ -91,11 +91,16 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 - **Transacciones**: Usar `select_for_update()` en operaciones de transferencia de stock y movimientos de inventario.
 - **Validaciones**: La lógica de validación de negocio reside en `Model.clean()`. El método `save()` llama a `self.full_clean()` antes de `super().save()`.
 - **Campos auditables**: Los cambios a campos en `campos_auditables` requieren `instance._justificacion_auditoria` antes del `save()`.
+- **Texto vacío es `''`, nunca `NULL`** (regla Ruff `DJ001`, convención de Django): los `CharField`/`TextField` opcionales se declaran `blank=True, default=''`. Así no hay dos representaciones del vacío (`NULL` y `''`) que los filtros, reportes y el frontend tengan que distinguir. Quien escribe en estos campos envía `''`, también desde el frontend (`valor || ''`, no `|| null`). La única excepción es un campo `unique=True` opcional, que conserva `null=True` con `# noqa: DJ001` y su motivo, porque mssql-django crea esos índices únicos filtrados (`WHERE col IS NOT NULL`): admiten varias filas sin valor si son `NULL`, pero no si son `''` (ver `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`).
+- **Orden de los miembros del modelo** (regla `DJ012`): campos y managers, `class Meta`, métodos mágicos, `save()`, `get_absolute_url()` y por último los métodos propios.
+- **Pasos *best-effort* dentro de una transacción** (sincronización MES, trazabilidad, avisos): van en su propio `with transaction.atomic():` (savepoint) dentro del `try`. Sin savepoint, un error de BD atrapado deja la transacción externa inservible en SQL Server y deja a medias lo que el paso alcanzó a escribir.
 
 ### Migraciones
 
 - Cada migration debe tener un nombre descriptivo: `0050_agregar_constraint_cantidad_positiva`.
 - Los índices nuevos van en migrations separadas de los cambios de esquema.
+- Si una migración hace más estricta una columna (por ejemplo, `NULL` → `NOT NULL`), primero normaliza los datos con `RunPython` y después cambia el esquema, en la misma migración (ejemplo: `RunPython nulos_a_vacio` de `gestion/0003_squashed_0009_paromaquina_origen`). Antes de desplegarla, se prueba sobre un respaldo con datos de producción, no solo sobre la BD vacía del CI.
+- **Consolidar migraciones** (`squashmigrations`): se conserva la lista `replaces` para siempre (sin ella, una base ya migrada volvería a ejecutar la consolidada); las funciones de cada `RunPython` se copian dentro de la migración nueva antes de borrar las originales; las migraciones que dependen de otra app (`gestion.0002` con `token_blacklist`) no se fusionan con la que crea el modelo del que dependen, porque forman una dependencia circular; y solo se borran las originales cuando toda base existente ya las aplicó. Se comprueba con la comparación de esquemas (columnas, índices, restricciones) entre el árbol viejo y el nuevo y con una base que ya estaba en la última migración original.
 - **No** usar `python manage.py makemigrations` en producción sin revisión del SQL generado.
 
 ---
@@ -114,7 +119,8 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 ### Reglas
 
 - **Factories**: Usar `factory_boy` (`gestion/tests/factories.py`). Prohibido crear fixtures JSON manuales.
-- **Cobertura mínima**: **89%** en módulos `gestion/`, `inventory/` e `internal_api/` (configurado en `.coveragerc` y `setup.cfg` con `fail_under = 89`).
+- **Cobertura mínima** (bloquea el CI): **90 %** en `gestion/`, `inventory/` e `internal_api/` (`fail_under` de `.coveragerc`, única fuente). En los microservicios, el umbral de cada `pytest.ini`: `reporting_excel` 90 %, `printing_service` 95 %, `scanning_service` 90 %.
+- **Refactor con pruebas de caracterización**: antes de reestructurar una función sin pruebas suficientes, se escriben pruebas que fijan su comportamiento actual y se verifica que pasan **también contra `HEAD`**. Si una prueba falla contra `HEAD`, no caracteriza: documenta un defecto, y se dice así en la prueba.
 - **Técnicas obligatorias** en tests nuevos:
   - EP (Partición de Equivalencia): al menos una clase válida e inválida por parámetro
   - BVA (Valores Límite): valores mínimo, mínimo+1, máximo-1, máximo
@@ -142,19 +148,30 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 
 ## 7. CI/CD y Calidad
 
-### Gates de calidad (`.github/workflows/ci.yml` y `.gitlab-ci.yml`)
+### Gates de calidad (`.gitlab-ci.yml`)
 
-Ningún PR puede fusionarse a `main` o `staging` sin pasar:
-1. `flake8` — sin errores de sintaxis o estilo en `gestion/`, `inventory/`, `TexCore/`, `internal_api/`
-2. `bandit` — sin vulnerabilidades de severidad media/alta
-3. `detect-secrets` — sin secrets detectados
-4. Tests Django con cobertura ≥ 89%
-5. TypeScript `tsc --noEmit` sin errores
-6. Build de React sin errores
+Flujo de ramas: rama de trabajo → MR a `staging` → MR de `staging` a `master` (producción). `master` solo acepta
+MR desde `staging` (job `ramas:politica`). Ningún MR puede fusionarse a `staging` o `master` sin que el pipeline termine en verde («Los pipelines deben tener éxito»), que exige estos jobs:
+1. **Pipeline y scripts**: `lint:pipeline` (yamllint del `.gitlab-ci.yml` y shellcheck de los scripts). Las imágenes de los jobs van fijadas por digest.
+2. **Lint y análisis estático del backend**:
+   - **Ruff** en 0 sobre todo el Python del repo, con las reglas de `pyproject.toml`. Incluye las reglas de seguridad `S` (reemplazan a bandit), Django (`DJ`) y complejidad ciclomática ≤ 15 (`C901`). Detalle de la migración a Ruff: `CHANGELOG.md`, 5-oct-2026 (etapas 1 a 4) y 14-oct-2026 (etapa 5, el formateador).
+   - **`ruff format --check`**: el formato lo decide el formateador, no cada quien. `ruff format .` deja el código como lo exige el gate; el espaciado y las líneas en blanco ya no se revisan con reglas de lint. Los Markdown están excluidos: sus bloques de código son fragmentos sueltos y el formateador les cambiaría el significado.
+   - **detect-secrets**: ningún secreto nuevo en los archivos versionados (`detect-secrets-hook`) y la línea base `.secrets.baseline` auditada por completo (todos los hallazgos con `is_secret: false`).
+   - **mypy** en 0, con los plugins de Django y DRF.
+3. **SAST**: Semgrep (`p/django`, `p/python`, `p/secrets`, `p/jwt`). Bloquea en severidad ERROR; los falsos positivos llevan `# nosemgrep: <regla>` con su motivo.
+4. **Tests del backend** sobre SQL Server 2022, aplicando todas las migraciones, con cobertura ≥ 90 %.
+5. **Tests de los 3 microservicios**, cada uno con su umbral de cobertura.
+6. **SCA**: `pip-audit` (backend y microservicios) y `npm audit` del frontend sin vulnerabilidades conocidas.
+7. **Frontend**: `tsc --noEmit`, Vitest con sus umbrales de cobertura y el build de React.
+8. **Convención de pruebas ISTQB** (`lint:istqb`, `scripts/auditar_convencion_pruebas.py`): cada prueba sigue `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]` y cada archivo declara las técnicas que aplica.
+9. **Control de acceso** (`lint:permisos`, `scripts/auditar_permisos_backend.py`): ninguna ruta es pública fuera de la lista blanca.
+10. **En `staging` y `master`**: las imágenes Docker se construyen (`build:validacion` y `build:imagenes`).
+
+Una función que supera la complejidad 15 se divide en pasos con nombre (extraer métodos o servicios, SRP), cubiertos antes con pruebas de caracterización. No se excluye con `noqa` salvo que el motivo quede escrito.
 
 ### Pre-commit
 
-Instalar localmente:
+Corre los mismos `ruff check`, `ruff format` y `detect-secrets` que el CI (`.pre-commit-config.yaml`). Instalar localmente:
 ```bash
 pip install pre-commit
 pre-commit install

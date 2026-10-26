@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { JefePlantaDashboard } from './JefePlantaDashboard';
@@ -27,46 +27,53 @@ vi.mock('axios', () => {
 });
 import apiClient from '../../lib/axios';
 
+import { parcial } from '../../testing/parcial';
+
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
+// BuscadorLotes (y la ficha de lote) leen el rol del usuario.
+// Referencia estable: los efectos con [profile] no deben dispararse en cada render.
+const mockProfile = { role: 'jefe_planta', user: { id: 1, username: 'jefe_planta', sede: 1 } };
+vi.mock('../../lib/auth', () => ({ useAuth: () => ({ profile: mockProfile }) }));
+
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 vi.mock('./ManageOrdenesProduccion', () => ({
-  ManageOrdenesProduccion: (props: any) => (
+  ManageOrdenesProduccion: (props: import('react').ComponentProps<typeof import('./ManageOrdenesProduccion').ManageOrdenesProduccion>) => (
     <div data-testid="manage-op-mock">
-      <span data-testid="op-count">{props.ordenes.length}</span>
+      <span data-testid="op-count">{props.ordenes?.length}</span>
       <span data-testid="op-loading">{String(props.loading)}</span>
-      <button onClick={() => props.onOrdenCreate({ codigo: 'OP-NEW' })}>crear-orden</button>
-      <button onClick={() => props.onOrdenUpdate(1, { codigo: 'OP-UPD' })}>actualizar-orden</button>
-      <button onClick={() => props.onOrdenDelete(1)}>eliminar-orden</button>
-      <button onClick={() => props.onOrderStatusChange(1, 'en_proceso')}>iniciar-orden</button>
-      <button onClick={() => props.onOrderStatusChange(1, 'finalizada')}>finalizar-orden</button>
-      <button onClick={() => props.onOrderStatusChange(1, 'otro_estado')}>cambiar-otro-estado</button>
-      <button onClick={() => props.onDataRefresh()}>refrescar-datos</button>
+      <button onClick={() => props.onOrdenCreate?.(parcial({ codigo: 'OP-NEW' }))}>crear-orden</button>
+      <button onClick={() => props.onOrdenUpdate?.(1, parcial({ codigo: 'OP-UPD' }))}>actualizar-orden</button>
+      <button onClick={async () => { const ok = await props.onOrdenDelete?.(1, 'Orden duplicada'); document.title = `delete:${ok}`; }}>eliminar-orden</button>
+      <button onClick={() => props.onOrderStatusChange?.(1, 'en_proceso')}>iniciar-orden</button>
+      <button onClick={() => props.onOrderStatusChange?.(1, 'finalizada')}>finalizar-orden</button>
+      <button onClick={() => props.onOrderStatusChange?.(1, 'otro_estado')}>cambiar-otro-estado</button>
+      <button onClick={() => props.onDataRefresh?.()}>refrescar-datos</button>
     </div>
   ),
 }));
 
 vi.mock('../produccion/TransferenciasInterarea', () => ({
-  TransferenciasInterarea: (props: any) => (
+  TransferenciasInterarea: (props: import('react').ComponentProps<typeof import('../produccion/TransferenciasInterarea').TransferenciasInterarea>) => (
     <div data-testid="transferencias-mock">areaId:{String(props.areaId)}</div>
   ),
 }));
 
-// Mock ResizeObserver for Radix UI
+// Mock de ResizeObserver para Radix UI
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
 };
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/ordenes-produccion/': {
       count: 2,
       results: [
@@ -89,8 +96,8 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/users/': [],
   };
   const data = { ...defaults, ...overrides };
-  (apiClient.get as any).mockImplementation((url: string) => {
-    // If URL has query params, just match the base path
+  (apiClient.get as Mock).mockImplementation((url: string) => {
+    // Con query params, se compara solo la ruta base
     const basePath = url.split('?')[0];
     if (basePath in data) return Promise.resolve({ data: data[basePath] });
     return Promise.resolve({ data: [] });
@@ -109,7 +116,7 @@ describe('JefePlantaDashboard', () => {
     </BrowserRouter>
   );
 
-  it('debe renderizar el título del dashboard y cargar datos', async () => {
+  it('dado el panel cuando monta entonces muestra el título y carga los datos', async () => {
     renderComponent();
 
     // Verifica que muestra el título
@@ -125,7 +132,7 @@ describe('JefePlantaDashboard', () => {
   });
 
   it('dado que las peticiones aun no resuelven cuando monta entonces muestra el estado de carga', () => {
-    (apiClient.get as any).mockReturnValue(new Promise(() => {}));
+    (apiClient.get as Mock).mockReturnValue(new Promise(() => {}));
     renderComponent();
 
     expect(screen.getByText('Cargando datos...')).toBeInTheDocument();
@@ -156,7 +163,7 @@ describe('JefePlantaDashboard', () => {
   });
 
   it('dado exportacion PDF cuando hace click entonces deshabilita el boton y muestra loading', async () => {
-    (apiClient.post as any).mockResolvedValueOnce(new Blob(['pdf'], { type: 'application/pdf' }));
+    (apiClient.post as Mock).mockResolvedValueOnce(new Blob(['pdf'], { type: 'application/pdf' }));
     renderComponent();
 
     const menuBtn = screen.getByRole('button', { name: /acciones gerenciales/i });
@@ -165,14 +172,14 @@ describe('JefePlantaDashboard', () => {
     const btnAvance = screen.getByText(/reporte avance operativo/i).closest('div[role="menuitem"]');
     await userEvent.click(btnAvance!);
 
-    // Muestra success (sonner mockup)
+    // Muestra success (mock de sonner)
     await waitFor(() => {
       expect(toastSuccessMock).toHaveBeenCalledWith(expect.stringContaining('Reporte de Avance exportado correctamente'));
     });
   });
 
   it('dado un error al obtener los datos iniciales cuando falla la peticion entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.split('?')[0] === '/ordenes-produccion/') return Promise.reject(new Error('network error'));
       return Promise.resolve({ data: [] });
     });
@@ -184,7 +191,7 @@ describe('JefePlantaDashboard', () => {
     expect(screen.getByTestId('op-loading')).toHaveTextContent('false');
   });
 
-  it('renderiza TransferenciasInterarea sin areaId para que jefe de planta vea todas las transferencias', async () => {
+  it('dado el jefe de planta cuando abre transferencias entonces las renderiza sin areaId para ver todas', async () => {
     renderComponent();
 
     await waitFor(() => expect(screen.getByTestId('transferencias-mock')).toBeInTheDocument());
@@ -193,7 +200,7 @@ describe('JefePlantaDashboard', () => {
 
   describe('creacion de ordenes', () => {
     it('dado una creacion exitosa cuando el usuario crea una orden entonces la agrega a la lista y muestra un toast de exito', async () => {
-      (apiClient.post as any).mockResolvedValueOnce({ data: { id: 3, codigo: 'OP-003', estado: 'pendiente' } });
+      (apiClient.post as Mock).mockResolvedValueOnce({ data: { id: 3, codigo: 'OP-003', estado: 'pendiente' } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -205,7 +212,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error de validacion 400 cuando el usuario crea una orden entonces muestra un toast con el detalle', async () => {
-      (apiClient.post as any).mockRejectedValueOnce({
+      (apiClient.post as Mock).mockRejectedValueOnce({
         response: { status: 400, data: { codigo: ['ya existe'] } },
       });
       renderComponent();
@@ -220,7 +227,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error generico cuando el usuario crea una orden entonces muestra un toast de error genérico', async () => {
-      (apiClient.post as any).mockRejectedValueOnce({ response: { status: 500 } });
+      (apiClient.post as Mock).mockRejectedValueOnce({ response: { status: 500 } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -234,7 +241,7 @@ describe('JefePlantaDashboard', () => {
 
   describe('actualizacion de ordenes', () => {
     it('dado una actualizacion exitosa cuando el usuario actualiza una orden entonces la reemplaza en la lista y muestra un toast de exito', async () => {
-      (apiClient.patch as any).mockResolvedValueOnce({ data: { id: 1, codigo: 'OP-001-EDIT', estado: 'pendiente' } });
+      (apiClient.patch as Mock).mockResolvedValueOnce({ data: { id: 1, codigo: 'OP-001-EDIT', estado: 'pendiente' } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -246,7 +253,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error de validacion 400 cuando el usuario actualiza una orden entonces muestra un toast con el detalle', async () => {
-      (apiClient.patch as any).mockRejectedValueOnce({
+      (apiClient.patch as Mock).mockRejectedValueOnce({
         response: { status: 400, data: { peso_neto_requerido: ['debe ser mayor a cero'] } },
       });
       renderComponent();
@@ -260,7 +267,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error generico cuando el usuario actualiza una orden entonces muestra un toast de error genérico', async () => {
-      (apiClient.patch as any).mockRejectedValueOnce({ response: { status: 500 } });
+      (apiClient.patch as Mock).mockRejectedValueOnce({ response: { status: 500 } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -273,32 +280,22 @@ describe('JefePlantaDashboard', () => {
   });
 
   describe('eliminacion de ordenes', () => {
-    it('dado que el usuario confirma cuando elimina una orden entonces la quita de la lista y muestra un toast de exito', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('dado una justificacion cuando elimina una orden entonces la envia, quita la orden y devuelve exito', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm');
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
       await userEvent.click(screen.getByText('eliminar-orden'));
 
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('1'));
-      expect(apiClient.delete).toHaveBeenCalledWith('/ordenes-produccion/1/');
+      expect(apiClient.delete).toHaveBeenCalledWith('/ordenes-produccion/1/', { data: { justificacion: 'Orden duplicada' } });
       expect(toastSuccessMock).toHaveBeenCalledWith('Orden eliminada');
-    });
-
-    it('dado que el usuario cancela cuando elimina una orden entonces no elimina nada', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
-      renderComponent();
-      await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
-
-      await userEvent.click(screen.getByText('eliminar-orden'));
-
-      expect(apiClient.delete).not.toHaveBeenCalled();
-      expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+      await waitFor(() => expect(document.title).toBe('delete:true'));
+      expect(confirmSpy).not.toHaveBeenCalled();
     });
 
     it('dado un error al eliminar cuando falla la peticion entonces muestra un toast de error y no quita la orden', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-      (apiClient.delete as any).mockRejectedValueOnce(new Error('boom'));
+      (apiClient.delete as Mock).mockRejectedValueOnce(new Error('boom'));
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -306,12 +303,13 @@ describe('JefePlantaDashboard', () => {
 
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la orden'));
       expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+      await waitFor(() => expect(document.title).toBe('delete:false'));
     });
   });
 
   describe('cambio de estado de ordenes', () => {
     it('dado un cambio exitoso a en_proceso cuando el usuario inicia una orden entonces muestra el toast de orden iniciada', async () => {
-      (apiClient.patch as any).mockResolvedValueOnce({ data: { status: 'ok', estado: 'en_proceso' } });
+      (apiClient.patch as Mock).mockResolvedValueOnce({ data: { status: 'ok', estado: 'en_proceso' } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -324,7 +322,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un cambio exitoso a finalizada cuando el usuario finaliza una orden entonces muestra el toast de orden finalizada', async () => {
-      (apiClient.patch as any).mockResolvedValueOnce({ data: { status: 'ok', estado: 'finalizada' } });
+      (apiClient.patch as Mock).mockResolvedValueOnce({ data: { status: 'ok', estado: 'finalizada' } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -336,7 +334,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un estado sin etiqueta especifica cuando cambia el estado entonces muestra el toast genérico de estado actualizado', async () => {
-      (apiClient.patch as any).mockResolvedValueOnce({ data: { status: 'ok', estado: 'otro_estado' } });
+      (apiClient.patch as Mock).mockResolvedValueOnce({ data: { status: 'ok', estado: 'otro_estado' } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -346,7 +344,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error de validacion 400 con campo estado cuando cambia el estado entonces muestra el mensaje especifico', async () => {
-      (apiClient.patch as any).mockRejectedValueOnce({
+      (apiClient.patch as Mock).mockRejectedValueOnce({
         response: { status: 400, data: { estado: ['transición inválida'] } },
       });
       renderComponent();
@@ -362,7 +360,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error de validacion 400 sin campo estado cuando cambia el estado entonces usa el json completo como mensaje', async () => {
-      (apiClient.patch as any).mockRejectedValueOnce({
+      (apiClient.patch as Mock).mockRejectedValueOnce({
         response: { status: 400, data: { detail: 'no permitido' } },
       });
       renderComponent();
@@ -378,7 +376,7 @@ describe('JefePlantaDashboard', () => {
     });
 
     it('dado un error generico cuando cambia el estado entonces muestra un toast de error genérico', async () => {
-      (apiClient.patch as any).mockRejectedValueOnce({ response: { status: 500 } });
+      (apiClient.patch as Mock).mockRejectedValueOnce({ response: { status: 500 } });
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
@@ -404,6 +402,27 @@ describe('JefePlantaDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
     expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+  });
+
+  it('dado el plan maestro MTS cuando crea un plan desde alertas entonces muestra fija la sede del jefe de planta', async () => {
+    mockEndpoints({
+      '/sedes/': [{ id: 1, nombre: 'Sede A' }, { id: 2, nombre: 'Sede B' }],
+      '/planes-produccion/necesidades-reposicion/': [{
+        sede_id: 1, sede_nombre: 'Sede A', producto_id: 30, producto_codigo: 'HILO-24-1',
+        producto_descripcion: 'Hilo 24/1', tipo: 'hilo', unidad_medida: 'kg',
+        stock_actual: '25.00', stock_minimo: '100.00', deficit: '75.00',
+      }],
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('tab', { name: /Plan Maestro/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Crear Plan desde Déficits/i }));
+
+    const sede = screen.getByLabelText('Sede');
+    expect(sede).toHaveValue('Sede A');
+    expect(sede).toBeDisabled();
+    expect(screen.queryByText('Sede B')).not.toBeInTheDocument();
   });
 
   it('dado ordenes sin count cuando carga entonces usa 0 como total por defecto', async () => {
@@ -438,11 +457,11 @@ describe('JefePlantaDashboard', () => {
   it('dado datos ya cargados cuando el hijo solicita refrescar entonces vuelve a pedir los datos al servidor', async () => {
     renderComponent();
     await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
-    const llamadasIniciales = (apiClient.get as any).mock.calls.length;
+    const llamadasIniciales = (apiClient.get as Mock).mock.calls.length;
 
     await userEvent.click(screen.getByText('refrescar-datos'));
 
-    await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBeGreaterThan(llamadasIniciales));
+    await waitFor(() => expect((apiClient.get as Mock).mock.calls.length).toBeGreaterThan(llamadasIniciales));
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -457,9 +476,9 @@ describe('JefePlantaDashboard', () => {
   describe('exportacion de PDFs', () => {
 
     // Helpers de DOM/URL para simular el flujo blob → click → revoke
-    let createObjectURLMock: ReturnType<typeof vi.fn>;
-    let revokeObjectURLMock: ReturnType<typeof vi.fn>;
-    let anchorClickMock: ReturnType<typeof vi.fn>;
+    let createObjectURLMock: Mock<(obj: Blob | MediaSource) => string>;
+    let revokeObjectURLMock: Mock<(url: string) => void>;
+    let anchorClickMock: Mock<() => void>;
 
     beforeEach(() => {
       createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/test-pdf');
@@ -494,7 +513,7 @@ describe('JefePlantaDashboard', () => {
 
     // EP-V1 ─────────────────────────────────────────────────────────────────
     it('ep-v1: dado un post exitoso cuando el usuario exporta el avance operativo entonces descarga el pdf y muestra toast de exito', async () => {
-      (apiClient.post as any).mockResolvedValueOnce({
+      (apiClient.post as Mock).mockResolvedValueOnce({
         data: new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }),
       });
 
@@ -520,7 +539,7 @@ describe('JefePlantaDashboard', () => {
     // La sede ya NO se envía desde el cliente: el backend la deriva del usuario
     // autenticado. El payload solo lleva mes_label y empresa_nombre.
     it('ep-v2: dado un post exitoso cuando el usuario exporta el balance de masas entonces descarga el pdf sin enviar sede_id', async () => {
-      (apiClient.post as any).mockResolvedValueOnce({
+      (apiClient.post as Mock).mockResolvedValueOnce({
         data: new Blob(['%PDF-1.4 balance'], { type: 'application/pdf' }),
       });
 
@@ -532,9 +551,9 @@ describe('JefePlantaDashboard', () => {
       await waitFor(() =>
         expect(toastSuccessMock).toHaveBeenCalledWith('Balance de Masas exportado correctamente'),
       );
-      const [, balancePayload] = (apiClient.post as any).mock.calls.find(
-        (c: any[]) => c[0] === '/internal/v1/reports/produccion/reporte-balance/',
-      );
+      const [, balancePayload] = (apiClient.post as Mock).mock.calls.find(
+        (c: unknown[]) => c[0] === '/internal/v1/reports/produccion/reporte-balance/',
+      ) ?? [];
       expect(balancePayload).toEqual(
         expect.objectContaining({ empresa_nombre: 'TexCore Industrial' }),
       );
@@ -546,7 +565,7 @@ describe('JefePlantaDashboard', () => {
 
     // EP-I1 ─────────────────────────────────────────────────────────────────
     it('ep-i1: dado un error de red cuando el usuario exporta el avance entonces muestra toast de error y no llama a createObjectURL', async () => {
-      (apiClient.post as any).mockRejectedValueOnce(new Error('Network Error'));
+      (apiClient.post as Mock).mockRejectedValueOnce(new Error('Network Error'));
 
       renderComponent();
       await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
@@ -566,7 +585,7 @@ describe('JefePlantaDashboard', () => {
     // porque la sede la impone el backend.
     it('ep-i2: dado que no hay ordenes cargadas cuando el usuario exporta el balance entonces igual llama al backend', async () => {
       mockEndpoints({ '/ordenes-produccion/': { count: 0, results: [] } });
-      (apiClient.post as any).mockResolvedValueOnce({
+      (apiClient.post as Mock).mockResolvedValueOnce({
         data: new Blob(['%PDF-1.4 balance'], { type: 'application/pdf' }),
       });
 
@@ -587,7 +606,7 @@ describe('JefePlantaDashboard', () => {
 
     // EP-I3 ─────────────────────────────────────────────────────────────────
     it('ep-i3: dado un error de red cuando el usuario exporta el balance entonces muestra toast de error', async () => {
-      (apiClient.post as any).mockRejectedValueOnce(new Error('Service Unavailable'));
+      (apiClient.post as Mock).mockRejectedValueOnce(new Error('Service Unavailable'));
 
       renderComponent();
       await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());

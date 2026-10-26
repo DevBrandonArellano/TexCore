@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): open en false / open en true y movimientoId / movimientoId nulo / una
+ *   peticion en curso / sin registros de auditoria.
+ * - Caja blanca (CB): ramas de error — un error en la peticion.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -10,7 +16,7 @@ const mockGet = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
@@ -29,7 +35,7 @@ describe('AuditoriaDialog', () => {
     mockGet.mockReset();
   });
 
-  it('dado open en false entonces no renderiza el contenido del dialogo', () => {
+  it('dado open en false cuando renderiza entonces no muestra el contenido del dialogo', () => {
     render(
       <AuditoriaDialog movimientoId={1} open={false} onClose={vi.fn()} />,
     );
@@ -60,8 +66,8 @@ describe('AuditoriaDialog', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it('dado que la peticion esta en curso entonces muestra los skeletons de carga', async () => {
-    let resolveRequest: (value: any) => void = () => {};
+  it('dado una peticion en curso cuando abre entonces muestra los skeletons de carga', async () => {
+    let resolveRequest: (value: unknown) => void = () => {};
     mockGet.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -81,7 +87,7 @@ describe('AuditoriaDialog', () => {
     );
   });
 
-  it('dado sin registros de auditoria entonces muestra el mensaje de historial vacio', async () => {
+  it('dado sin registros de auditoria cuando abre entonces muestra el mensaje de historial vacio', async () => {
     mockGet.mockResolvedValueOnce({ data: [] });
 
     render(
@@ -109,7 +115,7 @@ describe('AuditoriaDialog', () => {
     expect(screen.getByText(expectedFecha)).toBeInTheDocument();
   });
 
-  it('dado un error en la peticion entonces deja de cargar y muestra el mensaje de historial vacio', async () => {
+  it('dado un error en la peticion cuando abre entonces deja de cargar y muestra el historial vacio', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGet.mockRejectedValueOnce(new Error('network error'));
 

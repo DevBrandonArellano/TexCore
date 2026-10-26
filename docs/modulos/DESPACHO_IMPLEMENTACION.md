@@ -86,7 +86,7 @@ Detalle de cada lote despachado:
 ### 4. Actualización del Proceso de Despacho
 
 **Archivo modificado:**
-- `inventory/views.py` - `ProcessDespachoAPIView`
+- `inventory/views/despacho_views.py` - `ProcessDespachoAPIView`
 
 **Mejoras implementadas:**
 1. **Registro automático de historial:**
@@ -186,17 +186,17 @@ Ver [Análisis del Sistema de Despacho](ANALISIS_SISTEMA_DESPACHO.md) para la ar
 
 ### Construir y levantar servicios:
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --build
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
 ### Ver logs del servicio satélite:
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml logs -f scanning
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod logs -f scanning
 ```
 
 ### Aplicar migraciones:
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend python manage.py migrate
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend python manage.py migrate
 ```
 
 ---

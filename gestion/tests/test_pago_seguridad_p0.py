@@ -13,63 +13,57 @@ Técnicas ISTQB: EP (particiones rol permitido/denegado, monto válido/inválido
 BVA (monto == saldo, monto == 0), STT (estado esta_pagado tras reconciliación).
 """
 
-from unittest.mock import patch
 from decimal import Decimal
+from unittest.mock import patch
 
-from django.test import TestCase, TransactionTestCase
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
+from django.test import TestCase, TransactionTestCase
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.models import (
-    CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
-)
+from gestion.models import Cliente, CustomUser, DetallePedido, PagoCliente, PedidoVenta, Producto, Sede
 from gestion.utils import PaymentReconciler
 
 
 def _crear_base(testcase):
     """Fixture común: sede, vendedor, cliente y producto (estilo test_pago_reversion)."""
-    testcase.sede = Sede.objects.create(nombre='Sede Pagos Test', location='Quito')
+    testcase.sede = Sede.objects.create(nombre="Sede Pagos Test", location="Quito")
 
-    testcase.vendedor = CustomUser.objects.create_user(
-        username='vendedor_pagos', password='test123'
-    )
-    grupo_vendedor, _ = Group.objects.get_or_create(name='vendedor')
+    testcase.vendedor = CustomUser.objects.create_user(username="vendedor_pagos", password="test123")
+    grupo_vendedor, _ = Group.objects.get_or_create(name="vendedor")
     testcase.vendedor.groups.add(grupo_vendedor)
     testcase.vendedor.sede = testcase.sede
     testcase.vendedor.save()
 
-    testcase.operario = CustomUser.objects.create_user(
-        username='operario_pagos', password='test123'
-    )
-    grupo_operario, _ = Group.objects.get_or_create(name='operario')
+    testcase.operario = CustomUser.objects.create_user(username="operario_pagos", password="test123")
+    grupo_operario, _ = Group.objects.get_or_create(name="operario")
     testcase.operario.groups.add(grupo_operario)
 
     testcase.cliente = Cliente.objects.create(
-        ruc_cedula='1790012345001',
-        nombre_razon_social='Textiles Andinos SA',
-        direccion_envio='Av. Principal 100',
-        nivel_precio='normal',
-        limite_credito=Decimal('50000.00'),
+        ruc_cedula="1790012345001",
+        nombre_razon_social="Textiles Andinos SA",
+        direccion_envio="Av. Principal 100",
+        nivel_precio="normal",
+        limite_credito=Decimal("50000.00"),
         plazo_credito_dias=30,
         vendedor_asignado=testcase.vendedor,
         sede=testcase.sede,
     )
 
     testcase.producto = Producto.objects.create(
-        codigo='TELA-P0',
-        descripcion='Tela Jersey Test',
-        tipo='tela',
-        unidad_medida='kg',
-        precio_base=Decimal('10.00'),
+        codigo="TELA-P0",
+        descripcion="Tela Jersey Test",
+        tipo="tela",
+        unidad_medida="kg",
+        precio_base=Decimal("10.00"),
     )
 
 
-def _crear_pedido(testcase, peso, precio, anulado=False, guia='GR-P0'):
+def _crear_pedido(testcase, peso, precio, anulado=False, guia="GR-P0"):
     """Crea un pedido con un detalle. Deuda = peso × precio (sin IVA)."""
     pedido = PedidoVenta.objects.create(
         cliente=testcase.cliente,
-        estado='despachado',
+        estado="despachado",
         guia_remision=guia,
         vendedor_asignado=testcase.vendedor,
         anulado=anulado,
@@ -96,34 +90,40 @@ class PagoPermisosP017TestCase(TestCase):
         _crear_base(self)
         self.api = APIClient()
 
-    def test_operario_no_puede_listar_pagos(self):
+    def test_pagos_dado_operario_cuando_lista_entonces_403(self):
         """EP rol denegado: operario autenticado recibe 403 al listar pagos."""
         self.api.force_authenticate(user=self.operario)
-        response = self.api.get('/api/pagos-cliente/')
+        response = self.api.get("/api/pagos-cliente/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_operario_no_puede_crear_pago(self):
+    def test_pagos_dado_operario_cuando_crea_entonces_403(self):
         """EP rol denegado: operario no puede registrar pagos."""
         self.api.force_authenticate(user=self.operario)
-        response = self.api.post('/api/pagos-cliente/', {
-            'cliente': self.cliente.id,
-            'monto': '100.00',
-            'metodo_pago': 'efectivo',
-        }, format='json')
+        response = self.api.post(
+            "/api/pagos-cliente/",
+            {
+                "cliente": self.cliente.id,
+                "monto": "100.00",
+                "metodo_pago": "efectivo",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(PagoCliente.objects.count(), 0)
 
-    def test_operario_no_puede_revertir_pago(self):
+    def test_pagos_dado_operario_cuando_revierte_entonces_403(self):
         """EP rol denegado: operario no puede revertir un pago existente."""
         pago = PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('500.00'),
-            metodo_pago='efectivo', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("500.00"),
+            metodo_pago="efectivo",
+            sede=self.sede,
         )
         self.api.force_authenticate(user=self.operario)
         response = self.api.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': 'Intento no autorizado'},
-            format='json',
+            f"/api/pagos-cliente/{pago.id}/revertir/",
+            {"justificacion": "Intento no autorizado"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(
@@ -131,75 +131,79 @@ class PagoPermisosP017TestCase(TestCase):
             "El pago NO debe eliminarse ante un intento no autorizado",
         )
 
-    def test_operario_no_puede_eliminar_pago(self):
-        """EP rol denegado: DELETE también debe estar restringido."""
+    def test_pagos_dado_operario_cuando_elimina_entonces_no_se_borra(self):
+        """EP rol denegado: DELETE no existe (un pago se revierte, no se borra)."""
         pago = PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('500.00'),
-            metodo_pago='efectivo', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("500.00"),
+            metodo_pago="efectivo",
+            sede=self.sede,
         )
         self.api.force_authenticate(user=self.operario)
         response = self.api.delete(
-            f'/api/pagos-cliente/{pago.id}/',
-            {'justificacion': 'Intento no autorizado'},
-            format='json',
+            f"/api/pagos-cliente/{pago.id}/",
+            {"justificacion": "Intento no autorizado"},
+            format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         self.assertTrue(PagoCliente.objects.filter(id=pago.id).exists())
 
-    def test_vendedor_puede_revertir_pago_de_su_cliente(self):
+    def test_pagos_dado_vendedor_del_cliente_cuando_revierte_entonces_200(self):
         """EP rol permitido: vendedor revierte pagos de SUS clientes."""
         _crear_pedido(self, peso=100, precio=10)  # deuda 1000
         pago = PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('500.00'),
-            metodo_pago='transferencia', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("500.00"),
+            metodo_pago="transferencia",
+            sede=self.sede,
         )
         self.api.force_authenticate(user=self.vendedor)
         response = self.api.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': 'Error en registro'},
-            format='json',
+            f"/api/pagos-cliente/{pago.id}/revertir/",
+            {"justificacion": "Error en registro"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(PagoCliente.objects.filter(id=pago.id).exists())
 
-    def test_vendedor_no_puede_revertir_pago_de_otro_vendedor(self):
+    def test_pagos_dado_vendedor_ajeno_cuando_revierte_entonces_404(self):
         """EP aislamiento: vendedor no ve ni revierte pagos de clientes ajenos (404)."""
-        otro_vendedor = CustomUser.objects.create_user(
-            username='vendedor_ajeno', password='test123'
-        )
-        grupo_vendedor, _ = Group.objects.get_or_create(name='vendedor')
+        otro_vendedor = CustomUser.objects.create_user(username="vendedor_ajeno", password="test123")
+        grupo_vendedor, _ = Group.objects.get_or_create(name="vendedor")
         otro_vendedor.groups.add(grupo_vendedor)
 
         pago = PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('500.00'),
-            metodo_pago='efectivo', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("500.00"),
+            metodo_pago="efectivo",
+            sede=self.sede,
         )
         self.api.force_authenticate(user=otro_vendedor)
         response = self.api.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': 'No es mi cliente'},
-            format='json',
+            f"/api/pagos-cliente/{pago.id}/revertir/",
+            {"justificacion": "No es mi cliente"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(PagoCliente.objects.filter(id=pago.id).exists())
 
-    def test_admin_sistemas_puede_revertir_pago(self):
+    def test_pagos_dado_admin_sistemas_cuando_revierte_entonces_200(self):
         """EP rol permitido: admin_sistemas gestiona pagos de cualquier cliente."""
-        admin = CustomUser.objects.create_user(
-            username='admin_pagos', password='test123'
-        )
-        grupo_admin, _ = Group.objects.get_or_create(name='admin_sistemas')
+        admin = CustomUser.objects.create_user(username="admin_pagos", password="test123")
+        grupo_admin, _ = Group.objects.get_or_create(name="admin_sistemas")
         admin.groups.add(grupo_admin)
 
         pago = PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('300.00'),
-            metodo_pago='cheque', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("300.00"),
+            metodo_pago="cheque",
+            sede=self.sede,
         )
         self.api.force_authenticate(user=admin)
         response = self.api.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': 'Corrección administrativa'},
-            format='json',
+            f"/api/pagos-cliente/{pago.id}/revertir/",
+            {"justificacion": "Corrección administrativa"},
+            format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -215,48 +219,64 @@ class PagoValidacionMontoP005TestCase(TestCase):
         self.api = APIClient()
         self.api.force_authenticate(user=self.vendedor)
 
-    def test_pago_que_excede_saldo_es_rechazado(self):
+    def test_pago_dado_monto_mayor_a_deuda_cuando_registra_entonces_400_sin_persistir(self):
         """EP monto inválido: pago > deuda → 400 y no se persiste."""
         _crear_pedido(self, peso=100, precio=10)  # deuda 1000
-        response = self.api.post('/api/pagos-cliente/', {
-            'cliente': self.cliente.id,
-            'monto': '5000.00',
-            'metodo_pago': 'transferencia',
-        }, format='json')
+        response = self.api.post(
+            "/api/pagos-cliente/",
+            {
+                "cliente": self.cliente.id,
+                "monto": "5000.00",
+                "metodo_pago": "transferencia",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(PagoCliente.objects.count(), 0)
 
-    def test_pago_igual_al_saldo_es_aceptado(self):
+    def test_pago_dado_monto_igual_a_deuda_cuando_registra_entonces_201_y_pedido_pagado(self):
         """BVA límite exacto: pago == deuda → 201 y pedido queda pagado."""
         pedido = _crear_pedido(self, peso=100, precio=10)  # deuda 1000
-        response = self.api.post('/api/pagos-cliente/', {
-            'cliente': self.cliente.id,
-            'monto': '1000.00',
-            'metodo_pago': 'transferencia',
-        }, format='json')
+        response = self.api.post(
+            "/api/pagos-cliente/",
+            {
+                "cliente": self.cliente.id,
+                "monto": "1000.00",
+                "metodo_pago": "transferencia",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         pedido.refresh_from_db()
         self.assertTrue(pedido.esta_pagado, "Reconciliación debe marcar el pedido pagado")
 
-    def test_pago_monto_cero_es_rechazado(self):
+    def test_pago_dado_monto_cero_cuando_registra_entonces_400(self):
         """BVA límite inferior: monto == 0 → 400."""
         _crear_pedido(self, peso=100, precio=10)
-        response = self.api.post('/api/pagos-cliente/', {
-            'cliente': self.cliente.id,
-            'monto': '0.00',
-            'metodo_pago': 'efectivo',
-        }, format='json')
+        response = self.api.post(
+            "/api/pagos-cliente/",
+            {
+                "cliente": self.cliente.id,
+                "monto": "0.00",
+                "metodo_pago": "efectivo",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(PagoCliente.objects.count(), 0)
 
-    def test_pago_monto_negativo_es_rechazado(self):
+    def test_pago_dado_monto_negativo_cuando_registra_entonces_400(self):
         """EP monto inválido: monto negativo → 400."""
         _crear_pedido(self, peso=100, precio=10)
-        response = self.api.post('/api/pagos-cliente/', {
-            'cliente': self.cliente.id,
-            'monto': '-100.00',
-            'metodo_pago': 'efectivo',
-        }, format='json')
+        response = self.api.post(
+            "/api/pagos-cliente/",
+            {
+                "cliente": self.cliente.id,
+                "monto": "-100.00",
+                "metodo_pago": "efectivo",
+            },
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(PagoCliente.objects.count(), 0)
 
@@ -273,25 +293,30 @@ class PagoAtomicidadP005TestCase(TransactionTestCase):
         self.api = APIClient()
         self.api.force_authenticate(user=self.vendedor)
 
-    def test_fallo_en_reconciliacion_revierte_el_pago(self):
+    def test_pago_dado_fallo_en_reconciliacion_cuando_registra_entonces_revierte_el_pago(self):
         """STT: error post-save → rollback total, sin pago huérfano sin reconciliar."""
         _crear_pedido(self, peso=100, precio=10)  # deuda 1000
 
         with patch(
-            'gestion.views.sales_views.PaymentReconciler.reconcile_client_orders',
-            side_effect=Exception('Fallo simulado de reconciliación'),
+            "gestion.views.sales_views.PaymentReconciler.reconcile_client_orders",
+            side_effect=Exception("Fallo simulado de reconciliación"),
         ):
-            try:
-                self.api.post('/api/pagos-cliente/', {
-                    'cliente': self.cliente.id,
-                    'monto': '500.00',
-                    'metodo_pago': 'transferencia',
-                }, format='json')
-            except Exception:
-                pass  # la excepción puede propagarse en el test client
+            # El manejador global (gestion/exceptions.py) convierte el fallo en un 500 genérico.
+            response = self.api.post(
+                "/api/pagos-cliente/",
+                {
+                    "cliente": self.cliente.id,
+                    "monto": "500.00",
+                    "metodo_pago": "transferencia",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 500)
 
         self.assertEqual(
-            PagoCliente.objects.count(), 0,
+            PagoCliente.objects.count(),
+            0,
             "Si la reconciliación falla, el pago debe revertirse (transacción atómica). "
             "Un pago persistido sin reconciliar deja esta_pagado desincronizado.",
         )
@@ -308,17 +333,19 @@ class ReconciliadorPedidosAnuladosTestCase(TestCase):
     def setUp(self):
         _crear_base(self)
 
-    def test_pedido_anulado_no_consume_saldo_en_fifo(self):
+    def test_pago_dado_pedido_anulado_cuando_aplica_fifo_entonces_no_le_consume_saldo(self):
         """
         STT: pedido1 ANULADO (1000) + pedido2 activo (500); pago de 500.
         El pago debe cubrir pedido2 (el anulado no existe para la cartera).
         """
-        pedido_anulado = _crear_pedido(self, peso=100, precio=10, anulado=True, guia='GR-ANUL')
-        pedido_activo = _crear_pedido(self, peso=50, precio=10, anulado=False, guia='GR-ACT')
+        pedido_anulado = _crear_pedido(self, peso=100, precio=10, anulado=True, guia="GR-ANUL")
+        pedido_activo = _crear_pedido(self, peso=50, precio=10, anulado=False, guia="GR-ACT")
 
         PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('500.00'),
-            metodo_pago='transferencia', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("500.00"),
+            metodo_pago="transferencia",
+            sede=self.sede,
         )
 
         PaymentReconciler.reconcile_client_orders(self.cliente)
@@ -335,22 +362,24 @@ class ReconciliadorPedidosAnuladosTestCase(TestCase):
             "Un pedido anulado jamás debe marcarse como pagado",
         )
 
-    def test_saldo_calculado_y_reconciliador_son_consistentes(self):
+    def test_saldo_dado_deuda_cero_cuando_reconcilia_entonces_todos_los_pedidos_activos_pagados(self):
         """
         STT: si saldo_calculado dice deuda 0, todos los pedidos activos
         deben estar esta_pagado=True (consistencia entre ambas vistas).
         """
-        _crear_pedido(self, peso=100, precio=10, anulado=True, guia='GR-ANUL-2')
-        pedido_activo = _crear_pedido(self, peso=80, precio=10, anulado=False, guia='GR-ACT-2')
+        _crear_pedido(self, peso=100, precio=10, anulado=True, guia="GR-ANUL-2")
+        pedido_activo = _crear_pedido(self, peso=80, precio=10, anulado=False, guia="GR-ACT-2")
 
         PagoCliente.objects.create(
-            cliente=self.cliente, monto=Decimal('800.00'),
-            metodo_pago='efectivo', sede=self.sede,
+            cliente=self.cliente,
+            monto=Decimal("800.00"),
+            metodo_pago="efectivo",
+            sede=self.sede,
         )
         PaymentReconciler.reconcile_client_orders(self.cliente)
 
         cliente_anotado = Cliente.objects.get(pk=self.cliente.pk)
-        self.assertEqual(cliente_anotado.saldo_calculado, Decimal('0.000'))
+        self.assertEqual(cliente_anotado.saldo_calculado, Decimal("0.000"))
 
         pedido_activo.refresh_from_db()
         self.assertTrue(

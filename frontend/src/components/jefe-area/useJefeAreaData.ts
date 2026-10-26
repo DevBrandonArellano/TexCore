@@ -1,17 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { toArray } from '../../lib/collections';
 import type { useAuth } from '../../lib/auth';
-import type { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, LineaProduccion, OeeResultado } from '../../lib/types';
+import type {
+  Maquina, KPIArea, Producto, User, OrdenProduccion, LineaProduccion, OeeResultado, EficienciaMaquina,
+} from '../../lib/types';
 
 type Profile = ReturnType<typeof useAuth>['profile'];
+
+/** GET `/maquinas/{id}/{accion}/` para cada máquina; omite las que fallan. */
+async function porMaquina<T>(maquinas: Maquina[], accion: 'oee' | 'eficiencia'): Promise<[number, T][]> {
+  const entradas = await Promise.all(
+    maquinas.map(async (m) => {
+      try {
+        const res = await apiClient.get<T>(`/maquinas/${m.id}/${accion}/`);
+        return [m.id, res.data] as [number, T];
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return entradas.filter((e): e is [number, T] => e !== null);
+}
 
 export function useJefeAreaData(profile: Profile) {
   const [kpis, setKpis] = useState<KPIArea | null>(null);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [alertas, setAlertas] = useState<Producto[]>([]);
-  const [lotes, setLotes] = useState<LoteProduccion[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [operarios, setOperarios] = useState<User[]>([]);
   const [lineas, setLineas] = useState<LineaProduccion[]>([]);
@@ -19,87 +35,73 @@ export function useJefeAreaData(profile: Profile) {
   const [maquinasCarga, setMaquinasCarga] = useState<Record<number, number>>({});
   const [maquinasOee, setMaquinasOee] = useState<Record<number, OeeResultado>>({});
 
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, lineasRes] = await Promise.all([
-        apiClient.get<KPIArea>('/kpi-area/'),
-        apiClient.get<Maquina[]>('/maquinas/'),
-        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
-        apiClient.get<User[]>('/users/'),
-        apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
-        apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
-      ]);
-
-      const maquinasData = toArray<Maquina>(maquinasRes.data);
-      const lotesData = toArray<LoteProduccion>(lotesRes.data);
-      const productosData = toArray<Producto>(productosRes.data);
-
-      setKpis(kpiRes.data);
-      setMaquinas(maquinasData);
-      setOrdenes(toArray<OrdenProduccion>(ordenesRes.data));
-      setOperarios(toArray<User>(usersRes.data));
-      setLotes(lotesData);
-      setLineas(toArray<LineaProduccion>(lineasRes.data));
-
-      // Calcular carga real de trabajo por máquina
-      const today = new Date().toISOString().split('T')[0];
-      const cargas: Record<number, number> = {};
-
-      maquinasData.forEach((m: Maquina) => {
-        const produccionHoy = (lotesData as LoteProduccion[])
-          .filter((l: LoteProduccion) => l.maquina === m.id && l.hora_final.startsWith(today))
-          .reduce((sum: number, l: LoteProduccion) => sum + Number(l.peso_neto_producido), 0);
-
-        const capacidad = Number(m.capacidad_maxima) || 1;
-        cargas[m.id] = Math.min(Math.round((produccionHoy / capacidad) * 100), 100);
-      });
-      setMaquinasCarga(cargas);
-
-      const lowStock = (productosData as Producto[]).filter((p: Producto) =>
-        (p.tipo === 'hilo' || p.tipo === 'quimico') &&
-        p.stock_minimo > 0
-      );
-      setAlertas(lowStock.slice(0, 5));
-
-      // OEE por máquina (R4) — un GET por máquina; el área es pequeña por diseño (RBAC).
-      const oeeEntries = await Promise.all(
-        maquinasData.map(async (m: Maquina) => {
-          try {
-            const res = await apiClient.get<OeeResultado>(`/maquinas/${m.id}/oee/`);
-            return [m.id, res.data] as const;
-          } catch {
-            return null;
-          }
-        })
-      );
-      const oeePorMaquina: Record<number, OeeResultado> = {};
-      oeeEntries.forEach((entry) => {
-        if (entry) oeePorMaquina[entry[0]] = entry[1];
-      });
-      setMaquinasOee(oeePorMaquina);
-
-    } catch (error) {
-      console.error("Error fetching dashboard data", error);
-      toast.error("Error al cargar los datos del panel.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // La carga vive en el efecto; recargar solo pide una nueva vuelta (desde eventos).
+  const [recarga, setRecarga] = useState(0);
   useEffect(() => {
-    if (profile) {
-      fetchDashboardData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+    if (!profile) return;
+    let vigente = true;
+    const cargar = async () => {
+      try {
+        const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lineasRes] = await Promise.all([
+          apiClient.get<KPIArea>('/kpi-area/'),
+          apiClient.get<Maquina[]>('/maquinas/'),
+          apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
+          apiClient.get<User[]>('/users/'),
+          apiClient.get<Producto[]>('/productos/'),
+          apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
+        ]);
+        if (!vigente) return;
+
+        const maquinasData = toArray<Maquina>(maquinasRes.data);
+        const productosData = toArray<Producto>(productosRes.data);
+
+        setKpis(kpiRes.data);
+        setMaquinas(maquinasData);
+        setOrdenes(toArray<OrdenProduccion>(ordenesRes.data));
+        setOperarios(toArray<User>(usersRes.data));
+        setLineas(toArray<LineaProduccion>(lineasRes.data));
+
+        const lowStock = productosData.filter((p: Producto) =>
+          (p.tipo === 'hilo' || p.tipo === 'quimico') &&
+          p.stock_minimo > 0
+        );
+        setAlertas(lowStock.slice(0, 5));
+
+        // OEE (R4) y carga del día por máquina: dos GET por máquina, el área es
+        // pequeña por diseño (RBAC). La carga la calcula el servidor con la fecha
+        // local; antes se sumaban en el navegador los lotes del día UTC.
+        const [oeeEntries, eficienciaEntries] = await Promise.all([
+          porMaquina<OeeResultado>(maquinasData, 'oee'),
+          porMaquina<EficienciaMaquina>(maquinasData, 'eficiencia'),
+        ]);
+        if (!vigente) return;
+        setMaquinasOee(Object.fromEntries(oeeEntries));
+        setMaquinasCarga(Object.fromEntries(
+          eficienciaEntries.map(([id, e]) => [id, Math.min(Math.round(Number(e.eficiencia_porcentaje)), 100)]),
+        ));
+      } catch (error) {
+        if (!vigente) return;
+        console.error("Error fetching dashboard data", error);
+        toast.error("Error al cargar los datos del panel.");
+      } finally {
+        if (vigente) setIsLoading(false);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [profile, recarga]);
+
+  const fetchDashboardData = useCallback(() => {
+    setIsLoading(true);
+    setRecarga((n) => n + 1);
+  }, []);
 
   return {
     kpis,
     maquinas,
     alertas,
-    lotes,
     ordenes,
     operarios,
     lineas,

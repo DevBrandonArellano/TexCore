@@ -7,13 +7,13 @@ Usado tanto por ProcessDespachoAPIView (al procesar un despacho) como por
 DespachoReversionService (al revertir uno), para que ambos caminos calculen
 el mismo estado con la misma lógica en vez de reglas divergentes.
 """
+
 from decimal import Decimal
 
 from django.db.models import Sum
 
 
 class DespachoEstadoService:
-
     @staticmethod
     def peso_despachado_por_producto(pedido) -> dict:
         """
@@ -25,19 +25,18 @@ class DespachoEstadoService:
         from inventory.models import DetalleHistorialDespacho
 
         filas = (
-            DetalleHistorialDespacho.objects
-            .filter(pedido=pedido, es_devolucion=False)
-            .values('producto_id')
-            .annotate(total=Sum('peso'))
+            DetalleHistorialDespacho.objects.filter(pedido=pedido, es_devolucion=False)
+            .values("producto_id")
+            .annotate(total=Sum("peso"))
         )
-        return {fila['producto_id']: fila['total'] for fila in filas}
+        return {fila["producto_id"]: fila["total"] for fila in filas}
 
     @staticmethod
     def requerido_por_producto(pedido) -> dict:
         """Suma el peso requerido por producto_id a partir de los detalles del pedido."""
         requerido: dict = {}
         for detalle in pedido.detalles.all():
-            requerido[detalle.producto_id] = requerido.get(detalle.producto_id, Decimal('0')) + detalle.peso
+            requerido[detalle.producto_id] = requerido.get(detalle.producto_id, Decimal("0")) + detalle.peso
         return requerido
 
     @staticmethod
@@ -56,24 +55,24 @@ class DespachoEstadoService:
         - Todo despachado (cada producto cubre su requerido) -> 'despachado'.
         - Algo despachado pero no todo -> 'despachado_parcial'.
         """
-        if pedido.estado == 'facturado':
-            return 'facturado'
+        if pedido.estado == "facturado":
+            return "facturado"
 
         despachado = DespachoEstadoService.peso_despachado_por_producto(pedido)
-        total_despachado = sum(despachado.values(), Decimal('0'))
+        total_despachado = sum(despachado.values(), Decimal("0"))
 
         if total_despachado <= 0:
-            return 'pendiente'
+            return "pendiente"
 
         requerido = DespachoEstadoService.requerido_por_producto(pedido)
         if not requerido:
             # Sin detalles definidos para comparar (pedido sin líneas, dato
             # legacy): si algo quedó despachado y asignado a este pedido, no
             # hay forma de saber qué falta — se considera completo.
-            return 'despachado'
+            return "despachado"
 
         completo = all(
-            despachado.get(producto_id, Decimal('0')) >= cantidad_requerida
+            despachado.get(producto_id, Decimal("0")) >= cantidad_requerida
             for producto_id, cantidad_requerida in requerido.items()
         )
-        return 'despachado' if completo else 'despachado_parcial'
+        return "despachado" if completo else "despachado_parcial"

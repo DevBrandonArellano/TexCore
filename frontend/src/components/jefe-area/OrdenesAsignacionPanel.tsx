@@ -3,9 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { ListChecks, ClipboardList, CheckCircle2 as CheckCircle, Layout } from 'lucide-react';
+import { ListChecks, ClipboardList, CheckCircle2 as CheckCircle, Layout, Blend } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../ui/sheet';
+import { ComponenteMezclaPanel } from './ComponenteMezclaPanel';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import { ordenesApi } from '../../lib/api/ordenesApi';
+import { formatApiError } from '../../lib/errorUtils';
 import type { Maquina, User, OrdenProduccion } from '../../lib/types';
 
 interface OrdenesAsignacionPanelProps {
@@ -17,6 +20,8 @@ interface OrdenesAsignacionPanelProps {
 
 function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefresh }: OrdenesAsignacionPanelProps) {
   const [assignments, setAssignments] = useState<Record<number, { maquinaId: string, operarioId: string }>>({});
+  // La mezcla se define antes de iniciar la orden: el backend la bloquea fuera de `pendiente`.
+  const [ordenMezcla, setOrdenMezcla] = useState<OrdenProduccion | null>(null);
 
   const handleAsignarOrden = async (ordenId: number, maquinaId: string, operarioId: string) => {
     if (!maquinaId || !operarioId) {
@@ -25,16 +30,16 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
     }
 
     try {
-      await apiClient.patch(`/ordenes-produccion/${ordenId}/`, {
+      // Asignación e inicio en una sola operación del Jefe de Área (completar_detalles).
+      await ordenesApi.completarDetalles(ordenId, {
         maquina_asignada: parseInt(maquinaId),
         operario_asignado: parseInt(operarioId),
-        estado: 'en_proceso'
+        iniciar: true,
       });
       toast.success("Orden asignada e iniciada correctamente.");
       onDataRefresh();
     } catch (error) {
-      console.error("Error asignando orden", error);
-      toast.error("Error al asignar la orden.");
+      toast.error("Error al asignar la orden.", { description: formatApiError(error).message });
     }
   };
 
@@ -42,7 +47,7 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
 
   return (
     <Card className="flex flex-col flex-1 min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-blue-500" />
@@ -107,6 +112,10 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
                     </Select>
                   </div>
 
+                  <Button size="sm" variant="outline" onClick={() => setOrdenMezcla(orden)}>
+                    <Blend className="mr-2 h-4 w-4" /> Componentes de mezcla
+                  </Button>
+
                   <Button
                     size="sm"
                     onClick={() => handleAsignarOrden(
@@ -129,6 +138,22 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
           </div>
         )}
       </CardContent>
+
+      <Sheet open={ordenMezcla !== null} onOpenChange={(abierta) => { if (!abierta) setOrdenMezcla(null); }}>
+        <SheetContent className="sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Mezcla de {ordenMezcla?.codigo}</SheetTitle>
+            <SheetDescription>
+              Productos y porcentajes que consume la orden. Solo se modifican mientras está pendiente.
+            </SheetDescription>
+          </SheetHeader>
+          {ordenMezcla && (
+            <div className="px-4 pb-4">
+              <ComponenteMezclaPanel ordenId={ordenMezcla.id} pesoNeto={Number(ordenMezcla.peso_neto_requerido)} />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }

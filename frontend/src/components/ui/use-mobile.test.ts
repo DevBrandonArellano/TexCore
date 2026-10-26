@@ -1,3 +1,7 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un ancho de escritorio / un ancho movil / un cambio de tamaño.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useIsMobile } from './use-mobile';

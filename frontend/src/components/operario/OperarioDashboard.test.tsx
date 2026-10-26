@@ -1,3 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que las peticiones no han resuelto / sin ordenes asignadas / el perfil del
+ *   operario / ordenes con distintos estados / una respuesta paginada con results.
+ * - Análisis de valores límite (BVA): una orden con requerido en cero / el campo de bobinas vacio / el campo
+ *   de unidades vacio.
+ * - Transición de estados (STT): ordenes con distintos estados / los lotes en proceso de carga.
+ * - Caja blanca (CB): ramas de error — un error al cargar ordenes / un error del backend con detail / un error
+ *   del backend al eliminar.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -10,9 +20,9 @@ const mockPatch = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
   },
 }));
 
@@ -20,8 +30,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -31,7 +41,7 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('../produccion/TrazabilidadProducto', () => ({
-  TrazabilidadProducto: ({ ordenId, allowRegister }: any) => (
+  TrazabilidadProducto: ({ ordenId, allowRegister }: import('react').ComponentProps<typeof import('../produccion/TrazabilidadProducto').TrazabilidadProducto>) => (
     <div data-testid="mock-trazabilidad">
       Trazabilidad de orden {ordenId} - allowRegister:{String(allowRegister)}
     </div>
@@ -91,10 +101,12 @@ const ORDEN_CON_MEZCLA = {
   ],
 };
 
-function mockFetch(ordenes: any[] = [], lotes: any[] = []) {
+const PAGINA_VACIA = { count: 0, next: null, previous: null, results: [] };
+
+function mockFetch(ordenes: unknown[] = [], lotes: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: ordenes });
-    if (url === '/lotes-produccion/') return Promise.resolve({ data: lotes });
+    if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results: lotes } });
     return Promise.resolve({ data: [] });
   });
 }
@@ -144,6 +156,7 @@ describe('OperarioDashboard', () => {
   it('dado una respuesta paginada con results cuando carga entonces extrae el arreglo de ordenes', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.resolve({ data: { results: [ORDEN_1] } });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -153,6 +166,7 @@ describe('OperarioDashboard', () => {
   it('dado un error al cargar ordenes cuando falla la peticion entonces notifica el error', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.reject(new Error('network error'));
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -433,10 +447,13 @@ describe('OperarioDashboard', () => {
     );
   });
 
-  it('dado varios lotes con distinta hora_final cuando renderiza entonces los ordena del mas reciente al mas antiguo', async () => {
-    mockFetch([], [LOTE_MAS_ANTIGUO, LOTE_1]);
+  it('dado el operario cuando carga sus ultimos lotes entonces pide una sola pagina de 10 ordenada por el servidor', async () => {
+    mockFetch([], [LOTE_1, LOTE_MAS_ANTIGUO]);
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
+      params: expect.objectContaining({ page: 1, page_size: 10, ordering: '-hora_final' }),
+    });
     const rows = screen.getAllByRole('row').slice(1);
     expect(within(rows[0]).getByText('LOTE-0100')).toBeInTheDocument();
     expect(within(rows[1]).getByText('LOTE-0102')).toBeInTheDocument();
@@ -618,6 +635,7 @@ describe('OperarioDashboard', () => {
   it('dado una respuesta de ordenes sin arreglo ni results cuando carga entonces usa una lista vacia', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.resolve({ data: {} });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -626,14 +644,20 @@ describe('OperarioDashboard', () => {
     );
   });
 
-  it('dado una respuesta paginada de lotes con results cuando carga entonces extrae el arreglo de lotes', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/ordenes-produccion/') return Promise.resolve({ data: [] });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
-      return Promise.resolve({ data: [] });
-    });
+  it('dado un lote reciente cuando pulsa ver ficha entonces abre la ficha del lote', async () => {
+    mockFetch([], [LOTE_1]);
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => url === '/lotes-produccion/100/genealogia/'
+      ? Promise.resolve({ data: {
+          lote_codigo: 'LOTE-0100', producto: 'Hilo', peso_neto: 20, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
+          operario: null, maquina: null, fechas: { inicio: '', final: '' },
+          orden_produccion: { codigo: null, formula_color: null }, quimicos_consumidos: [],
+        } })
+      : base(url, config));
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Ver ficha' }));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/100/genealogia/'));
   });
 
   it('dado una merma mayor a la cantidad requerida cuando confirma el registro entonces muestra error y no envia la peticion', async () => {
@@ -672,7 +696,7 @@ describe('OperarioDashboard', () => {
   });
 
   it('dado un lote sin unidades_empaque ni peso_merma cuando edita entonces precarga 1 unidad y 0 de merma', async () => {
-    const loteIncompleto: any = { ...LOTE_1, unidades_empaque: undefined, peso_merma: undefined };
+    const loteIncompleto = { ...LOTE_1, unidades_empaque: undefined, peso_merma: undefined };
     mockFetch([], [loteIncompleto]);
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
@@ -706,7 +730,7 @@ describe('OperarioDashboard', () => {
   });
 
   it('dado una orden sin peso_producido cuando renderiza entonces asume 0 kg producidos', async () => {
-    const ordenSinProducido: any = { ...ORDEN_1, peso_producido: undefined };
+    const ordenSinProducido = { ...ORDEN_1, peso_producido: undefined };
     mockFetch([ordenSinProducido], []);
     renderComponent();
     await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());

@@ -9,14 +9,15 @@ Técnicas ISTQB aplicadas:
 - Caja blanca: rama de fallback por sede (sin asignación M2M explícita) y
   rama `is_async` que delega a Celery en vez de llamar sincrónicamente.
 """
+
 from unittest.mock import MagicMock, patch
 
 import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
-from rest_framework.test import APIClient
+from django.test import TestCase, override_settings
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import Bodega, Sede
 from inventory.reporting_proxy import _validate_report_path
@@ -26,19 +27,19 @@ User = get_user_model()
 
 class ValidateReportPathTestCase(TestCase):
     def test_validate_dado_path_traversal_cuando_valida_entonces_false(self):
-        self.assertFalse(_validate_report_path('export/../secreto'))
+        self.assertFalse(_validate_report_path("export/../secreto"))
 
     def test_validate_dado_doble_slash_cuando_valida_entonces_false(self):
-        self.assertFalse(_validate_report_path('export//kardex'))
+        self.assertFalse(_validate_report_path("export//kardex"))
 
     def test_validate_dado_backslash_cuando_valida_entonces_false(self):
-        self.assertFalse(_validate_report_path('export\\kardex'))
+        self.assertFalse(_validate_report_path("export\\kardex"))
 
     def test_validate_dado_prefijo_no_permitido_cuando_valida_entonces_false(self):
-        self.assertFalse(_validate_report_path('admin/secreto'))
+        self.assertFalse(_validate_report_path("admin/secreto"))
 
     def test_validate_dado_path_valido_cuando_valida_entonces_true(self):
-        self.assertTrue(_validate_report_path('export/kardex'))
+        self.assertTrue(_validate_report_path("export/kardex"))
 
 
 class ReportingProxyViewExtraTestCase(TestCase):
@@ -47,9 +48,11 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.otra_sede = Sede.objects.create(nombre="Otra Sede QA", location="Guayaquil")
         self.bodega = Bodega.objects.create(nombre="Bodega QA", sede=self.sede)
 
-        self.group_bodeguero, _ = Group.objects.get_or_create(name='bodeguero')
+        self.group_bodeguero, _ = Group.objects.get_or_create(name="bodeguero")
         self.usuario_misma_sede = User.objects.create_user(
-            username='mismasede_qa', password='x', sede=self.sede,
+            username="mismasede_qa",
+            password="x",
+            sede=self.sede,
         )
         self.usuario_misma_sede.groups.add(self.group_bodeguero)
 
@@ -61,7 +64,7 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.client.force_authenticate(user=self.usuario_misma_sede)
         mock_post.return_value = httpx.Response(200, content=b"ok-por-sede")
 
-        url = f'/api/reporting/export/kardex?bodega_id={self.bodega.id}'
+        url = f"/api/reporting/export/kardex?bodega_id={self.bodega.id}"
         resp = self.client.get(url)
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -69,76 +72,124 @@ class ReportingProxyViewExtraTestCase(TestCase):
 
     def test_get_dado_bodega_inexistente_cuando_get_entonces_404(self):
         self.client.force_authenticate(user=self.usuario_misma_sede)
-        resp = self.client.get('/api/reporting/export/kardex?bodega_id=999999')
+        resp = self.client.get("/api/reporting/export/kardex?bodega_id=999999")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_get_dado_path_fuera_de_whitelist_cuando_get_entonces_400(self):
-        admin = User.objects.create_user(username='admin_qa2', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa2", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
-        resp = self.client.get('/api/reporting/admin/secreto')
+        resp = self.client.get("/api/reporting/admin/secreto")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('no permitida', resp.json()['detail'])
+        self.assertIn("no permitida", resp.json()["detail"])
 
-    @patch('gestion.tasks.async_export_report.delay')
+    @patch("httpx.Client.post")
+    def test_get_dado_kardex_con_fecha_invalida_cuando_get_entonces_400_con_el_motivo_real(self, mock_post):
+        # Antes caía en el except ValueError de "ruta no soportada" y respondía
+        # "Ruta de reporte no permitida": un mensaje falso para el usuario.
+        self.client.force_authenticate(user=self.usuario_misma_sede)
+        resp = self.client.get(f"/api/reporting/export/kardex?bodega_id={self.bodega.id}&fecha_inicio=2026-13-45")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fecha_inicio", resp.json()["detail"])
+        mock_post.assert_not_called()
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @patch("gestion.tasks.async_export_report.delay")
     def test_get_dado_modo_async_cuando_get_entonces_202_y_no_llama_httpx(self, mock_delay):
-        admin = User.objects.create_user(username='admin_qa3', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa3", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_delay.return_value = MagicMock(id='task-123')
+        mock_delay.return_value = MagicMock(id="task-123")
 
         with patch("httpx.Client.post") as mock_post:
-            resp = self.client.get('/api/reporting/export/productos?async=true')
+            resp = self.client.get("/api/reporting/export/productos?async=true")
             mock_post.assert_not_called()
 
         self.assertEqual(resp.status_code, 202)
-        self.assertEqual(resp.json()['task_id'], 'task-123')
+        self.assertEqual(resp.json()["task_id"], "task-123")
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @patch("gestion.tasks.async_export_report.delay")
+    def test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle(self, mock_delay):
+        # Segunda defensa: el flag está activo pero el broker se cae en tiempo
+        # de ejecución — encolar debe degradar a 503 claro, no a 500.
+        from kombu.exceptions import OperationalError
+
+        admin = User.objects.create_user(username="admin_qa_sin_broker", password="x", is_superuser=True)
+        self.client.force_authenticate(user=admin)
+        mock_delay.side_effect = OperationalError("Error 111 connecting to redis:6379")
+
+        with patch("httpx.Client.post") as mock_post:
+            resp = self.client.get("/api/reporting/export/productos?async=true")
+            mock_post.assert_not_called()
+
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("asíncrona", resp.json()["detail"])
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=False)
+    @patch("gestion.tasks.async_export_report.delay")
+    def test_get_dado_async_deshabilitado_cuando_get_async_entonces_503_inmediato_sin_encolar(self, mock_delay):
+        # Producción no despliega Redis: con el flag apagado no se intenta
+        # encolar, porque .delay() con el broker caído bloquea el worker de
+        # gunicorn 20-70 s (reintentos de kombu y del result backend).
+        admin = User.objects.create_user(username="admin_qa_async_off", password="x", is_superuser=True)
+        self.client.force_authenticate(user=admin)
+
+        with patch("httpx.Client.post") as mock_post:
+            resp = self.client.get("/api/reporting/export/productos?async=true")
+            mock_post.assert_not_called()
+
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn("asíncrona", resp.json()["detail"])
+        mock_delay.assert_not_called()
 
     @patch("httpx.Client.post")
     def test_get_dado_microservicio_responde_error_cuando_get_entonces_propaga_status(self, mock_post):
-        admin = User.objects.create_user(username='admin_qa4', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa4", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
         mock_post.return_value = httpx.Response(400, json={"detail": "parámetro inválido"})
 
-        resp = self.client.get('/api/reporting/export/productos')
+        resp = self.client.get("/api/reporting/export/productos")
 
         self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.json()['detail'], 'parámetro inválido')
+        self.assertEqual(resp.json()["detail"], "parámetro inválido")
 
     @patch("httpx.Client.post")
     def test_get_dado_microservicio_responde_error_sin_json_cuando_get_entonces_detalle_generico(self, mock_post):
         # Caja blanca: rama `except BaseException` al parsear el body de error
-        admin = User.objects.create_user(username='admin_qa5', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa5", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_post.return_value = httpx.Response(500, content=b'not-json')
+        mock_post.return_value = httpx.Response(500, content=b"not-json")
 
-        resp = self.client.get('/api/reporting/export/productos')
+        resp = self.client.get("/api/reporting/export/productos")
 
         self.assertEqual(resp.status_code, 500)
-        self.assertIn('Error 500', resp.json()['detail'])
+        self.assertIn("Error 500", resp.json()["detail"])
 
     @patch("httpx.Client.post")
     def test_get_dado_content_disposition_cuando_get_entonces_lo_copia(self, mock_post):
-        admin = User.objects.create_user(username='admin_qa6', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa6", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
         mock_post.return_value = httpx.Response(
-            200, content=b"excel", headers={"Content-Disposition": 'attachment; filename="r.xlsx"'},
+            200,
+            content=b"excel",
+            headers={"Content-Disposition": 'attachment; filename="r.xlsx"'},
         )
 
-        resp = self.client.get('/api/reporting/export/productos')
+        resp = self.client.get("/api/reporting/export/productos")
 
-        self.assertEqual(resp['Content-Disposition'], 'attachment; filename="r.xlsx"')
+        self.assertEqual(resp["Content-Disposition"], 'attachment; filename="r.xlsx"')
 
     @patch("httpx.Client.post", side_effect=httpx.ConnectError("no se pudo conectar"))
     def test_get_dado_error_de_conexion_cuando_get_entonces_502(self, mock_post):
-        admin = User.objects.create_user(username='admin_qa7', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa7", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
-        resp = self.client.get('/api/reporting/export/productos')
+        resp = self.client.get("/api/reporting/export/productos")
         self.assertEqual(resp.status_code, 502)
 
     @patch("httpx.Client.post", side_effect=RuntimeError("fallo inesperado"))
     def test_get_dado_excepcion_generica_cuando_get_entonces_500(self, mock_post):
-        admin = User.objects.create_user(username='admin_qa8', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa8", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
-        resp = self.client.get('/api/reporting/export/productos')
+        resp = self.client.get("/api/reporting/export/productos")
         self.assertEqual(resp.status_code, 500)
 
     @patch("httpx.Client.post")
@@ -150,13 +201,18 @@ class ReportingProxyViewExtraTestCase(TestCase):
         content_negotiation_class la vista nunca llegaba a ejecutar get() —
         DefaultContentNegotiation.filter_renderers lanzaba Http404 antes.
         """
-        admin = User.objects.create_user(username='admin_qa9', password='x', is_superuser=True)
+        admin = User.objects.create_user(username="admin_qa9", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
         mock_post.return_value = httpx.Response(200, content=b"excel-xlsx")
 
-        resp = self.client.get('/api/reporting/gerencial/ventas', {
-            'fecha_inicio': '2026-08-01', 'fecha_fin': '2026-08-31', 'format': 'xlsx',
-        })
+        resp = self.client.get(
+            "/api/reporting/gerencial/ventas",
+            {
+                "fecha_inicio": "2026-08-01",
+                "fecha_fin": "2026-08-31",
+                "format": "xlsx",
+            },
+        )
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content, b"excel-xlsx")

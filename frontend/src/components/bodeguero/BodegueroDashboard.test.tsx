@@ -1,22 +1,37 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que las peticiones aun no resuelven / sin productos, bodegas ni lotes /
+ *   productos, bodegas y lotes existentes / un perfil con nombre / un perfil sin nombre.
+ * - Caja blanca (CB): ramas de error — que fallan las peticiones de productos o bodegas / que fallan las
+ *   peticiones opcionales de lotes y proveedores / un error al obtener las alertas.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BodegueroDashboard } from './BodegueroDashboard';
-import type { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import type { Producto, Bodega, LoteProduccion, Quimico } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
+const mockPost = vi.fn();
+const mockPatch = vi.fn();
+const mockDelete = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
+const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: vi.fn(),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -26,7 +41,7 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('../admin-sistemas/InventoryDashboard', () => ({
-  InventoryDashboard: (props: any) => (
+  InventoryDashboard: (props: import('react').ComponentProps<typeof import('../admin-sistemas/InventoryDashboard').InventoryDashboard>) => (
     <div data-testid="inventory-dashboard">
       <span data-testid="inv-productos">{props.productos.length}</span>
       <span data-testid="inv-bodegas">{props.bodegas.length}</span>
@@ -36,27 +51,104 @@ vi.mock('../admin-sistemas/InventoryDashboard', () => ({
   ),
 }));
 
+vi.mock('../admin-sistemas/ManageProductos', () => ({
+  ManageProductos: (props: import('react').ComponentProps<typeof import('../admin-sistemas/ManageProductos').ManageProductos>) => (
+    <div data-testid="manage-productos">
+      <span data-testid="manage-productos-count">{props.productos.length}</span>
+      <button
+        type="button"
+        onClick={() => props.onProductCreate({
+          codigo: 'INS-001',
+          descripcion: 'Insumo de empaque',
+          tipo: 'insumo',
+          unidad_medida: 'unidades',
+          stock_minimo: 12,
+          precio_base: 2.5,
+          presentacion: 'Caja',
+          pais_origen: 'Ecuador',
+          calidad: 'A',
+        })}
+      >
+        crear-producto
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onProductUpdate(1, {
+          codigo: 'HP-001-A',
+          descripcion: 'Hilo actualizado',
+          tipo: 'hilo',
+          unidad_medida: 'kg',
+          stock_minimo: 15,
+          precio_base: 6,
+          presentacion: '',
+          pais_origen: '',
+          calidad: '',
+        })}
+      >
+        actualizar-producto
+      </button>
+      <button type="button" onClick={() => props.onProductDelete(1)}>eliminar-producto</button>
+      <button type="button" onClick={() => props.onProductCreate(parcial({}))}>crear-producto-vacio</button>
+    </div>
+  ),
+}));
+
+vi.mock('../admin-sistemas/ManageQuimicos', () => ({
+  ManageQuimicos: (props: import('react').ComponentProps<typeof import('../admin-sistemas/ManageQuimicos').ManageQuimicos>) => (
+    <div data-testid="manage-quimicos">
+      <span data-testid="manage-quimicos-count">{props.quimicos.length}</span>
+      <button
+        type="button"
+        onClick={() => props.onChemicalCreate(parcial({
+          codigo: 'Q-001',
+          descripcion: 'Soda cáustica',
+          unidad_medida: 'kg',
+          precio_base: 3.75,
+          presentacion: 'Saco',
+        }))}
+      >
+        crear-quimico
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onChemicalUpdate(10, parcial({
+          codigo: 'Q-001-A',
+          descripcion: 'Soda actualizada',
+          unidad_medida: 'kg',
+          precio_base: 4,
+          presentacion: '',
+        }))}
+      >
+        actualizar-quimico
+      </button>
+      <button type="button" onClick={() => props.onChemicalDelete(10)}>eliminar-quimico</button>
+      <button type="button" onClick={() => props.onChemicalCreate(parcial({}))}>crear-quimico-vacio</button>
+    </div>
+  ),
+}));
+
 vi.mock('../shared/MRPDashboard', () => ({
   MRPDashboard: () => <div data-testid="mrp-dashboard">MRP Mock</div>,
 }));
 
 const mockHandleExport = vi.fn();
+let mockExportLoadingState: Record<string, boolean> = {};
 vi.mock('../admin-sistemas/useReportesExport', () => ({
-  useReportesExport: () => ({ loading: {}, handleExport: mockHandleExport }),
+  useReportesExport: () => ({ loading: mockExportLoadingState, handleExport: mockHandleExport }),
 }));
 
 // Shim de Radix Select — ver el mismo patrón en ReportesView.test.tsx.
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button type="button" onClick={() => onValueChange(value)}>
@@ -90,6 +182,15 @@ const BODEGA_1: Bodega = { id: 1, nombre: 'Bodega Central', sede: 3 };
 const BODEGA_2: Bodega = { id: 2, nombre: 'Bodega Norte', sede: 3 };
 const BODEGA_3: Bodega = { id: 3, nombre: 'Bodega Sur', sede: 3 };
 
+const QUIMICO_1: Quimico = {
+  id: 10,
+  codigo: 'Q-001',
+  descripcion: 'Soda cáustica',
+  tipo: 'quimico',
+  unidad_medida: 'kg',
+  precio_base: 3.75,
+};
+
 const LOTE_1: LoteProduccion = {
   id: 1,
   orden_produccion: 1,
@@ -110,12 +211,14 @@ const ALERTA_1 = {
   stock_minimo: '10',
 };
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/productos/': [],
     '/bodegas/': [],
-    '/lotes-produccion/': [],
+    // El total de lotes sale del `count` del listado paginado.
+    '/lotes-produccion/': { count: 0, next: null, previous: null, results: [] },
     '/proveedores/': [],
+    '/chemicals/': [],
     '/inventory/alertas-stock/': [],
   };
   const data = { ...defaults, ...overrides };
@@ -129,6 +232,11 @@ describe('BodegueroDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockHandleExport.mockReset();
+    mockExportLoadingState = {};
+    mockPost.mockResolvedValue({ data: {} });
+    mockPatch.mockResolvedValue({ data: {} });
+    mockDelete.mockResolvedValue({ data: {} });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockUseAuth.mockReturnValue({
       profile: { user: { first_name: 'Juan', username: 'jperez', sede: 3 } },
     });
@@ -158,13 +266,14 @@ describe('BodegueroDashboard', () => {
     mockEndpoints({
       '/productos/': [PRODUCTO_1, PRODUCTO_2],
       '/bodegas/': [BODEGA_1, BODEGA_2, BODEGA_3],
-      '/lotes-produccion/': [LOTE_1],
+      '/lotes-produccion/': { count: 57, next: null, previous: null, results: [LOTE_1] },
     });
     render(<BodegueroDashboard />);
 
     await waitFor(() => expect(screen.getByText('productos registrados').previousSibling).toHaveTextContent('2'));
     expect(screen.getByText('bodegas en el sistema').previousSibling).toHaveTextContent('3');
-    expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('1');
+    expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('57');
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', { params: { page: 1, page_size: 1 } });
 
     expect(screen.getByTestId('inv-productos')).toHaveTextContent('2');
     expect(screen.getByTestId('inv-bodegas')).toHaveTextContent('3');
@@ -223,12 +332,13 @@ describe('BodegueroDashboard', () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it('dado que las respuestas de productos, bodegas, lotes y proveedores vienen paginadas cuando carga entonces usa el campo results', async () => {
+  it('dado que las respuestas de productos, bodegas y proveedores vienen paginadas cuando carga entonces usa el campo results', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/productos/') return Promise.resolve({ data: { results: [PRODUCTO_1] } });
       if (url === '/bodegas/') return Promise.resolve({ data: { results: [BODEGA_1, BODEGA_2] } });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: 1, next: null, previous: null, results: [LOTE_1] } });
       if (url === '/proveedores/') return Promise.resolve({ data: { results: [] } });
+      if (url === '/chemicals/') return Promise.resolve({ data: { results: [QUIMICO_1] } });
       return Promise.resolve({ data: [] });
     });
     render(<BodegueroDashboard />);
@@ -236,6 +346,183 @@ describe('BodegueroDashboard', () => {
     await waitFor(() => expect(screen.getByText('productos registrados').previousSibling).toHaveTextContent('1'));
     expect(screen.getByText('bodegas en el sistema').previousSibling).toHaveTextContent('2');
     expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('1');
+  });
+
+  it('dado el dashboard cargado cuando abre Catálogos entonces muestra productos, insumos y químicos existentes', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1, PRODUCTO_2], '/chemicals/': [QUIMICO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos')).toBeInTheDocument();
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    expect(screen.getByTestId('manage-quimicos')).toBeInTheDocument();
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+  });
+
+  it('dado Catálogos cuando crea un insumo entonces llama a productos con sede y actualiza la lista', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 3,
+        codigo: 'INS-001',
+        descripcion: 'Insumo de empaque',
+        tipo: 'insumo',
+        unidad_medida: 'unidades',
+        stock_minimo: 12,
+        precio_base: 2.5,
+        sede: 3,
+      },
+    });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/productos/', {
+      codigo: 'INS-001',
+      descripcion: 'Insumo de empaque',
+      tipo: 'insumo',
+      unidad_medida: 'unidades',
+      stock_minimo: 12,
+      precio_base: 2.5,
+      presentacion: 'Caja',
+      pais_origen: 'Ecuador',
+      calidad: 'A',
+      sede: 3,
+    }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+    expect(toastSuccessMock).toHaveBeenCalledWith('Producto creado exitosamente');
+  });
+
+  it('dado Catálogos cuando actualiza y elimina producto entonces usa los endpoints de productos', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    mockPatch.mockResolvedValueOnce({ data: { ...PRODUCTO_1, codigo: 'HP-001-A', descripcion: 'Hilo actualizado' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-producto' }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/productos/1/', expect.objectContaining({
+      codigo: 'HP-001-A',
+      descripcion: 'Hilo actualizado',
+      tipo: 'hilo',
+      stock_minimo: 15,
+      precio_base: 6,
+      presentacion: '',
+      pais_origen: '',
+      calidad: '',
+    })));
+
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-producto' }));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/productos/1/'));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('0');
+  });
+
+  it('dado Catálogos cuando crea, actualiza y elimina químico entonces usa los endpoints de chemicals', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1] });
+    mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 11 } });
+    mockPatch.mockResolvedValueOnce({ data: { ...QUIMICO_1, codigo: 'Q-001-A' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico' }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/chemicals/', {
+      codigo: 'Q-001',
+      descripcion: 'Soda cáustica',
+      tipo: 'quimico',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 3.75,
+      presentacion: 'Saco',
+      sede: 3,
+    }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-quimico' }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/chemicals/10/', expect.objectContaining({
+      codigo: 'Q-001-A',
+      descripcion: 'Soda actualizada',
+      tipo: 'quimico',
+      precio_base: 4,
+      presentacion: '',
+    })));
+
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-quimico' }));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/chemicals/10/'));
+  });
+
+  it('dado creacion de quimico cuando se crea exitosamente entonces se sincroniza e incrementa tambien la lista de productos', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1], '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 99, codigo: 'Q-99', descripcion: 'Nuevo Quimico' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico' }));
+    await waitFor(() => expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Productos e Insumos/ }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+  });
+
+  it('dado creacion de producto tipo insumo cuando se crea exitosamente entonces se sincroniza con la lista de quimicos', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1], '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 101,
+        codigo: 'INS-001',
+        descripcion: 'Insumo de empaque',
+        tipo: 'insumo',
+        unidad_medida: 'unidades',
+        stock_minimo: 12,
+        precio_base: 2.5,
+      },
+    });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto' }));
+    await waitFor(() => expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2');
+  });
+
+  it('dado eliminacion de quimico cuando se confirma entonces se remueve de quimicos y productos', async () => {
+    mockEndpoints({
+      '/chemicals/': [QUIMICO_1],
+      '/productos/': [PRODUCTO_1, { ...QUIMICO_1, stock_minimo: 0 }],
+    });
+    mockDelete.mockResolvedValueOnce({});
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-quimico' }));
+
+    await waitFor(() => expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('0'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Productos e Insumos/ }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
   });
 
   it('dado el dashboard cargado cuando el usuario cambia a la pestaña de inventario entonces se renderiza con los datos actuales', async () => {
@@ -517,5 +804,186 @@ describe('BodegueroDashboard', () => {
 
       expect(mockHandleExport).toHaveBeenCalledWith('stock-bajo');
     });
+
+    it('dado una exportacion en curso cuando abre la pestaña de alertas entonces el boton muestra Generando', async () => {
+      mockExportLoadingState = { 'stock-bajo': true };
+      mockEndpoints({ '/bodegas/': [BODEGA_1], '/inventory/alertas-stock/': [ALERTA_1] });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      expect(await screen.findByText('Generando...')).toBeInTheDocument();
+    });
+
+    describe('filtro por bodega y búsqueda de productos', () => {
+      const ALERTA_NORTE = { ...ALERTA_1, producto_codigo: 'HN-002', bodega: 'Bodega Norte', bodega_id: 2, estado: 'bajo' };
+      const HILO_OK = {
+        ...ALERTA_1, producto: 'Hilo Rojo', producto_codigo: 'HR-003', stock_actual: '50', estado: 'ok',
+      };
+      const TELA_SIN_MINIMO = {
+        ...ALERTA_1, producto: 'Tela cruda', producto_codigo: 'TC-004', stock_minimo: '0', estado: 'sin_minimo',
+      };
+
+      function mockAlertasPorParametros(responder: (params: Record<string, unknown>) => unknown[]) {
+        mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+          if (url === '/bodegas/') return Promise.resolve({ data: [BODEGA_1, BODEGA_2] });
+          if (url === '/inventory/alertas-stock/') return Promise.resolve({ data: responder(config?.params ?? {}) });
+          if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: 0, results: [] } });
+          return Promise.resolve({ data: [] });
+        });
+      }
+
+      function llamadasAlertas() {
+        return mockGet.mock.calls
+          .filter(([url]) => url === '/inventory/alertas-stock/')
+          .map(([, config]) => (config as { params?: Record<string, unknown> } | undefined)?.params ?? {});
+      }
+
+      async function abrirAlertas() {
+        render(<BodegueroDashboard />);
+        await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+      }
+
+      it('dado una bodega seleccionada cuando cambia el selector entonces la tabla muestra solo las alertas de esa bodega', async () => {
+        mockAlertasPorParametros((params) => (params.bodega_id === '2' ? [ALERTA_NORTE] : [ALERTA_1, ALERTA_NORTE]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+
+        await waitFor(() => expect(screen.queryByText('HP-001')).not.toBeInTheDocument());
+        expect(screen.getByText('HN-002')).toBeInTheDocument();
+        expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2' });
+        expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeEnabled();
+      });
+
+      it('dado una bodega seleccionada cuando elige Todas las bodegas entonces pide sin filtro y deshabilita la exportacion', async () => {
+        mockAlertasPorParametros(() => [ALERTA_1]);
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+        await waitFor(() => expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2' }));
+
+        await userEvent.click(screen.getByRole('button', { name: 'Todas las bodegas' }));
+
+        await waitFor(() => expect(llamadasAlertas().at(-1)).toEqual({}));
+        expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeDisabled();
+      });
+
+      it('dado un texto en el buscador cuando el usuario escribe entonces busca en el servidor y muestra el estado de cada producto', async () => {
+        mockAlertasPorParametros((params) => (params.search === 'hilo' ? [ALERTA_1, HILO_OK, TELA_SIN_MINIMO] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'hilo');
+
+        await waitFor(() => expect(screen.getByText('HR-003')).toBeInTheDocument());
+        expect(llamadasAlertas().at(-1)).toEqual({ search: 'hilo' });
+        expect(within(screen.getByText('HP-001').closest('tr') as HTMLElement).getByText('Stock Bajo')).toBeInTheDocument();
+        expect(within(screen.getByText('HR-003').closest('tr') as HTMLElement).getByText('Stock OK')).toBeInTheDocument();
+        expect(within(screen.getByText('TC-004').closest('tr') as HTMLElement).getByText('Sin mínimo')).toBeInTheDocument();
+      });
+
+      it('dado una bodega y un texto cuando se combinan entonces busca solo en esa bodega', async () => {
+        mockAlertasPorParametros((params) => (params.bodega_id === '2' && params.search === 'hilo' ? [HILO_OK] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'hilo');
+
+        await waitFor(() => expect(screen.getByText('HR-003')).toBeInTheDocument());
+        expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2', search: 'hilo' });
+      });
+
+      it('dado solo espacios en el buscador cuando el usuario escribe entonces no filtra y sigue mostrando las alertas', async () => {
+        mockAlertasPorParametros(() => [ALERTA_1]);
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), '   ');
+
+        await new Promise((r) => setTimeout(r, 400));
+        expect(llamadasAlertas().every((params) => !('search' in params))).toBe(true);
+        expect(screen.getByText('HP-001')).toBeInTheDocument();
+      });
+
+      it('dado una busqueda sin coincidencias cuando termina de cargar entonces indica que no encontro el producto', async () => {
+        mockAlertasPorParametros((params) => (params.search ? [] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'zzz');
+
+        expect(await screen.findByText('No se encontraron productos que coincidan con «zzz».')).toBeInTheDocument();
+      });
+    });
+
+    it('dado una respuesta de alertas sin arreglo ni campo results cuando carga entonces no muestra alertas', async () => {
+      mockEndpoints({ '/inventory/alertas-stock/': {} });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      expect(await screen.findByText('No hay alertas de stock bajo en este momento.')).toBeInTheDocument();
+    });
+  });
+
+  it('dado crear un producto sin campos opcionales cuando se envia entonces usa los valores por defecto', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto-vacio' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/productos/', {
+      codigo: '',
+      descripcion: '',
+      tipo: 'hilo',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 0,
+      presentacion: '',
+      pais_origen: '',
+      calidad: '',
+      sede: 3,
+    }));
+  });
+
+  it('dado crear un quimico sin campos opcionales cuando se envia entonces usa los valores por defecto', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico-vacio' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/chemicals/', {
+      codigo: '',
+      descripcion: '',
+      tipo: 'quimico',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 0,
+      presentacion: '',
+      sede: 3,
+    }));
+  });
+
+  it('dado varios productos cuando actualiza uno entonces conserva los demas sin modificar', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1, PRODUCTO_2] });
+    mockPatch.mockResolvedValueOnce({ data: { ...PRODUCTO_1, codigo: 'HP-001-A' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-producto' }));
+
+    await waitFor(() => expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2'));
   });
 });

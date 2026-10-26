@@ -1,10 +1,17 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): reporte que requiere bodega sin bodega seleccionada / respuesta con datos
+ *   reales / respuesta con header x-report-empty / error 404 / error 403.
+ * - Análisis de valores límite (BVA): reporte stock-cero sin bodega seleccionada.
+ * - Caja blanca (CB): ramas de error — error 404 / error 403 / error generico.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useReportesExport } from './useReportesExport';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const { mockToast } = vi.hoisted(() => ({
@@ -14,7 +21,7 @@ vi.mock('sonner', () => ({ toast: mockToast }));
 
 const mockDownloadBlob = vi.fn();
 vi.mock('../../lib/downloadBlob', () => ({
-  downloadBlob: (...args: any[]) => mockDownloadBlob(...args),
+  downloadBlob: (...args: unknown[]) => mockDownloadBlob(...args),
 }));
 
 describe('useReportesExport', () => {

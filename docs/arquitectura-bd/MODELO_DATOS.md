@@ -2,6 +2,10 @@
 
 Este documento detalla los modelos de datos de TexCore y las reglas de negocio críticas implementadas.
 
+**Convenciones comunes a todos los modelos** (desde el 5-oct-2026, reglas Ruff `DJ001`/`DJ012`):
+- Los campos de texto opcionales (`CharField`/`TextField`) usan `''` como vacío: `blank=True, default=''`, columna `NOT NULL`. No hay texto `NULL`. Ver `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` y su lista de los 32 campos convertidos.
+- Los miembros de cada modelo siguen el orden de la guía de Django: campos y managers, `Meta`, métodos mágicos, `save()`, `get_absolute_url()` y métodos propios.
+
 ## 1. Aplicación: `gestion`
 
 ### `Sede`
@@ -34,7 +38,7 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 > **Nota de precisión:** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario`, los valores se redondean con `.quantize(Decimal('0.01'))` para stock de kilos y `Decimal('0.0001')` para metros de tela. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
 
 ### `MovimientoInventario`
-*   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
+*   **Kardex**: Genera trazabilidad a partir de los movimientos. El saldo que muestran la pantalla y el Excel lo calcula la base en cada consulta (`inventory/services/kardex_service.py`: `SUM` para el saldo inicial y `SUM() OVER (ORDER BY fecha, id)` para el saldo corrido). `saldo_resultante` es solo una foto del stock del lote al registrar el movimiento (una transferencia guarda un lado, el despacho guarda 0 y las ediciones no recalculan los posteriores): no se usa como saldo de kárdex.
 *   **Auditoría**: Los cambios en movimientos existentes quedan registrados en `AuditLog`.
 *   **Integración Logística**: El campo `documento_ref` vincula movimientos con Pedidos, Órdenes de Producción o Guías de Despacho.
 
@@ -57,10 +61,13 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 *   `codigo_lote` **nunca cambia** por un reetiquetado — solo cambian datos secundarios.
 *   Ver detalle completo en [docs/modulos/GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md).
 
-### `FormulaColor` y `FaseReceta`
-*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos).
-*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.
-*   **Versión**: Control de cambios en recetas de laboratorio.
+### `FormulaColor`, `FaseReceta`, `ProcesoTintoreria` y `VersionFormula`
+*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos). La receta "viva" es la que se edita.
+*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto, Otro.
+*   **Fases**: cada `FaseReceta` apunta a un `ProcesoTintoreria` (catálogo **por sede**: Descrude, Tintura, Jabonado…, con tipo `pre_tratamiento`/`colorante`/`auxiliar`/`lavado`/`acabado`) y tiene `ciclo`, temperatura y tiempo. Reemplazó al antiguo enum de 5 fases (migración `0014`). `MaquinaProceso` registra qué procesos ejecuta cada máquina; `Maquina.volumen_bano_litros` es el volumen del baño (distinto de `capacidad_maxima`, kg/turno).
+*   **Versionado inmutable** (`VersionFormula`, migración `0015`): aprobar una fórmula en pruebas crea la versión oficial v1; editar una fórmula aprobada exige motivo y crea la versión N+1 oficial (la anterior queda intacta y deja de ser oficial). Cada versión guarda la receta completa como JSON (`snapshot`), incluido código y descripción de cada químico para que siga legible si el producto se renombra o se da de baja. Una sola versión oficial por fórmula (índice filtrado). Solo `es_oficial` es mutable; el resto y el borrado se rechazan.
+*   **Congelado en la OP**: `OrdenProduccion.version_formula` se fija al lanzar la orden (salir de `pendiente`) con la versión oficial vigente; sin versión oficial el lanzamiento se rechaza. Una orden lanzada no cambia de fórmula ni de versión. `OrdenProduccion.formula_color` y `version_formula` son `PROTECT`: una fórmula usada por órdenes no se puede borrar.
+*   Servicio: `gestion/services/versionado_formula.py` (`VersionadoFormulaService`).
 
 ## 4. Gestión de Despacho y Servicios Satélite
 
@@ -72,11 +79,11 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 *   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
 *   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
-## 5. Stored Procedures de Reportes de Producción
+## 5. Consultas de Reportes de Producción y Gerenciales
 
-Los 21 Stored Procedures optimizados de T-SQL (`database/V3__optimize_stored_procedures_texcore.sql`) se ejecutan sobre SQL Server 2022 con aislamiento RCSI. Se invocan vía la API interna (`internal_api`) autenticada mediante JWT RS256 para el servicio satélite `reporting_excel`.
+Los reportes gerenciales y de producción se consultan directamente vía la API interna (`internal_api/services/reporting_data.py`) utilizando Django ORM con índices optimizados en SQL Server 2022 (`V2`, `V4`, `V5`). Los 21 Stored Procedures originales fueron eliminados como código muerto en la auditoría del 31 de agosto de 2026 para simplificar la arquitectura y eliminar overhead de traducción.
 
-| SP | Parámetros | Descripción |
+| Consulta / Reporte | Parámetros | Descripción |
 |----|-----------|-------------|
 | `sp_GetOrdenesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Detalle de OPs con producto, fórmula de color, sede, área, máquina, operario y avance (%). Incluye OPs sin lotes aún. |
 | `sp_GetLotesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Lotes del período con `peso_bruto`, `tara`, `peso_neto`, `kg_por_hora` calculado, y duración en minutos. |
@@ -104,7 +111,7 @@ graph TD
 
 ```mermaid
 graph TD
-    View[KpiEjecutivoView\ngestion/views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
+    View[KpiEjecutivoView\ngestion/views/kpi_views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
     View --> SvcE[ExecutiveKPIService\nobtener_kpis]
     SvcP -->|QuerySet ORM| OP[gestion_ordenproduccion\ngestion_loteproduccion]
     SvcE -->|QuerySet ORM + F expr| INV[inventory_stockbodega\ngestion_pedidoventa\nordencomprasugerida]

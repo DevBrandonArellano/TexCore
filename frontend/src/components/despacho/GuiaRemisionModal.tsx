@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
+
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 
 const MOTIVOS_TRASLADO = [
   'Venta',
@@ -78,17 +81,16 @@ export function GuiaRemisionModal({ despachoId, onOpenChange }: GuiaRemisionModa
         },
         { responseType: 'blob' },
       );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      window.open(url, '_blank');
+      abrirPdfEnPestana(response.data);
       toast.success('Guía de remisión generada.');
       handleClose(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error generando guía de remisión', error);
+      const datos = datosDeError(error) as { motivo_traslado?: string; punto_partida?: string } | undefined;
       toast.error(
-        error.response?.data?.motivo_traslado ||
-        error.response?.data?.punto_partida ||
-        error.response?.data?.error ||
-        'Error al generar la guía de remisión.',
+        datos?.motivo_traslado ||
+        datos?.punto_partida ||
+        mensajeDeLaApi(error, 'Error al generar la guía de remisión.'),
       );
     } finally {
       setGenerando(false);

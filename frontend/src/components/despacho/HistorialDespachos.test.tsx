@@ -1,6 +1,15 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): clic en imprimir historial / clic en generar guia de remision / clic en
+ *   volver a despacho / datos aun no resueltos / sin despachos.
+ * - Transición de estados (STT): error de reversion con clave justificacion / error de reversion sin mensaje
+ *   del backend.
+ * - Caja blanca (CB): ramas de error — un error del servidor / error de reversion con clave justificacion /
+ *   error de reversion sin mensaje del backend.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -13,8 +22,8 @@ const mockNavigate = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -27,8 +36,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -71,7 +80,7 @@ const DESPACHO_CON_FALTANTES = {
   },
 };
 
-function makeResponse(results: any[], overrides: Partial<{ count: number; next: string | null; previous: string | null }> = {}) {
+function makeResponse(results: unknown[], overrides: Partial<{ count: number; next: string | null; previous: string | null }> = {}) {
   return { count: results.length, next: null, previous: null, results, ...overrides };
 }
 
@@ -109,7 +118,7 @@ describe('HistorialDespachos', () => {
     await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
-      '/inventory/historial-despachos/imprimir/?',
+      '/inventory/historial-despachos/imprimir/?page=1',
       { responseType: 'blob' },
     ));
     expect(window.open).toHaveBeenCalledWith('blob:mock-url', '_blank');
@@ -210,6 +219,19 @@ describe('HistorialDespachos', () => {
     expect(screen.getByText('Detalle de Despacho #1')).toBeInTheDocument();
     expect(screen.getByText('LOTE-001')).toBeInTheDocument();
     expect(screen.getByText('50.25 kg')).toBeInTheDocument();
+  });
+
+  it('dado clic en ver detalles cuando abre el modal entonces el ancho se sobrescribe con la variante sm del dialogo base', async () => {
+    // El dialogo base trae `sm:max-w-lg`; un `max-w-3xl` sin prefijo `sm:` pierde contra el
+    // y el detalle queda angosto y amontonado en pantallas de 640px o mas.
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ver detalles' }));
+
+    const dialogo = screen.getByText('Detalle de Despacho #1').closest('[data-slot="dialog-content"]');
+    expect(dialogo).toHaveClass('sm:max-w-4xl');
   });
 
   it('dado items no despachados presentes cuando abre el modal de detalle entonces los muestra', async () => {
@@ -359,6 +381,24 @@ describe('HistorialDespachos', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al revertir el despacho'));
   });
 
+  it('dado la pagina 3 en la url cuando imprime el historial entonces pide solo esa pagina', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
+        return Promise.resolve({ data: new Blob(['%PDF-fake']) });
+      }
+      return Promise.resolve({ data: makeResponse([DESPACHO_1]) });
+    });
+    renderComponent(['/?page=3']);
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/inventory/historial-despachos/imprimir/?page=3',
+      { responseType: 'blob' },
+    ));
+  });
+
   it('dado filtros de fecha en la url cuando imprime el historial entonces los incluye en la peticion', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
@@ -372,7 +412,7 @@ describe('HistorialDespachos', () => {
     await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
-      '/inventory/historial-despachos/imprimir/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10',
+      '/inventory/historial-despachos/imprimir/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10&page=1',
       { responseType: 'blob' },
     ));
   });

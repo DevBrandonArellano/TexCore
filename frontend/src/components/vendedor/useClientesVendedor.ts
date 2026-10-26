@@ -4,6 +4,8 @@ import apiClient from '../../lib/axios';
 import { usePagination } from '../../hooks/usePagination';
 import type { Cliente } from '../../lib/types';
 
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
+
 const ITEMS_PER_PAGE = 20;
 
 const EMPTY_CLIENTE_FORM = {
@@ -45,41 +47,32 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
 
   const handleCreateOrUpdateCliente = async () => {
     try {
-      const dataToSend = {
-        ...formData,
+      // El saldo y la cartera los calcula el servidor; la justificación solo aplica al editar.
+      const { saldo_pendiente: _saldo, cartera_vencida: _cartera, _justificacion_auditoria, ...datosCliente } = formData;
+      const datosNumericos = {
+        ...datosCliente,
         limite_credito: parseFloat(formData.limite_credito),
-        plazo_credito_dias: parseInt(formData.plazo_credito_dias as any),
-        _justificacion_auditoria: formData._justificacion_auditoria
+        plazo_credito_dias: parseInt(String(formData.plazo_credito_dias)),
       };
-      // @ts-ignore
-      delete dataToSend.saldo_pendiente;
-      // @ts-ignore
-      delete dataToSend.cartera_vencida;
 
       if (editingCliente) {
-        await apiClient.put(`/clientes/${editingCliente.id}/`, dataToSend);
+        await apiClient.put(`/clientes/${editingCliente.id}/`, { ...datosNumericos, _justificacion_auditoria });
         toast.success('Cliente actualizado correctamente');
       } else {
-        // @ts-ignore
-        delete dataToSend._justificacion_auditoria;
-        await apiClient.post('/clientes/', dataToSend);
+        await apiClient.post('/clientes/', datosNumericos);
         toast.success('Cliente registrado correctamente');
       }
       setIsDialogOpen(false);
       resetClienteForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving cliente:', error);
-      if (error.response?.data) {
-        const data = error.response.data;
-        if (data.detail) {
-          toast.error(data.detail);
-        } else if (typeof data === 'object') {
-          const messages = Object.entries(data).map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('\\n');
-          toast.error('Error de validación', { description: messages || 'Revisa los campos enviados.' });
-        } else {
-          toast.error('Error al guardar el cliente');
-        }
+      const data = datosDeError(error) as Record<string, unknown> | undefined;
+      if (data && typeof data === 'object' && typeof data.detail === 'string') {
+        toast.error(data.detail);
+      } else if (data) {
+        const mensaje = mensajeDeLaApi(error, 'Revisa los campos enviados.');
+        toast.error('Error de validación', { description: mensaje });
       } else {
         toast.error('Error de conexión o servidor al guardar el cliente');
       }
@@ -115,7 +108,7 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
       });
       toast.success('Cliente inactivado correctamente');
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error inactivating cliente:', error);
       toast.error('Error al inactivar el cliente');
     }
@@ -123,12 +116,12 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
 
   const openClienteDetail = async (cliente: Cliente) => {
     try {
-      // Fetch the detailed client object that includes the `pedidos` and `pagos` arrays which are omitted in list views
+      // Trae el cliente detallado, con `pedidos` y `pagos` (omitidos en el listado)
       const res = await apiClient.get(`/clientes/${cliente.id}/`);
       setSelectedCliente(res.data);
     } catch (e) {
       console.error("Error fetching client details", e);
-      setSelectedCliente(cliente); // Fallback
+      setSelectedCliente(cliente); // Alternativa
     }
     setIsDetailOpen(true);
   };

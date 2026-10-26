@@ -7,9 +7,11 @@ ISO 27001 A.12.4: trazabilidad de quién solicita qué reporte y con qué result
 COBIT MEA01: registro de acceso a información gerencial y ejecutiva.
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
-import logging
-from typing import Optional, Protocol, runtime_checkable
 
+import logging
+from typing import Protocol, runtime_checkable
+
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .engine import get_session_factory
@@ -48,22 +50,26 @@ class AuditRepository:
                 await session.commit()
             logger.info(
                 "Registro de auditoría de reporte guardado",
-                extra={"sd": {
-                    "rfc5424_severity": 6,
-                    "table": ReportAuditLog.__tablename__,
-                    "requested_by": record.requested_by,
-                    "report_type": record.report_type,
-                    "success": str(record.success),
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 6,
+                        "table": ReportAuditLog.__tablename__,
+                        "requested_by": record.requested_by,
+                        "report_type": record.report_type,
+                        "success": str(record.success),
+                    }
+                },
             )
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de reporte",
-                extra={"sd": {
-                    "rfc5424_severity": 4,
-                    "table": ReportAuditLog.__tablename__,
-                    "error": str(exc)[:200],
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 4,
+                        "table": ReportAuditLog.__tablename__,
+                        "error": str(exc)[:200],
+                    }
+                },
             )
 
 
@@ -72,9 +78,9 @@ def build_report_record(
     report_type: str,
     endpoint: str,
     success: bool,
-    params_json: Optional[str] = None,
-    format: Optional[str] = None,
-    error_detail: Optional[str] = None,
+    params_json: str | None = None,
+    format: str | None = None,
+    error_detail: str | None = None,
 ) -> ReportAuditLog:
     """Factory function — construye ReportAuditLog. SRP: separa construcción de persistencia."""
     return ReportAuditLog(

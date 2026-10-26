@@ -4,19 +4,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Cliente } from '../../lib/types';
-import { Users, Pencil, Trash2, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { Cliente, PayloadCliente } from '../../lib/types';
+import { Users, Pencil, Trash2, Shield } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageClientesProps {
   clientes: Cliente[];
-  onClienteCreate: (clienteData: any) => Promise<boolean>;
-  onClienteUpdate: (clienteId: number, clienteData: any) => Promise<boolean>;
+  onClienteCreate: (clienteData: PayloadCliente) => Promise<boolean>;
+  onClienteUpdate: (clienteId: number, clienteData: PayloadCliente) => Promise<boolean>;
   onClienteDelete: (clienteId: number) => void;
   loading: boolean;
 }
@@ -89,12 +90,9 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
       return;
     }
 
-    let success = false;
-    if (editingCliente) {
-      success = await onClienteUpdate(editingCliente.id, formData);
-    } else {
-      success = await onClienteCreate(formData);
-    }
+    const success = editingCliente
+      ? await onClienteUpdate(editingCliente.id, formData)
+      : await onClienteCreate(formData);
 
     if (success) {
       setIsOpen(false);
@@ -159,7 +157,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nivel_precio">Nivel de Precio</Label>
-                  <Select value={formData.nivel_precio} onValueChange={(value) => setFormData({ ...formData, nivel_precio: value as any })}>
+                  <Select value={formData.nivel_precio} onValueChange={(value) => setFormData({ ...formData, nivel_precio: value === 'mayorista' ? 'mayorista' : 'normal' })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona un nivel" />
                     </SelectTrigger>
@@ -276,52 +274,12 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4"
+        />
       </CardContent>
     </Card>
   );

@@ -17,10 +17,14 @@ asyncio.sleep(). Comparar contra una línea base medida en el mismo proceso
 entorno de test. Si el event loop estuviera bloqueado, paralelo tardaría ~=
 serie; con I/O verdaderamente async, paralelo debe ser sustancialmente
 más rápido.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: peticiones concurrentes.
 """
+
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi import Response
 from httpx import ASGITransport, AsyncClient
@@ -56,9 +60,7 @@ async def test_export_dado_peticiones_concurrentes_cuando_formateo_es_lento_ento
             serial_elapsed = time.monotonic() - start
 
             start = time.monotonic()
-            responses = await asyncio.gather(
-                *[client.post("/generate", json=body) for _ in range(_N_REQUESTS)]
-            )
+            responses = await asyncio.gather(*[client.post("/generate", json=body) for _ in range(_N_REQUESTS)])
             concurrent_elapsed = time.monotonic() - start
 
     assert all(r.status_code == 200 for r in responses)
