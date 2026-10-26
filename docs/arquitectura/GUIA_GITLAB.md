@@ -20,8 +20,8 @@ Los puertos 80 y 443 son del stack de TexCore y no se tocan. El archivo es `infr
 **Memoria.** El equipo tiene 16 GB y **no tiene swap**. GitLab queda limitado a 6 GB (usa ~3,8) y el stack de TexCore usa unos 3 GB, así que el staging es **efímero** (`scripts/staging_efimero.sh`): se levanta, se prueba y se baja dentro del pipeline. El 20-oct el OOM killer cerró el navegador y el escritorio al coincidir un pipeline con ambos; por eso:
 
 - `texcore-ci` corre **1 job a la vez** y cada job tiene un tope de 4 GB (`memory = "4g"` y `service_memory = "3g"` en `[runners.docker]` del `config.toml` del runner). Un exceso hace fallar ese job, no el equipo.
-- El SQL Server de las pruebas lleva `MSSQL_MEMORY_LIMIT_MB=2048` (en `.gitlab-ci.yml` y en `scripts/run_backend_tests.sh`): sin tope, reserva hasta el 80 % de la memoria.
-- `test:frontend` acota el heap de Node a 2 GB.
+- El SQL Server de las pruebas lleva `MSSQL_MEMORY_LIMIT_MB=1024` (en `.gitlab-ci.yml` y en `scripts/run_backend_tests.sh`): sin tope, reserva hasta el 80 % de la memoria.
+- `test:frontend` acota el heap de Node a 1,5 GB y corre Vitest con 2 procesos (`--maxWorkers=2`).
 - **Crea swap** (necesita `sudo`; protege al escritorio de los picos): `sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile && echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab`; o zram con `systemd-zram-generator`.
 - Mientras corre un pipeline evita abrir muchas pestañas; el pipeline completo dura unos 15 minutos.
 
