@@ -45,7 +45,7 @@ Todos estaban cumplidos y verificados. La columna «Detalle» dice dónde leerlo
 | `2026-10-01-decisiones-fase-b-y-unificacion-migraciones` | Decisiones de la fase B y migraciones unificadas | `CHANGELOG`, 1-oct-2026 |
 | `2026-10-01-fase-b-rutas-sin-consumidor` | Rutas de la API sin consumidor | `CHANGELOG`, 1-oct-2026; `scripts/auditar_rutas_frontend.py` devuelve 0 |
 | `2026-10-05-migracion-ruff` | Migración a Ruff, 5 etapas | `CHANGELOG`, 5-oct (etapas 1-4) y 14-oct-2026 (etapa 5, el formateador); `ADR_008` |
-| `2026-10-05-modernizacion-ci-cd` | Modernización del CI/CD, 7 fases | `CHANGELOG`, 5-oct, 13-oct y 14-oct-2026. **Faltan las acciones en GitHub** (rama por defecto, rulesets, environment y runner), que hace el usuario: paso 9 de la hoja de ruta |
+| `2026-10-05-modernizacion-ci-cd` | Modernización del CI/CD, 7 fases | `CHANGELOG`, 5-oct, 13-oct y 14-oct-2026. Acciones en GitHub hechas el 26-oct-2026: rama por defecto `master`, rama `main` eliminada y `MES`, `staging` y `master` sincronizadas sin coautores de IA. El entorno y el runner siguen en GitLab |
 | `2026-10-14-historial-mantenimiento-maquinas` | Historial de mantenimiento y paros de máquina | `CHANGELOG`, 14-oct-2026 (tarde) y `ADR_013` |
 
 Las entradas antiguas del `CHANGELOG` siguen citando estas rutas: son referencias históricas a archivos

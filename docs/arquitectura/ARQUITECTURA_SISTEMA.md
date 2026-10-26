@@ -1509,7 +1509,7 @@ runner `texcore-produccion`           # Etiqueta `produccion` (GUIA_GITLAB.md §
 
 ### 8.4 GitHub (espejo)
 
-El 5-oct-2026 se retiro un primer `.gitlab-ci.yml` porque el repositorio vivia en GitHub y los dos pipelines divergian (Node 20 frente a 24, escaneo de satelites solo en GitLab). El 20-oct-2026 se invirtio la decision (ADR-014): GitLab es la plataforma principal, como pide la tesis, y los workflows de GitHub Actions y Dependabot se eliminaron en el mismo cambio. GitHub conserva una copia del codigo por *push mirror*; no ejecuta nada. Ver el `CHANGELOG.md` del 5-oct, 13-oct, 14-oct y 20-oct-2026.
+El 5-oct-2026 se retiro un primer `.gitlab-ci.yml` porque el repositorio vivia en GitHub y los dos pipelines divergian (Node 20 frente a 24, escaneo de satelites solo en GitLab). El 20-oct-2026 se invirtio la decision (ADR-014): GitLab es la plataforma principal, como pide la tesis, y los workflows de GitHub Actions y Dependabot se eliminaron en el mismo cambio. GitHub conserva una copia del codigo por *push mirror*; no ejecuta nada. El 26-oct-2026 se reescribieron `MES`, `staging` y `master` en GitHub para quitar los coautores de IA de los mensajes de commit, y se eliminó la rama `main`; la rama por defecto es `master`. Ver el `CHANGELOG.md` del 5-oct, 13-oct, 14-oct, 20-oct y 26-oct-2026.
 
 ### 8.5 Despliegue y operacion manual
 

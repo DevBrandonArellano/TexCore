@@ -1,6 +1,6 @@
 # Contraste de la tesis con el sistema — evidencia no automatizada
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0009` · **Fecha:** 14-oct-2026
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0010` · **Fecha:** 26-oct-2026
 > (La evidencia de infraestructura del Sprint 0 se capturó el 13-oct, sobre `gestion/0008`; nada de lo añadido después la altera.)
 > **Propósito:** respaldar el paso a producción, contrastando cada compromiso de la tesis con el sistema.
 > **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
@@ -25,7 +25,7 @@ DoD de la tesis: «Contenedores levantan sin errores; pipeline ejecuta build y l
 | Puerto de la BD no accesible desde fuera (TEX-02 CA-2) | 1433 sin publicar y conexión rechazada: `sprint-0/2026-10-08_puerto-bd.txt` | ✅ |
 | Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` por HTTPS a `/api/health/` y a `/`: `sprint-0/2026-10-13_nginx-https.txt` | ✅ |
 | IP real del cliente en la auditoría (TEX-03 CA-3) | `gestion/tests/test_system_views.py` (`_extract_client_ip`) | ✅ |
-| Pipeline ejecuta build y lint (TEX-04) | Pipeline #6 del `.gitlab-ci.yml` en GitLab CI (20-oct-2026): los 12 jobs de integración (`lint:*`, `test:*`, `audit:*`) en verde, cobertura media 95,8 %. El build de imágenes y el release se ejecutan al fusionar en `master` | ✅ integración · ⏳ release |
+| Pipeline ejecuta build y lint (TEX-04) | Pipeline #6 del `.gitlab-ci.yml` en GitLab CI (20-oct-2026): los 12 jobs de integración (`lint:*`, `test:*`, `audit:*`) en verde, cobertura media 95,8 %. El build de imágenes y el release se ejecutan al fusionar en `master`. La configuración de los jobs cambió el 26-oct (topes de memoria): la corrida con la configuración actual está pendiente de subir | ✅ integración · ⏳ release y corrida actual |
 | Estructura base del repositorio y estándares (TEX-05) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` y convención ISTQB de nombres de prueba | ✅ |
 | Backlog estimado y priorizado | `docs/gestion-proyecto/PRODUCT_BACKLOG.md`: 54 historias, 288 puntos, 9 épicas | ✅ |
 
@@ -36,7 +36,7 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 | Sprint | DoD de la tesis | Evidencia | Veredicto |
 |---|---|---|---|
 | 1 | Acceso restringido por rol verificado; pruebas de acceso no autorizado superadas; auditoría activa | TEX-06 a TEX-10 (53 pruebas) | ✅ |
-| 2 | OP transita estados correctamente; registro de lote atómico; cobertura ≥ 75 % | TEX-11 a TEX-17 (444 pruebas); cobertura del núcleo de 92,1 % | ✅ |
+| 2 | OP transita estados correctamente; registro de lote atómico; cobertura ≥ 75 % | TEX-11 a TEX-17 (444 pruebas); cobertura del núcleo de 92,5 % | ✅ |
 | 3 | Movimientos reflejan saldo correcto; cada operación auditada; sin saldos inconsistentes | TEX-18 a TEX-23 (151 pruebas); stock = kárdex en 51 994 combinaciones tras la carga concurrente (`docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3.3) | ✅ |
 | 4 | MRP genera órdenes de compra sugeridas; alertas correctas; pruebas de borde superadas | TEX-24 a TEX-29 (209 pruebas) | ✅ |
 | 5 | Validación de crédito bloquea pedidos fuera de cupo; FIFO aplica cronológicamente; reversión auditada | TEX-30 a TEX-36 (80 pruebas) | ✅ |
@@ -51,7 +51,7 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 |---|---|---|
 | Código integrado en la rama principal a través del pipeline de CI/CD | PR `MES` → `staging` → `master` con los checks en verde | ⏳ |
 | Superación de los análisis estáticos (flake8, bandit, detect-secrets) | Gates bloqueantes del `.gitlab-ci.yml`, todos en 0. Job `lint:backend`: Ruff (estilo y reglas de seguridad `S`, que reemplazan a flake8 y bandit; ADR-015), mypy y detect-secrets (ningún secreto nuevo y línea base auditada por completo). Job `sast:semgrep`: Semgrep. Job `test:frontend`: ESLint y `tsc`. Job `lint:istqb`: convención ISTQB | ✅ |
-| Cobertura de pruebas automatizadas ≥ 75 % en el núcleo | 92,1 % del backend sobre SQL Server, con un gate de 90 % en el CI (`.coveragerc`). Microservicios con gates de 95 % (`printing_service`), 90 % (`reporting_excel`) y 90 % (`scanning_service`). Frontend con 95,5 % de sentencias, 90,0 % de ramas, 93,9 % de funciones y 96,6 % de líneas | ✅ |
+| Cobertura de pruebas automatizadas ≥ 75 % en el núcleo | 92,5 % del backend sobre SQL Server (1944 pruebas), con un gate de 90 % en el CI (`.coveragerc`). Microservicios con gates de 95 % (`printing_service`: 98,6 %), 90 % (`reporting_excel`: 98,3 %) y 90 % (`scanning_service`: 94,0 %). Frontend (1981 pruebas) con 95,4 % de sentencias, 90,2 % de ramas, 93,7 % de funciones y 96,5 % de líneas | ✅ |
 | Registro de auditoría en las operaciones críticas | TEX-09 (auditoría inmutable) y TEX-10 (justificación obligatoria), en `EVIDENCIA_POR_SPRINT.md` Sprint 1 | ✅ |
 | Despliegue verificado en el ambiente de staging | Despliegue en staging con la suite en verde | ⏳ |
 

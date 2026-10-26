@@ -595,10 +595,11 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | Brechas del código nuevo y convención de nombres (2-oct-2026, SQLite local) | 91.3% | 1478 ✅ |
 | CI/CD Fase 2 y Ruff Etapas 1-3 (5-oct-2026, SQLite local) | 91.2% | 1490 ✅ |
 | Ruff Etapa 4: DJ001, DJ012 y C901 (5-oct-2026, SQLite local, igual que el CI con `.coveragerc`) | **91.8%** | **1530 ✅** |
+| Validación con topes de memoria del CI (26-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.5%** | **1944 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).
 
 Frontend (`npx vitest run --coverage`, umbrales en `frontend/vite.config.ts`: lines 95, functions 91, branches 89,
-statements 94): **1888 pruebas** en 129 archivos, 95,67 / 90,16 / 93,62 / 96,61 % (statements / branches /
-functions / lines).
+statements 94): **1981 pruebas** en 138 archivos, 95,37 / 90,22 / 93,67 / 96,47 % (statements / branches /
+functions / lines), medido el 26-oct-2026 con `--maxWorkers=2`.

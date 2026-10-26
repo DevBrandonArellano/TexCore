@@ -68,6 +68,27 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 26 de Octubre de 2026 — Limpieza del historial en GitHub y release a master
+
+- **Coautores de IA:** se quitaron las líneas `Co-Authored-By` de los mensajes de commit de `MES`, `staging` y `master` en GitHub (38, 2 y 2 commits). El árbol de archivos no cambió. La reescritura se hizo sobre un clon espejo y se verificó antes de subirla, con `--force-with-lease`. La regla de protección de `master` se desactivó temporalmente para ese `force push` y se volvió a activar.
+- **Pull requests:** `MES` → `staging` (#43) y `staging` → `master` (#44), con merge commit. Tras la fusión, `master` y `staging` tienen el mismo árbol.
+- **Rama por defecto:** `master`. Se eliminó la rama `main`, que tenía un único commit sin relación con el resto.
+- **Clon local:** `MES` se alineó con `origin/MES`, `staging` y `master` con sus ramas remotas, y se borró la rama local `main`. Los cambios de evidencia de esta sesión quedaron sin commitear sobre `MES`. Se eliminaron los 20 stashes viejos del clon.
+- **Pendiente:** rotar la clave privada JWT que estuvo en `.env.test` (el repo es público) y quitar ese archivo del repo. Ver la sección 8.4 de `ARQUITECTURA_SISTEMA.md`.
+
+### 26 de Octubre de 2026 — Contraste de la tesis actualizado (sin commitear)
+
+Revisión de `CHECKLIST_EVIDENCIA_MANUAL.md` contra el Anteproyecto (RNF de las Tablas 6 a 10, DoD de §5.1, Tabla 14, §5.3 y §5.4), con las cifras medidas hoy:
+
+- Versión evaluada: migraciones hasta `gestion/0010` (antes `0009`).
+- Backend: cobertura 92,5 % (antes 92,1 %), 1944 pruebas.
+- Frontend: 95,4 / 90,2 / 93,7 / 96,5 % (sentencias / ramas / funciones / líneas), 1981 pruebas; antes 95,5 / 90,0 / 93,9 / 96,6 %. Los umbrales de `vite.config.ts` se cumplen.
+- Microservicios: `scanning_service` 94,0 %, `reporting_excel` 98,3 %, `printing_service` 98,6 %.
+- Se verificó que existen los archivos de evidencia de Sprint 0 y las pruebas de acceso citadas en RNF-01 y RNF-02.
+- Se añadió que el pipeline #6 es anterior al cambio de topes de memoria, y que la corrida con la configuración actual sigue pendiente.
+
+Ningún veredicto cambia. Siguen pendientes: TEX-54 y el despliegue en staging, RNF-05 (grabaciones), el primer release en `master` y el despliegue en la VM de producción. La corrección de flake8 y bandit por Ruff sigue sin aplicarse en el texto de la tesis.
+
 ### 26 de Octubre de 2026 — Topes de memoria del CI más bajos (sin commitear)
 
 Ajuste de los topes de memoria de los jobs, para que la corrida de pipeline no sature el equipo:
