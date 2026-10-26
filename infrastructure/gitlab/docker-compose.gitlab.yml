@@ -32,8 +32,11 @@ services:
         registry_nginx['ssl_certificate'] = '/etc/gitlab/ssl/gitlab.crt'
         registry_nginx['ssl_certificate_key'] = '/etc/gitlab/ssl/gitlab.key'
         # El equipo comparte memoria con el stack de TexCore (16 GB): se acota GitLab.
-        puma['worker_processes'] = 2
-        sidekiq['concurrency'] = 10
+        # 0 = modo single de Puma: sin workers extra (cada uno ~1 GiB de Rails).
+        puma['worker_processes'] = 0
+        sidekiq['concurrency'] = 5
+        # KAS (agente de Kubernetes) no se usa: se desactiva para liberar ~90 MiB.
+        gitlab_kas['enable'] = false
         postgresql['shared_buffers'] = '256MB'
         prometheus_monitoring['enable'] = false
         # Respaldo diario por cron del contenedor y retención de 7 días.
