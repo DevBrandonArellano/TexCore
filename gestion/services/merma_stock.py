@@ -1,6 +1,8 @@
 import logging
 from decimal import Decimal
+
 from django.db import transaction
+
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
@@ -25,37 +27,37 @@ class MermaStockService:
         if not maquina or not maquina.producto_merma_id or not maquina.bodega_merma_id:
             return
 
-        peso_merma = lote.peso_merma.quantize(Decimal('0.01'))
+        peso_merma = lote.peso_merma.quantize(Decimal("0.01"))
         if peso_merma <= 0:
             return
 
-        stock, _ = safe_get_or_create_stock(
-            StockBodega, maquina.bodega_merma, maquina.producto_merma, lote=lote
-        )
+        stock, _ = safe_get_or_create_stock(StockBodega, maquina.bodega_merma, maquina.producto_merma, lote=lote)
         stock = StockBodega.objects.select_for_update().get(id=stock.id)
         stock.cantidad += peso_merma
-        stock._justificacion_auditoria = f'Merma vendible de lote {lote.codigo_lote}'
+        stock._justificacion_auditoria = f"Merma vendible de lote {lote.codigo_lote}"
         stock.save()
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='PRODUCCION',
+            tipo_movimiento="PRODUCCION",
             producto=maquina.producto_merma,
             lote=lote,
             bodega_destino=maquina.bodega_merma,
             cantidad=peso_merma,
-            documento_ref=f'MERMA-{lote.codigo_lote}',
+            documento_ref=f"MERMA-{lote.codigo_lote}",
             usuario=user,
             saldo_resultante=stock.cantidad,
         )
 
         logger.info(
-            'Merma vendible registrada',
-            extra={'sd': {
-                'lote': lote.codigo_lote,
-                'producto_merma': maquina.producto_merma.codigo,
-                'cantidad_kg': str(peso_merma),
-                'bodega': maquina.bodega_merma.nombre,
-            }},
+            "Merma vendible registrada",
+            extra={
+                "sd": {
+                    "lote": lote.codigo_lote,
+                    "producto_merma": maquina.producto_merma.codigo,
+                    "cantidad_kg": str(peso_merma),
+                    "bodega": maquina.bodega_merma.nombre,
+                }
+            },
         )
 
     @staticmethod
@@ -66,7 +68,7 @@ class MermaStockService:
         if not maquina or not maquina.producto_merma_id:
             return
 
-        peso_merma = lote.peso_merma.quantize(Decimal('0.01'))
+        peso_merma = lote.peso_merma.quantize(Decimal("0.01"))
         if peso_merma <= 0:
             return
 
@@ -84,12 +86,12 @@ class MermaStockService:
         stock.save()
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='DEVOLUCION',
+            tipo_movimiento="DEVOLUCION",
             producto=maquina.producto_merma,
             lote=lote,
             bodega_origen=maquina.bodega_merma,
             cantidad=peso_merma,
-            documento_ref=f'REV-MERMA-{lote.codigo_lote}',
+            documento_ref=f"REV-MERMA-{lote.codigo_lote}",
             usuario=user,
             saldo_resultante=stock.cantidad,
             observaciones=justificacion,

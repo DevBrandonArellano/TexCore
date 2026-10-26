@@ -1,0 +1,161 @@
+import logging
+
+from django.conf import settings
+from django.middleware.csrf import get_token
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+logger = logging.getLogger(__name__)
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["username"] = user.username
+        token["groups"] = list(user.groups.values_list("name", flat=True))
+        return token
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+    # Login: público por diseño. TokenViewBase de simplejwt ya lo deja abierto
+    # (permission_classes = ()), así que el default global IsAuthenticated no lo
+    # bloquearía; AllowAny se declara explícito por claridad y defensa en profundidad.
+    # Los stubs de simplejwt declaran `permission_classes: tuple[()]` (vacío) en TokenViewBase.
+    permission_classes = [AllowAny]  # type: ignore[assignment]
+
+    def post(self, request, *args, **kwargs):
+        # El serializer se procesa aquí para acceder al usuario
+        serializer = self.get_serializer(data=request.data)
+
+        try:
+            serializer.is_valid(raise_exception=True)
+        except InvalidToken as e:
+            raise InvalidToken(e.args[0]) from e
+
+        user = serializer.user
+
+        from gestion.serializers import CustomUserSerializer
+        from gestion.views.profile_views import get_user_role
+
+        user_serializer = CustomUserSerializer(user)
+
+        role = get_user_role(user)
+
+        access_token = serializer.validated_data["access"]
+        refresh_token = serializer.validated_data["refresh"]
+
+        response_data = {"user": user_serializer.data, "role": role}
+
+        response = Response(response_data, status=status.HTTP_200_OK)
+        # Cookie `csrftoken` para las escrituras que siguen al login (CookieJWTAuthentication).
+        get_token(request)
+
+        # Establece las cookies
+        access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
+        secure_cookie = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SECURE", False)
+        samesite = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SAMESITE", "Lax")
+
+        response.set_cookie(
+            access_cookie_name,
+            access_token,
+            max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
+            httponly=True,
+            samesite=samesite,
+            secure=secure_cookie,
+            path="/",
+        )
+        response.set_cookie(
+            refresh_cookie_name,
+            refresh_token,
+            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+            httponly=True,
+            samesite=samesite,
+            secure=secure_cookie,
+            path="/",
+        )
+
+        return response
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    # Refresh: se autentica con la cookie de refresh, no con el access token.
+    # simplejwt ya lo deja abierto (TokenViewBase.permission_classes = ());
+    # AllowAny se declara explícito por claridad y defensa en profundidad.
+    # Los stubs de simplejwt declaran `permission_classes: tuple[()]` (vacío) en TokenViewBase.
+    permission_classes = [AllowAny]  # type: ignore[assignment]
+
+    def post(self, request, *args, **kwargs):
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
+        refresh_token = request.COOKIES.get(refresh_cookie_name)
+
+        if not refresh_token:
+            raise InvalidToken("No refresh token found in cookies.")
+
+        request.data["refresh"] = refresh_token
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except InvalidToken as e:
+            response = Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+            access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+            response.delete_cookie(access_cookie_name, path="/")
+            response.delete_cookie(refresh_cookie_name, path="/")
+            return response
+
+        if response.status_code == 200:
+            access_token = response.data["access"]
+            access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+            secure_cookie = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SECURE", False)
+            samesite = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_SAMESITE", "Lax")
+
+            response.set_cookie(
+                access_cookie_name,
+                access_token,
+                max_age=int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()),
+                httponly=True,
+                samesite=samesite,
+                secure=secure_cookie,
+                path="/",
+            )
+            # El refresh rotado ya lo maneja el middleware de cookies; el access no va en el cuerpo.
+            if "access" in response.data:
+                del response.data["access"]
+
+        return response
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        access_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE", "access_token")
+        refresh_cookie_name = getattr(settings, "SIMPLE_JWT", {}).get("AUTH_COOKIE_REFRESH", "refresh_token")
+        refresh_token_str = request.COOKIES.get(refresh_cookie_name)
+
+        # Agregar el refresh token a la blacklist para invalidarlo en el servidor.
+        # Aunque el cliente elimine la cookie, el token seguiría siendo válido
+        # hasta su expiración sin este paso.
+        if refresh_token_str:
+            try:
+                token = RefreshToken(refresh_token_str)
+                token.blacklist()
+            except TokenError:
+                # Token ya expirado o inválido — no es un error
+                pass
+            except Exception:
+                # La blacklist puede no estar migrada aún — loguear pero no bloquear el logout
+                logger.exception("Error al agregar refresh token a blacklist durante logout")
+
+        response = Response({"message": "Logout exitoso"}, status=status.HTTP_200_OK)
+        response.delete_cookie(access_cookie_name, path="/")
+        response.delete_cookie(refresh_cookie_name, path="/")
+        return response

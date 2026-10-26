@@ -1,20 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Proveedor } from '../../lib/types';
-import { Truck, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PayloadProveedor, Proveedor } from '../../lib/types';
+import { Truck, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageProveedoresProps {
   proveedores: Proveedor[];
-  onProveedorCreate: (proveedorData: any) => Promise<boolean>;
-  onProveedorUpdate: (proveedorId: number, proveedorData: any) => Promise<boolean>;
+  onProveedorCreate: (proveedorData: PayloadProveedor) => Promise<boolean>;
+  onProveedorUpdate: (proveedorId: number, proveedorData: PayloadProveedor) => Promise<boolean>;
   onProveedorDelete: (proveedorId: number) => void;
   loading: boolean;
 }
@@ -39,23 +41,15 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
     );
   }, [proveedores, searchTerm]);
 
-  const totalPages = Math.ceil(filteredProveedores.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedProveedores = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredProveedores.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProveedores, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedProveedores,
+  } = usePagination(filteredProveedores, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -79,12 +73,9 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
       return;
     }
 
-    let success = false;
-    if (editingProveedor) {
-      success = await onProveedorUpdate(editingProveedor.id, formData);
-    } else {
-      success = await onProveedorCreate(formData);
-    }
+    const success = editingProveedor
+      ? await onProveedorUpdate(editingProveedor.id, formData)
+      : await onProveedorCreate(formData);
 
     if (success) {
       setIsOpen(false);
@@ -207,56 +198,12 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4"
+        />
       </CardContent>
     </Card>
   );

@@ -1,3 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): datos aun no resueltos / pedidos pendientes / sin pedidos pendientes /
+ *   error al cargar pedidos / un texto de busqueda.
+ * - Análisis de valores límite (BVA): un codigo de barras vacio.
+ * - Transición de estados (STT): pedidos pendientes / sin pedidos pendientes / mas de 20 pedidos pendientes /
+ *   un pedido con estado despachado parcial.
+ * - Caja blanca (CB): ramas de error — error al cargar pedidos / un error de red / un error del servidor
+ *   distinto de 409.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -5,13 +15,15 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { DespachoDashboard } from './DespachoDashboard';
 
+import { PedidoVenta } from '../../lib/types';
+
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -20,9 +32,9 @@ const toastSuccessMock = vi.fn();
 const toastWarningMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
-    warning: (...args: any[]) => toastWarningMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+    warning: (...args: unknown[]) => toastWarningMock(...args),
   },
 }));
 
@@ -32,7 +44,7 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-const PEDIDO_1 = {
+const PEDIDO_1: PedidoVenta = {
   id: 1,
   cliente: 100,
   cliente_nombre: 'Cliente A',
@@ -48,7 +60,7 @@ const PEDIDO_1 = {
   anulado: false,
 };
 
-const PEDIDO_2 = {
+const PEDIDO_2: PedidoVenta = {
   ...PEDIDO_1,
   id: 2,
   guia_remision: 'G-002',
@@ -58,7 +70,7 @@ const PEDIDO_2 = {
   ],
 };
 
-const PEDIDO_3 = {
+const PEDIDO_3: PedidoVenta = {
   ...PEDIDO_1,
   id: 3,
   cliente: 200,
@@ -66,7 +78,7 @@ const PEDIDO_3 = {
   guia_remision: 'G-003',
 };
 
-function mockPedidosResponse(pedidos: any[]) {
+function mockPedidosResponse(pedidos: PedidoVenta[]) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/pedidos-venta/?estado=pendiente')) {
       return Promise.resolve({ data: pedidos });
@@ -86,7 +98,7 @@ function renderComponent() {
   );
 }
 
-async function enterDespachoMode(pedidos: any[], selectIndexes: number[] = [0]) {
+async function enterDespachoMode(pedidos: PedidoVenta[], selectIndexes: number[] = [0]) {
   mockPedidosResponse(pedidos);
   renderComponent();
   await waitFor(() => expect(screen.getByText(`#${pedidos[0].guia_remision}`)).toBeInTheDocument());
@@ -210,6 +222,43 @@ describe('DespachoDashboard', () => {
     await waitFor(() => expect(screen.getByText('LOTE-1001')).toBeInTheDocument());
     expect(screen.getByText('25.50')).toBeInTheDocument();
     expect(toastSuccessMock).toHaveBeenCalledWith('Lote LOTE-1001 agregado (25.5kg)');
+  });
+
+  // Un lote puede traer productos agregados a mano (decisión 2026-10-07): el despacho
+  // vende los que piden los pedidos y el conteo de la carga debe reflejarlo.
+  const LOTE_CON_PRODUCTO_MANUAL = {
+    valid: true,
+    lote: {
+      codigo: 'LOTE-2002', producto_id: 10, producto_nombre: 'Hilo Poliéster', peso: '40.00', peso_total: '60.00',
+      productos: [
+        { producto_id: 10, producto_nombre: 'Hilo Poliéster', peso: '40.00', bodega_id: 1, bodega_nombre: 'PT' },
+        { producto_id: 11, producto_nombre: 'Hilo Nylon', peso: '20.00', bodega_id: 1, bodega_nombre: 'PT' },
+      ],
+    },
+  };
+
+  it('dado un lote con producto manual pedido cuando escanea entonces cuenta cada producto en su requerimiento', async () => {
+    await enterDespachoMode([PEDIDO_1, PEDIDO_2], [0, 1]);
+    mockPost.mockResolvedValueOnce({ data: LOTE_CON_PRODUCTO_MANUAL });
+
+    await scanLote('LOTE-2002');
+
+    await waitFor(() => expect(screen.getByText('40.00 / 50.00 kg')).toBeInTheDocument());
+    expect(screen.getByText('20.00 / 30.00 kg')).toBeInTheDocument();
+    expect(screen.getByText('+ Hilo Nylon (20.00)')).toBeInTheDocument();
+    expect(toastSuccessMock).toHaveBeenCalledWith('Lote LOTE-2002 agregado (60kg)');
+  });
+
+  it('dado un lote con producto manual que nadie pide cuando escanea entonces no lo cuenta', async () => {
+    await enterDespachoMode([PEDIDO_1]);
+    mockPost.mockResolvedValueOnce({ data: LOTE_CON_PRODUCTO_MANUAL });
+
+    await scanLote('LOTE-2002');
+
+    await waitFor(() => expect(screen.getByText('40.00 / 50.00 kg')).toBeInTheDocument());
+    expect(screen.queryByText('Hilo Nylon')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Hilo Nylon (20.00)')).not.toBeInTheDocument();
+    expect(toastSuccessMock).toHaveBeenCalledWith('Lote LOTE-2002 agregado (40kg)');
   });
 
   it('dado un codigo de lote invalido con motivo cuando escanea entonces muestra el motivo', async () => {
@@ -556,5 +605,93 @@ describe('DespachoDashboard', () => {
     await userEvent.tab();
 
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado una respuesta paginada con results cuando carga entonces extrae el arreglo de pedidos', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/pedidos-venta/?estado=pendiente')) {
+        return Promise.resolve({ data: { results: [PEDIDO_1] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+  });
+
+  it('dado un detalle sin producto_descripcion cuando calcula requerimientos entonces usa el nombre de fallback Producto <id>', async () => {
+    const pedidoSinDescripcion = {
+      ...PEDIDO_1,
+      detalles: [{ id: 1, pedido_venta: 1, producto: 77, lote: null, cantidad: 1, piezas: 1, peso: 50, precio_unitario: 1 }],
+    };
+    await enterDespachoMode([pedidoSinDescripcion]);
+
+    expect(screen.getByText('0.00 / 50.00 kg')).toBeInTheDocument();
+    expect(screen.getByText('Producto 77')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin detalles cuando entra en modo despacho entonces no hay requerimientos calculados', async () => {
+    const pedidoSinDetalles = { ...PEDIDO_1, detalles: undefined };
+    await enterDespachoMode([pedidoSinDetalles]);
+
+    expect(screen.getByText('No hay requerimientos calculados.')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin detalles cuando renderiza la fila entonces muestra 0 productos y 0.00 kg', async () => {
+    const pedidoSinDetalles = { ...PEDIDO_1, detalles: undefined };
+    mockPedidosResponse([pedidoSinDetalles]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+    expect(screen.getByText('0 prod.')).toBeInTheDocument();
+    expect(screen.getByText('0.00 kg')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin guia_remision cuando renderiza la fila entonces usa el id como fallback', async () => {
+    // Dato fuera de contrato a propósito: un pedido antiguo sin guía de remisión.
+    const pedidoSinGuia = { ...PEDIDO_1, guia_remision: null } as unknown as PedidoVenta;
+    mockPedidosResponse([pedidoSinGuia]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+  });
+
+  it('dado un pedido con estado despachado_parcial cuando renderiza la fila entonces muestra el badge Parcial', async () => {
+    const pedidoParcial = { ...PEDIDO_1, estado: 'despachado_parcial' as const };
+    mockPedidosResponse([pedidoParcial]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('Parcial')).toBeInTheDocument());
+  });
+
+  it('dado un id seleccionado que ya no existe en la lista de pedidos cuando recalcula requerimientos entonces lo ignora sin romper', async () => {
+    mockPedidosResponse([PEDIDO_1, PEDIDO_2]);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await userEvent.click(checkboxes[0]);
+    await userEvent.click(checkboxes[1]);
+
+    const search = screen.getByPlaceholderText('Buscar por cliente, guía...');
+    await userEvent.type(search, 'G-002');
+    await waitFor(() => expect(screen.queryByText('#G-001')).not.toBeInTheDocument());
+
+    expect(screen.getByText('2 Pedidos')).toBeInTheDocument();
+  });
+
+  it('dado un despacho exitoso con despacho_id cuando imprime documentos entonces incluye el historial_id en la query', async () => {
+    await enterDespachoMode([PEDIDO_1]);
+    mockPost.mockResolvedValueOnce({
+      data: { valid: true, lote: { codigo: 'LOTE-1001', producto_id: 10, producto_nombre: 'Hilo Poliéster', peso: '50.00' } },
+    });
+    await scanLote('LOTE-1001');
+    await waitFor(() => expect(screen.getByText('LOTE-1001')).toBeInTheDocument());
+
+    mockPost.mockResolvedValueOnce({ data: { despacho_id: 999 } });
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Salida' }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith('/pedidos-venta/1/download_pdf/?historial_id=999', { responseType: 'blob' }),
+    );
   });
 });

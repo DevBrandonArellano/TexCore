@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin areas / loading true / areas existentes / area sin sede coincidente /
+ *   boton nueva area.
+ * - Caja blanca (CB): ramas de error — onAreaCreate falla.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -8,7 +14,7 @@ import { Area, Sede } from '../../lib/types';
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
@@ -70,6 +76,23 @@ describe('ManageAreas', () => {
     renderComponent({ areas: [], selectedSedeId: '999' });
     await userEvent.click(screen.getByRole('button', { name: /Nueva Área/i }));
     expect(screen.getByText('Sede Norte')).toBeInTheDocument();
+  });
+
+  it('dado sin sedes disponibles cuando abre el dialogo para crear entonces no puede autoasignar una sede', async () => {
+    renderComponent({ areas: [], sedes: [] });
+    await userEvent.click(screen.getByRole('button', { name: /Nueva Área/i }));
+    expect(screen.getByText('Selecciona una sede en el menú lateral')).toBeInTheDocument();
+  });
+
+  it('dado sin sedes disponibles cuando intenta guardar sin sede entonces muestra el error de sede requerida', async () => {
+    const onAreaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ areas: [], sedes: [], onAreaCreate });
+    await userEvent.click(screen.getByRole('button', { name: /Nueva Área/i }));
+    await userEvent.type(screen.getByPlaceholderText('ej: Producción A'), 'Área nueva');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Área' }));
+
+    await waitFor(() => expect(screen.getAllByText('Selecciona una sede en el menú lateral').length).toBeGreaterThanOrEqual(2));
+    expect(onAreaCreate).not.toHaveBeenCalled();
   });
 
   it('dado nueva area sin nombre cuando intenta guardar entonces muestra error y no llama onAreaCreate', async () => {

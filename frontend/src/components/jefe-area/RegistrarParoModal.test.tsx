@@ -1,3 +1,9 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el modal abierto / sin categoria seleccionada / categoria seleccionada e
+ *   inicio valido / un error del backend.
+ * - Caja blanca (CB): ramas de error — un error del backend.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -5,15 +11,15 @@ import { RegistrarParoModal } from './RegistrarParoModal';
 
 const mockPost = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { post: (...args: any[]) => mockPost(...args) },
+  default: { post: (...args: unknown[]) => mockPost(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 

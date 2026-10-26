@@ -1,22 +1,28 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { Producto } from '../../lib/types';
-import { PackagePlus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PayloadProducto, Producto } from '../../lib/types';
+import { PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { SearchableSelect } from '../ui/searchable-select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
+import { PAISES } from '../../lib/paises';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+
+const CALIDAD_OPCIONES = ['Primera', 'Segunda', 'Saldo / Retazo'];
 
 interface ManageProductosProps {
   productos: Producto[];
-  onProductCreate: (productData: any) => Promise<boolean>;
-  onProductUpdate: (productId: number, productData: any) => Promise<boolean>;
+  onProductCreate: (productData: PayloadProducto) => Promise<boolean>;
+  onProductUpdate: (productId: number, productData: PayloadProducto) => Promise<boolean>;
   onProductDelete: (productId: number) => void;
   loading: boolean;
 }
@@ -29,7 +35,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'merma',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'colorante' | 'producto_intermedio' | 'merma',
     unidad_medida: 'kg' as 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades',
     stock_minimo: 0,
     precio_base: 0,
@@ -53,23 +59,15 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     });
   }, [productos, searchTerm, filtroTipo]);
 
-  const totalPages = Math.ceil(filteredProductos.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedProductos = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredProductos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProductos, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedProductos,
+  } = usePagination(filteredProductos, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -101,12 +99,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       return;
     }
 
-    let success = false;
-    if (editingProducto) {
-      success = await onProductUpdate(editingProducto.id, formData);
-    } else {
-      success = await onProductCreate(formData);
-    }
+    const success = editingProducto
+      ? await onProductUpdate(editingProducto.id, formData)
+      : await onProductCreate(formData);
 
     if (success) {
       setIsOpen(false);
@@ -132,7 +127,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
 
   return (
     <Card className="flex flex-col h-full min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Productos</CardTitle>
@@ -168,13 +163,14 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo</Label>
-                  <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value as any })}>
+                  <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value as Producto['tipo'] })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona un tipo" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="hilo">Hilo</SelectItem>
                       <SelectItem value="tela">Tela</SelectItem>
+                      <SelectItem value="colorante">Colorantes</SelectItem>
                       <SelectItem value="subproducto">Sub-producto</SelectItem>
                       <SelectItem value="quimico">Químico</SelectItem>
                       <SelectItem value="insumo">Insumo</SelectItem>
@@ -185,7 +181,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="unidad_medida">Unidad de Medida</Label>
-                  <Select value={formData.unidad_medida} onValueChange={(value) => setFormData({ ...formData, unidad_medida: value as any })}>
+                  <Select value={formData.unidad_medida} onValueChange={(value) => setFormData({ ...formData, unidad_medida: value as Producto['unidad_medida'] })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una unidad" />
                     </SelectTrigger>
@@ -236,21 +232,28 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pais_origen">País de Origen</Label>
-                  <Input
+                  <SearchableSelect
                     id="pais_origen"
-                    placeholder="Ej: Perú, China, India"
+                    options={PAISES}
                     value={formData.pais_origen}
-                    onChange={(e) => setFormData({ ...formData, pais_origen: e.target.value })}
+                    onValueChange={(val) => setFormData({ ...formData, pais_origen: val })}
+                    placeholder="Selecciona un país"
+                    searchPlaceholder="Buscar país..."
+                    emptyLabel="No se encontraron países"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="calidad">Calidad</Label>
-                  <Input
-                    id="calidad"
-                    placeholder="Ej: Primera, Segunda, Premium"
-                    value={formData.calidad}
-                    onChange={(e) => setFormData({ ...formData, calidad: e.target.value })}
-                  />
+                  <Select value={formData.calidad || undefined} onValueChange={(value) => setFormData({ ...formData, calidad: value })}>
+                    <SelectTrigger id="calidad">
+                      <SelectValue placeholder="Selecciona una calidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CALIDAD_OPCIONES.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <DialogFooter>
@@ -283,6 +286,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
               <SelectItem value="__none__">Todos los tipos</SelectItem>
               <SelectItem value="hilo">Hilo</SelectItem>
               <SelectItem value="tela">Tela</SelectItem>
+              <SelectItem value="colorante">Colorantes</SelectItem>
               <SelectItem value="quimico">Químico</SelectItem>
               <SelectItem value="merma">Merma</SelectItem>
               <SelectItem value="insumo">Insumo</SelectItem>
@@ -295,7 +299,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Descripción</TableHead>
@@ -336,7 +340,22 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell className="font-mono text-xs">{producto.codigo}</TableCell>
                     <TableCell>{producto.descripcion}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{producto.tipo}</Badge>
+                      <Badge
+                        variant={producto.tipo === 'colorante' ? 'secondary' : producto.tipo === 'producto_intermedio' ? 'secondary' : 'outline'}
+                        className={
+                          producto.tipo === 'colorante'
+                            ? 'bg-amber-100 text-amber-800 border-amber-200'
+                            : producto.tipo === 'producto_intermedio'
+                            ? 'bg-purple-100 text-purple-800 border-purple-200'
+                            : ''
+                        }
+                      >
+                        {producto.tipo === 'colorante'
+                          ? 'Colorantes'
+                          : producto.tipo === 'producto_intermedio'
+                          ? 'Producto Intermedio'
+                          : producto.tipo}
+                      </Badge>
                     </TableCell>
                     <TableCell>{producto.presentacion || '-'}</TableCell>
                     <TableCell>{producto.pais_origen || '-'}</TableCell>
@@ -368,56 +387,12 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4 shrink-0"
+        />
       </CardContent>
     </Card>
   );

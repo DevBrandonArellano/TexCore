@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): clases simples / clases condicionales falsy / clases tailwind en conflicto
+ *   / un array de clases.
+ */
 import { describe, it, expect } from 'vitest';
 import { cn } from './utils';
 
@@ -7,7 +12,8 @@ describe('cn', () => {
   });
 
   it('dado clases condicionales falsy cuando combina entonces las omite', () => {
-    expect(cn('a', false && 'b', undefined, 'c')).toBe('a c');
+    const condicion = Number('0') > 0;
+    expect(cn('a', condicion && 'b', undefined, 'c')).toBe('a c');
   });
 
   it('dado clases tailwind en conflicto cuando combina entonces la ultima gana', () => {

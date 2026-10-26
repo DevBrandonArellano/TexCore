@@ -1,0 +1,498 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.973s — supera el umbral de 1.0s'),1,2026-10-08T14:53:52Z,2026-10-08T14:53:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.065s — supera el umbral de 1.0s'),1,2026-10-08T14:55:33Z,2026-10-08T14:55:33Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.368s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.587s — supera el umbral de 1.0s'),1,2026-10-08T14:55:40Z,2026-10-08T14:55:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.219s — supera el umbral de 1.0s'),1,2026-10-08T14:55:02Z,2026-10-08T14:55:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.135s — supera el umbral de 1.0s'),1,2026-10-08T14:55:18Z,2026-10-08T14:55:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.402s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.448s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.482s — supera el umbral de 1.0s'),2,2026-10-08T14:55:29Z,2026-10-08T14:55:55Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.046s — supera el umbral de 3.0s (TEX-17 CA-3)'),2,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.416s — supera el umbral de 1.0s'),1,2026-10-08T14:54:30Z,2026-10-08T14:54:30Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.132s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:03Z,2026-10-08T14:55:03Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.350s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.330s — supera el umbral de 1.0s'),1,2026-10-08T14:56:07Z,2026-10-08T14:56:07Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.805s — supera el umbral de 1.0s'),1,2026-10-08T14:54:24Z,2026-10-08T14:54:24Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.996s — supera el umbral de 1.0s'),1,2026-10-08T14:55:19Z,2026-10-08T14:55:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.119s — supera el umbral de 1.0s'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.202s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:02Z,2026-10-08T14:55:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.393s — supera el umbral de 1.0s'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.021s — supera el umbral de 1.0s'),1,2026-10-08T14:55:10Z,2026-10-08T14:55:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.324s — supera el umbral de 1.0s'),1,2026-10-08T14:56:17Z,2026-10-08T14:56:17Z
+POST,/api/inventory/transferencias/,CatchResponseError('HTTP 400: Stock insuficiente en la bodega de origen. Disponible: N.N'),6,2026-10-08T14:54:27Z,2026-10-08T14:56:39Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.682s — supera el umbral de 1.0s'),1,2026-10-08T14:55:21Z,2026-10-08T14:55:21Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.388s — supera el umbral de 1.0s'),1,2026-10-08T14:54:44Z,2026-10-08T14:54:44Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.992s — supera el umbral de 1.0s'),1,2026-10-08T14:54:24Z,2026-10-08T14:54:24Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.511s — supera el umbral de 1.0s'),2,2026-10-08T14:54:55Z,2026-10-08T14:56:10Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.000s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:44Z,2026-10-08T14:53:44Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.812s — supera el umbral de 1.0s'),1,2026-10-08T14:54:57Z,2026-10-08T14:54:57Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.496s — supera el umbral de 1.0s'),1,2026-10-08T14:56:09Z,2026-10-08T14:56:09Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.529s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:26Z,2026-10-08T14:56:26Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.414s — supera el umbral de 1.0s'),1,2026-10-08T14:55:08Z,2026-10-08T14:55:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.901s — supera el umbral de 1.0s'),1,2026-10-08T14:55:25Z,2026-10-08T14:55:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.260s — supera el umbral de 1.0s'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.475s — supera el umbral de 1.0s'),1,2026-10-08T14:55:08Z,2026-10-08T14:55:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.998s — supera el umbral de 1.0s'),1,2026-10-08T14:54:08Z,2026-10-08T14:54:08Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.033s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:51Z,2026-10-08T14:54:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.801s — supera el umbral de 1.0s'),2,2026-10-08T14:55:10Z,2026-10-08T14:55:36Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.210s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:39Z,2026-10-08T14:56:39Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.937s — supera el umbral de 1.0s'),1,2026-10-08T14:55:34Z,2026-10-08T14:55:34Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.673s — supera el umbral de 1.0s'),1,2026-10-08T14:54:20Z,2026-10-08T14:54:20Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.893s — supera el umbral de 1.0s'),1,2026-10-08T14:56:30Z,2026-10-08T14:56:30Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.811s — supera el umbral de 1.0s'),1,2026-10-08T14:53:54Z,2026-10-08T14:53:54Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.428s — supera el umbral de 1.0s'),1,2026-10-08T14:53:35Z,2026-10-08T14:53:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.177s — supera el umbral de 1.0s'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.031s — supera el umbral de 1.0s'),1,2026-10-08T14:56:34Z,2026-10-08T14:56:34Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.518s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.927s — supera el umbral de 1.0s'),1,2026-10-08T14:53:55Z,2026-10-08T14:53:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.320s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.190s — supera el umbral de 1.0s'),1,2026-10-08T14:55:12Z,2026-10-08T14:55:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.901s — supera el umbral de 1.0s'),1,2026-10-08T14:54:33Z,2026-10-08T14:54:33Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.289s — supera el umbral de 1.0s'),1,2026-10-08T14:54:31Z,2026-10-08T14:54:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.888s — supera el umbral de 1.0s'),1,2026-10-08T14:55:25Z,2026-10-08T14:55:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.817s — supera el umbral de 1.0s'),1,2026-10-08T14:55:06Z,2026-10-08T14:55:06Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.802s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.593s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.627s — supera el umbral de 1.0s'),1,2026-10-08T14:56:08Z,2026-10-08T14:56:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.394s — supera el umbral de 1.0s'),1,2026-10-08T14:55:53Z,2026-10-08T14:55:53Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.013s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:35Z,2026-10-08T14:56:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.783s — supera el umbral de 1.0s'),1,2026-10-08T14:55:25Z,2026-10-08T14:55:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.736s — supera el umbral de 1.0s'),1,2026-10-08T14:56:29Z,2026-10-08T14:56:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.000s — supera el umbral de 1.0s'),2,2026-10-08T14:53:42Z,2026-10-08T14:54:14Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.128s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:23Z,2026-10-08T14:56:23Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.012s — supera el umbral de 1.0s'),2,2026-10-08T14:54:41Z,2026-10-08T14:54:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.218s — supera el umbral de 1.0s'),1,2026-10-08T14:54:28Z,2026-10-08T14:54:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.595s — supera el umbral de 1.0s'),1,2026-10-08T14:55:22Z,2026-10-08T14:55:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.423s — supera el umbral de 1.0s'),1,2026-10-08T14:54:28Z,2026-10-08T14:54:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.203s — supera el umbral de 1.0s'),1,2026-10-08T14:54:53Z,2026-10-08T14:54:53Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.500s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:11Z,2026-10-08T14:56:11Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.385s — supera el umbral de 1.0s'),1,2026-10-08T14:55:56Z,2026-10-08T14:55:56Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.503s — supera el umbral de 1.0s'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.798s — supera el umbral de 1.0s'),1,2026-10-08T14:54:47Z,2026-10-08T14:54:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.370s — supera el umbral de 1.0s'),1,2026-10-08T14:55:50Z,2026-10-08T14:55:50Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.079s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.026s — supera el umbral de 1.0s'),2,2026-10-08T14:55:34Z,2026-10-08T14:55:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.873s — supera el umbral de 1.0s'),1,2026-10-08T14:53:43Z,2026-10-08T14:53:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.981s — supera el umbral de 1.0s'),1,2026-10-08T14:55:12Z,2026-10-08T14:55:12Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.434s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.819s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:36Z,2026-10-08T14:56:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.192s — supera el umbral de 1.0s'),2,2026-10-08T14:54:31Z,2026-10-08T14:54:54Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.520s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.111s — supera el umbral de 1.0s'),2,2026-10-08T14:53:48Z,2026-10-08T14:54:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.824s — supera el umbral de 1.0s'),1,2026-10-08T14:56:31Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.294s — supera el umbral de 1.0s'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.371s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.406s — supera el umbral de 1.0s'),1,2026-10-08T14:54:44Z,2026-10-08T14:54:44Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.875s — supera el umbral de 1.0s'),1,2026-10-08T14:55:01Z,2026-10-08T14:55:01Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.388s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:44Z,2026-10-08T14:55:44Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.281s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:26Z,2026-10-08T14:56:26Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.510s — supera el umbral de 1.0s'),1,2026-10-08T14:56:44Z,2026-10-08T14:56:44Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.717s — supera el umbral de 3.0s (TEX-22 CA-3)'),2,2026-10-08T14:54:13Z,2026-10-08T14:56:09Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.659s — supera el umbral de 1.0s'),1,2026-10-08T14:54:43Z,2026-10-08T14:54:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.564s — supera el umbral de 1.0s'),1,2026-10-08T14:56:03Z,2026-10-08T14:56:03Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.267s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:48Z,2026-10-08T14:53:48Z
+POST,/api/inventory/historial-despachos/{id}/revertir/,CatchResponseError('HTTP 404: No HistorialDespacho matches the given query.'),6,2026-10-08T14:53:46Z,2026-10-08T14:56:28Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.058s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.440s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.070s — supera el umbral de 3.0s (TEX-22 CA-3)'),2,2026-10-08T14:54:51Z,2026-10-08T14:54:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.788s — supera el umbral de 1.0s'),1,2026-10-08T14:56:29Z,2026-10-08T14:56:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.636s — supera el umbral de 1.0s'),1,2026-10-08T14:56:41Z,2026-10-08T14:56:41Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.302s — supera el umbral de 1.0s'),1,2026-10-08T14:53:59Z,2026-10-08T14:53:59Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.391s — supera el umbral de 1.0s'),1,2026-10-08T14:56:18Z,2026-10-08T14:56:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.080s — supera el umbral de 1.0s'),1,2026-10-08T14:56:06Z,2026-10-08T14:56:06Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.110s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:22Z,2026-10-08T14:56:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.606s — supera el umbral de 1.0s'),1,2026-10-08T14:54:51Z,2026-10-08T14:54:51Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.465s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.597s — supera el umbral de 1.0s'),1,2026-10-08T14:56:31Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.791s — supera el umbral de 1.0s'),2,2026-10-08T14:55:16Z,2026-10-08T14:55:20Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.740s — supera el umbral de 1.0s'),1,2026-10-08T14:56:01Z,2026-10-08T14:56:01Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.720s — supera el umbral de 1.0s'),1,2026-10-08T14:55:24Z,2026-10-08T14:55:24Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.655s — supera el umbral de 1.0s'),1,2026-10-08T14:55:23Z,2026-10-08T14:55:23Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.472s — supera el umbral de 1.0s'),1,2026-10-08T14:55:42Z,2026-10-08T14:55:42Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.068s — supera el umbral de 1.0s'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.071s — supera el umbral de 1.0s'),1,2026-10-08T14:54:08Z,2026-10-08T14:54:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.631s — supera el umbral de 1.0s'),1,2026-10-08T14:55:23Z,2026-10-08T14:55:23Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.424s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:35Z,2026-10-08T14:53:35Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.299s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.890s — supera el umbral de 1.0s'),1,2026-10-08T14:55:20Z,2026-10-08T14:55:20Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.505s — supera el umbral de 1.0s'),1,2026-10-08T14:55:07Z,2026-10-08T14:55:07Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.407s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:49Z,2026-10-08T14:56:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.509s — supera el umbral de 1.0s'),1,2026-10-08T14:54:11Z,2026-10-08T14:54:11Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.739s — supera el umbral de 1.0s'),1,2026-10-08T14:56:33Z,2026-10-08T14:56:33Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.510s — supera el umbral de 1.0s'),1,2026-10-08T14:54:03Z,2026-10-08T14:54:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.575s — supera el umbral de 1.0s'),1,2026-10-08T14:54:27Z,2026-10-08T14:54:27Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.931s — supera el umbral de 1.0s'),3,2026-10-08T14:53:55Z,2026-10-08T14:55:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.408s — supera el umbral de 1.0s'),1,2026-10-08T14:55:53Z,2026-10-08T14:55:53Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.059s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:49Z,2026-10-08T14:56:49Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.365s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:39Z,2026-10-08T14:54:39Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.020s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:54:18Z,2026-10-08T14:54:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.322s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.149s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:03Z,2026-10-08T14:55:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.837s — supera el umbral de 1.0s'),1,2026-10-08T14:55:21Z,2026-10-08T14:55:21Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.808s — supera el umbral de 1.0s'),1,2026-10-08T14:54:55Z,2026-10-08T14:54:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.094s — supera el umbral de 1.0s'),1,2026-10-08T14:53:58Z,2026-10-08T14:53:58Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.625s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:02Z,2026-10-08T14:55:02Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.695s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:42Z,2026-10-08T14:54:42Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.478s — supera el umbral de 1.0s'),1,2026-10-08T14:55:59Z,2026-10-08T14:55:59Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.266s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.591s — supera el umbral de 1.0s'),1,2026-10-08T14:55:49Z,2026-10-08T14:55:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.195s — supera el umbral de 1.0s'),1,2026-10-08T14:55:12Z,2026-10-08T14:55:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.918s — supera el umbral de 1.0s'),1,2026-10-08T14:54:58Z,2026-10-08T14:54:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.612s — supera el umbral de 1.0s'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.593s — supera el umbral de 1.0s'),3,2026-10-08T14:54:52Z,2026-10-08T14:54:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.120s — supera el umbral de 1.0s'),2,2026-10-08T14:53:48Z,2026-10-08T14:55:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.019s — supera el umbral de 1.0s'),1,2026-10-08T14:55:40Z,2026-10-08T14:55:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.297s — supera el umbral de 1.0s'),1,2026-10-08T14:55:06Z,2026-10-08T14:55:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.907s — supera el umbral de 1.0s'),1,2026-10-08T14:55:44Z,2026-10-08T14:55:44Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.057s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.069s — supera el umbral de 1.0s'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.067s — supera el umbral de 1.0s'),1,2026-10-08T14:53:32Z,2026-10-08T14:53:32Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.135s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:43Z,2026-10-08T14:56:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.296s — supera el umbral de 1.0s'),1,2026-10-08T14:54:28Z,2026-10-08T14:54:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.807s — supera el umbral de 1.0s'),2,2026-10-08T14:55:47Z,2026-10-08T14:55:57Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.512s — supera el umbral de 1.0s'),2,2026-10-08T14:54:55Z,2026-10-08T14:56:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.974s — supera el umbral de 1.0s'),1,2026-10-08T14:54:11Z,2026-10-08T14:54:11Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.265s — supera el umbral de 3.0s (TEX-22 CA-3)'),2,2026-10-08T14:54:15Z,2026-10-08T14:56:35Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.082s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.915s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:36Z,2026-10-08T14:54:36Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.372s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:46Z,2026-10-08T14:56:46Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.767s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.189s — supera el umbral de 1.0s'),1,2026-10-08T14:54:07Z,2026-10-08T14:54:07Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.898s — supera el umbral de 1.0s'),1,2026-10-08T14:55:16Z,2026-10-08T14:55:16Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.995s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:49Z,2026-10-08T14:53:49Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.314s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.182s — supera el umbral de 1.0s'),1,2026-10-08T14:55:03Z,2026-10-08T14:55:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.678s — supera el umbral de 1.0s'),1,2026-10-08T14:56:34Z,2026-10-08T14:56:34Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.010s — supera el umbral de 1.0s'),1,2026-10-08T14:55:06Z,2026-10-08T14:55:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.392s — supera el umbral de 1.0s'),1,2026-10-08T14:56:20Z,2026-10-08T14:56:20Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.243s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.099s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.191s — supera el umbral de 1.0s'),1,2026-10-08T14:54:37Z,2026-10-08T14:54:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.813s — supera el umbral de 1.0s'),3,2026-10-08T14:54:23Z,2026-10-08T14:55:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.800s — supera el umbral de 1.0s'),1,2026-10-08T14:53:56Z,2026-10-08T14:53:56Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.404s — supera el umbral de 1.0s'),1,2026-10-08T14:54:15Z,2026-10-08T14:54:15Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.609s — supera el umbral de 1.0s'),1,2026-10-08T14:56:41Z,2026-10-08T14:56:41Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.188s — supera el umbral de 3.0s (TEX-22 CA-3)'),2,2026-10-08T14:54:16Z,2026-10-08T14:54:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.715s — supera el umbral de 1.0s'),1,2026-10-08T14:56:39Z,2026-10-08T14:56:39Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.473s — supera el umbral de 1.0s'),1,2026-10-08T14:55:08Z,2026-10-08T14:55:08Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.601s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:10Z,2026-10-08T14:56:10Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.166s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:04Z,2026-10-08T14:56:04Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.179s — supera el umbral de 1.0s'),1,2026-10-08T14:54:29Z,2026-10-08T14:54:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.784s — supera el umbral de 1.0s'),2,2026-10-08T14:53:53Z,2026-10-08T14:55:28Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.195s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:59Z,2026-10-08T14:54:59Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.090s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:18Z,2026-10-08T14:56:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.071s — supera el umbral de 1.0s'),1,2026-10-08T14:53:32Z,2026-10-08T14:53:32Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.202s — supera el umbral de 1.0s'),1,2026-10-08T14:55:53Z,2026-10-08T14:55:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.399s — supera el umbral de 1.0s'),1,2026-10-08T14:56:18Z,2026-10-08T14:56:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.891s — supera el umbral de 1.0s'),3,2026-10-08T14:55:27Z,2026-10-08T14:55:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.413s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.447s — supera el umbral de 1.0s'),1,2026-10-08T14:55:42Z,2026-10-08T14:55:42Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.274s — supera el umbral de 1.0s'),1,2026-10-08T14:55:42Z,2026-10-08T14:55:42Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.087s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.910s — supera el umbral de 1.0s'),1,2026-10-08T14:55:24Z,2026-10-08T14:55:24Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.764s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.908s — supera el umbral de 1.0s'),2,2026-10-08T14:53:55Z,2026-10-08T14:55:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.320s — supera el umbral de 1.0s'),1,2026-10-08T14:54:20Z,2026-10-08T14:54:20Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.591s — supera el umbral de 1.0s'),2,2026-10-08T14:56:29Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.311s — supera el umbral de 1.0s'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.681s — supera el umbral de 1.0s'),1,2026-10-08T14:53:53Z,2026-10-08T14:53:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.396s — supera el umbral de 1.0s'),1,2026-10-08T14:56:18Z,2026-10-08T14:56:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.492s — supera el umbral de 1.0s'),1,2026-10-08T14:53:45Z,2026-10-08T14:53:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.789s — supera el umbral de 1.0s'),1,2026-10-08T14:55:21Z,2026-10-08T14:55:21Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.007s — supera el umbral de 1.0s'),1,2026-10-08T14:54:26Z,2026-10-08T14:54:26Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.676s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:04Z,2026-10-08T14:56:04Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.018s — supera el umbral de 1.0s'),1,2026-10-08T14:55:24Z,2026-10-08T14:55:24Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.611s — supera el umbral de 1.0s'),1,2026-10-08T14:55:08Z,2026-10-08T14:55:08Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.717s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:36Z,2026-10-08T14:56:36Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.119s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:20Z,2026-10-08T14:54:20Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.093s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:09Z,2026-10-08T14:56:09Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.620s — supera el umbral de 1.0s'),1,2026-10-08T14:56:16Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.295s — supera el umbral de 1.0s'),1,2026-10-08T14:56:32Z,2026-10-08T14:56:32Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.560s — supera el umbral de 1.0s'),1,2026-10-08T14:54:44Z,2026-10-08T14:54:44Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.781s — supera el umbral de 1.0s'),1,2026-10-08T14:53:53Z,2026-10-08T14:53:53Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.693s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.001s — supera el umbral de 1.0s'),1,2026-10-08T14:54:12Z,2026-10-08T14:54:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.909s — supera el umbral de 1.0s'),1,2026-10-08T14:55:38Z,2026-10-08T14:55:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.397s — supera el umbral de 1.0s'),2,2026-10-08T14:53:59Z,2026-10-08T14:56:20Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.380s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.396s — supera el umbral de 1.0s'),1,2026-10-08T14:56:07Z,2026-10-08T14:56:07Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.831s — supera el umbral de 1.0s'),1,2026-10-08T14:56:46Z,2026-10-08T14:56:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.317s — supera el umbral de 1.0s'),1,2026-10-08T14:54:04Z,2026-10-08T14:54:04Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.109s — supera el umbral de 1.0s'),1,2026-10-08T14:53:57Z,2026-10-08T14:53:57Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.768s — supera el umbral de 1.0s'),1,2026-10-08T14:55:19Z,2026-10-08T14:55:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.390s — supera el umbral de 1.0s'),1,2026-10-08T14:54:57Z,2026-10-08T14:54:57Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.606s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:40Z,2026-10-08T14:53:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.872s — supera el umbral de 1.0s'),1,2026-10-08T14:53:52Z,2026-10-08T14:53:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.882s — supera el umbral de 1.0s'),1,2026-10-08T14:54:12Z,2026-10-08T14:54:12Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.035s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:10Z,2026-10-08T14:56:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.711s — supera el umbral de 1.0s'),1,2026-10-08T14:56:01Z,2026-10-08T14:56:01Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.823s — supera el umbral de 1.0s'),1,2026-10-08T14:56:06Z,2026-10-08T14:56:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.327s — supera el umbral de 1.0s'),1,2026-10-08T14:54:39Z,2026-10-08T14:54:39Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.818s — supera el umbral de 3.0s (TEX-22 CA-3)'),2,2026-10-08T14:54:40Z,2026-10-08T14:56:00Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.724s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:18Z,2026-10-08T14:54:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.219s — supera el umbral de 1.0s'),1,2026-10-08T14:54:06Z,2026-10-08T14:54:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.317s — supera el umbral de 1.0s'),1,2026-10-08T14:56:50Z,2026-10-08T14:56:50Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.029s — supera el umbral de 1.0s'),1,2026-10-08T14:54:14Z,2026-10-08T14:54:14Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.223s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:22Z,2026-10-08T14:56:22Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.218s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.589s — supera el umbral de 1.0s'),1,2026-10-08T14:55:32Z,2026-10-08T14:55:32Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.723s — supera el umbral de 1.0s'),1,2026-10-08T14:56:10Z,2026-10-08T14:56:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.883s — supera el umbral de 1.0s'),1,2026-10-08T14:55:24Z,2026-10-08T14:55:24Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.426s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.887s — supera el umbral de 1.0s'),1,2026-10-08T14:55:38Z,2026-10-08T14:55:38Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.157s — supera el umbral de 3.0s (TEX-17 CA-3)'),2,2026-10-08T14:56:43Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.182s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.432s — supera el umbral de 1.0s'),1,2026-10-08T14:55:22Z,2026-10-08T14:55:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.498s — supera el umbral de 1.0s'),1,2026-10-08T14:53:39Z,2026-10-08T14:53:39Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.108s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.186s — supera el umbral de 1.0s'),1,2026-10-08T14:54:32Z,2026-10-08T14:54:32Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.880s — supera el umbral de 1.0s'),1,2026-10-08T14:54:48Z,2026-10-08T14:54:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.932s — supera el umbral de 1.0s'),1,2026-10-08T14:55:18Z,2026-10-08T14:55:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.939s — supera el umbral de 1.0s'),1,2026-10-08T14:56:01Z,2026-10-08T14:56:01Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.686s — supera el umbral de 1.0s'),1,2026-10-08T14:56:49Z,2026-10-08T14:56:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.417s — supera el umbral de 1.0s'),2,2026-10-08T14:55:07Z,2026-10-08T14:55:09Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.706s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:46Z,2026-10-08T14:53:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.848s — supera el umbral de 1.0s'),1,2026-10-08T14:54:38Z,2026-10-08T14:54:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.696s — supera el umbral de 1.0s'),1,2026-10-08T14:54:35Z,2026-10-08T14:54:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.915s — supera el umbral de 1.0s'),1,2026-10-08T14:54:34Z,2026-10-08T14:54:34Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.097s — supera el umbral de 1.0s'),1,2026-10-08T14:54:53Z,2026-10-08T14:54:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.785s — supera el umbral de 1.0s'),1,2026-10-08T14:56:05Z,2026-10-08T14:56:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.140s — supera el umbral de 1.0s'),1,2026-10-08T14:56:38Z,2026-10-08T14:56:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.004s — supera el umbral de 1.0s'),1,2026-10-08T14:55:38Z,2026-10-08T14:55:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.331s — supera el umbral de 1.0s'),1,2026-10-08T14:55:22Z,2026-10-08T14:55:22Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.609s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:49Z,2026-10-08T14:53:49Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.098s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:45Z,2026-10-08T14:53:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.035s — supera el umbral de 1.0s'),1,2026-10-08T14:53:32Z,2026-10-08T14:53:32Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.012s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.260s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.888s — supera el umbral de 1.0s'),1,2026-10-08T14:54:17Z,2026-10-08T14:54:17Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.186s — supera el umbral de 1.0s'),1,2026-10-08T14:54:37Z,2026-10-08T14:54:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.916s — supera el umbral de 1.0s'),1,2026-10-08T14:53:55Z,2026-10-08T14:53:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.777s — supera el umbral de 1.0s'),1,2026-10-08T14:53:53Z,2026-10-08T14:53:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.714s — supera el umbral de 1.0s'),1,2026-10-08T14:55:22Z,2026-10-08T14:55:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.402s — supera el umbral de 1.0s'),1,2026-10-08T14:55:49Z,2026-10-08T14:55:49Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.067s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:44Z,2026-10-08T14:53:44Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.900s — supera el umbral de 1.0s'),1,2026-10-08T14:54:35Z,2026-10-08T14:54:35Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.508s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:40Z,2026-10-08T14:53:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.207s — supera el umbral de 1.0s'),1,2026-10-08T14:55:02Z,2026-10-08T14:55:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.922s — supera el umbral de 1.0s'),1,2026-10-08T14:56:02Z,2026-10-08T14:56:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.016s — supera el umbral de 1.0s'),1,2026-10-08T14:54:22Z,2026-10-08T14:54:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.122s — supera el umbral de 1.0s'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.196s — supera el umbral de 1.0s'),1,2026-10-08T14:56:16Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.873s — supera el umbral de 1.0s'),1,2026-10-08T14:56:31Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.062s — supera el umbral de 1.0s'),1,2026-10-08T14:54:08Z,2026-10-08T14:54:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.802s — supera el umbral de 1.0s'),2,2026-10-08T14:55:24Z,2026-10-08T14:55:57Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.234s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:55Z,2026-10-08T14:54:55Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.199s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:43Z,2026-10-08T14:55:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.331s — supera el umbral de 1.0s'),3,2026-10-08T14:54:00Z,2026-10-08T14:56:26Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.086s — supera el umbral de 1.0s'),1,2026-10-08T14:55:01Z,2026-10-08T14:55:01Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.314s — supera el umbral de 1.0s'),1,2026-10-08T14:54:27Z,2026-10-08T14:54:27Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.698s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.918s — supera el umbral de 1.0s'),1,2026-10-08T14:55:47Z,2026-10-08T14:55:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.480s — supera el umbral de 1.0s'),1,2026-10-08T14:56:29Z,2026-10-08T14:56:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.309s — supera el umbral de 1.0s'),1,2026-10-08T14:54:15Z,2026-10-08T14:54:15Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.994s — supera el umbral de 1.0s'),1,2026-10-08T14:56:24Z,2026-10-08T14:56:24Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.022s — supera el umbral de 1.0s'),1,2026-10-08T14:53:52Z,2026-10-08T14:53:52Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.579s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.231s — supera el umbral de 1.0s'),1,2026-10-08T14:56:07Z,2026-10-08T14:56:07Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.022s — supera el umbral de 1.0s'),2,2026-10-08T14:53:48Z,2026-10-08T14:54:59Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.702s — supera el umbral de 1.0s'),1,2026-10-08T14:56:14Z,2026-10-08T14:56:14Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.917s — supera el umbral de 1.0s'),1,2026-10-08T14:54:58Z,2026-10-08T14:54:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.689s — supera el umbral de 1.0s'),1,2026-10-08T14:55:21Z,2026-10-08T14:55:21Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.910s — supera el umbral de 1.0s'),1,2026-10-08T14:54:58Z,2026-10-08T14:54:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.795s — supera el umbral de 1.0s'),1,2026-10-08T14:55:26Z,2026-10-08T14:55:26Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.735s — supera el umbral de 1.0s'),2,2026-10-08T14:54:34Z,2026-10-08T14:54:34Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.075s — supera el umbral de 3.0s (TEX-17 CA-3)'),2,2026-10-08T14:54:15Z,2026-10-08T14:56:36Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.510s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:00Z,2026-10-08T14:56:00Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.719s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:03Z,2026-10-08T14:56:03Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.391s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:04Z,2026-10-08T14:55:04Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.707s — supera el umbral de 1.0s'),1,2026-10-08T14:56:05Z,2026-10-08T14:56:05Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.637s — supera el umbral de 1.0s'),1,2026-10-08T14:54:45Z,2026-10-08T14:54:45Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.437s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.614s — supera el umbral de 1.0s'),1,2026-10-08T14:53:36Z,2026-10-08T14:53:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.088s — supera el umbral de 1.0s'),1,2026-10-08T14:54:59Z,2026-10-08T14:54:59Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.668s — supera el umbral de 1.0s'),1,2026-10-08T14:55:10Z,2026-10-08T14:55:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.744s — supera el umbral de 1.0s'),1,2026-10-08T14:56:33Z,2026-10-08T14:56:33Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.785s — supera el umbral de 1.0s'),2,2026-10-08T14:53:53Z,2026-10-08T14:55:52Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.010s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:17Z,2026-10-08T14:55:17Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.295s — supera el umbral de 1.0s'),1,2026-10-08T14:55:00Z,2026-10-08T14:55:00Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.922s — supera el umbral de 1.0s'),1,2026-10-08T14:54:25Z,2026-10-08T14:54:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.723s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.681s — supera el umbral de 1.0s'),1,2026-10-08T14:56:22Z,2026-10-08T14:56:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.680s — supera el umbral de 1.0s'),1,2026-10-08T14:56:41Z,2026-10-08T14:56:41Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.194s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.108s — supera el umbral de 1.0s'),1,2026-10-08T14:53:57Z,2026-10-08T14:53:57Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.078s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:47Z,2026-10-08T14:53:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.105s — supera el umbral de 1.0s'),1,2026-10-08T14:54:25Z,2026-10-08T14:54:25Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.055s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:44Z,2026-10-08T14:56:44Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.687s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:15Z,2026-10-08T14:55:15Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.436s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:01Z,2026-10-08T14:55:01Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.216s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:46Z,2026-10-08T14:56:46Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.486s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:50Z,2026-10-08T14:54:50Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.715s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.116s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:33Z,2026-10-08T14:56:33Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.113s — supera el umbral de 1.0s'),1,2026-10-08T14:54:25Z,2026-10-08T14:54:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.387s — supera el umbral de 1.0s'),1,2026-10-08T14:53:34Z,2026-10-08T14:53:34Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.692s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.734s — supera el umbral de 1.0s'),1,2026-10-08T14:53:40Z,2026-10-08T14:53:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.024s — supera el umbral de 1.0s'),1,2026-10-08T14:54:52Z,2026-10-08T14:54:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.885s — supera el umbral de 1.0s'),1,2026-10-08T14:56:49Z,2026-10-08T14:56:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.006s — supera el umbral de 1.0s'),1,2026-10-08T14:54:22Z,2026-10-08T14:54:22Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.167s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:00Z,2026-10-08T14:54:00Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.774s — supera el umbral de 1.0s'),1,2026-10-08T14:56:41Z,2026-10-08T14:56:41Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.227s — supera el umbral de 1.0s'),1,2026-10-08T14:53:31Z,2026-10-08T14:53:31Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.275s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:12Z,2026-10-08T14:56:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.401s — supera el umbral de 1.0s'),1,2026-10-08T14:55:58Z,2026-10-08T14:55:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.394s — supera el umbral de 1.0s'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.303s — supera el umbral de 1.0s'),1,2026-10-08T14:55:06Z,2026-10-08T14:55:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.830s — supera el umbral de 1.0s'),1,2026-10-08T14:55:12Z,2026-10-08T14:55:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.704s — supera el umbral de 1.0s'),2,2026-10-08T14:54:37Z,2026-10-08T14:55:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.733s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.061s — supera el umbral de 1.0s'),1,2026-10-08T14:56:16Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.310s — supera el umbral de 1.0s'),1,2026-10-08T14:54:46Z,2026-10-08T14:54:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.033s — supera el umbral de 1.0s'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.544s — supera el umbral de 1.0s'),1,2026-10-08T14:54:35Z,2026-10-08T14:54:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.012s — supera el umbral de 1.0s'),1,2026-10-08T14:54:56Z,2026-10-08T14:54:56Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.743s — supera el umbral de 1.0s'),1,2026-10-08T14:54:38Z,2026-10-08T14:54:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.145s — supera el umbral de 1.0s'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.146s — supera el umbral de 1.0s'),1,2026-10-08T14:56:16Z,2026-10-08T14:56:16Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.229s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:55:03Z,2026-10-08T14:55:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.730s — supera el umbral de 1.0s'),1,2026-10-08T14:53:54Z,2026-10-08T14:53:54Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.291s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:43Z,2026-10-08T14:54:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.877s — supera el umbral de 1.0s'),1,2026-10-08T14:53:38Z,2026-10-08T14:53:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.944s — supera el umbral de 1.0s'),1,2026-10-08T14:54:06Z,2026-10-08T14:54:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.366s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.795s — supera el umbral de 1.0s'),1,2026-10-08T14:55:58Z,2026-10-08T14:55:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.879s — supera el umbral de 1.0s'),1,2026-10-08T14:54:59Z,2026-10-08T14:54:59Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.986s — supera el umbral de 1.0s'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.017s — supera el umbral de 1.0s'),2,2026-10-08T14:55:18Z,2026-10-08T14:55:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.904s — supera el umbral de 1.0s'),1,2026-10-08T14:54:19Z,2026-10-08T14:54:19Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.833s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:45Z,2026-10-08T14:56:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.713s — supera el umbral de 1.0s'),1,2026-10-08T14:53:53Z,2026-10-08T14:53:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.240s — supera el umbral de 1.0s'),1,2026-10-08T14:54:45Z,2026-10-08T14:54:45Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.099s — supera el umbral de 1.0s'),1,2026-10-08T14:53:57Z,2026-10-08T14:53:57Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.319s — supera el umbral de 1.0s'),1,2026-10-08T14:56:17Z,2026-10-08T14:56:17Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.688s — supera el umbral de 1.0s'),1,2026-10-08T14:56:31Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.721s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.234s — supera el umbral de 1.0s'),1,2026-10-08T14:53:38Z,2026-10-08T14:53:38Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.152s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:56:36Z,2026-10-08T14:56:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.808s — supera el umbral de 1.0s'),2,2026-10-08T14:54:23Z,2026-10-08T14:55:21Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.090s — supera el umbral de 1.0s'),1,2026-10-08T14:54:41Z,2026-10-08T14:54:41Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.092s — supera el umbral de 1.0s'),1,2026-10-08T14:53:57Z,2026-10-08T14:53:57Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.530s — supera el umbral de 1.0s'),1,2026-10-08T14:55:28Z,2026-10-08T14:55:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.409s — supera el umbral de 1.0s'),1,2026-10-08T14:55:49Z,2026-10-08T14:55:49Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.082s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:51Z,2026-10-08T14:54:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.488s — supera el umbral de 1.0s'),1,2026-10-08T14:56:14Z,2026-10-08T14:56:14Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.803s — supera el umbral de 1.0s'),1,2026-10-08T14:54:38Z,2026-10-08T14:54:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.804s — supera el umbral de 1.0s'),2,2026-10-08T14:54:23Z,2026-10-08T14:55:10Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.012s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:46Z,2026-10-08T14:53:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.330s — supera el umbral de 1.0s'),1,2026-10-08T14:54:39Z,2026-10-08T14:54:39Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.489s — supera el umbral de 1.0s'),1,2026-10-08T14:53:49Z,2026-10-08T14:53:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.900s — supera el umbral de 1.0s'),1,2026-10-08T14:54:48Z,2026-10-08T14:54:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.679s — supera el umbral de 1.0s'),1,2026-10-08T14:54:22Z,2026-10-08T14:54:22Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.734s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:50Z,2026-10-08T14:55:50Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.982s — supera el umbral de 1.0s'),1,2026-10-08T14:54:59Z,2026-10-08T14:54:59Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.988s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:42Z,2026-10-08T14:56:42Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.335s — supera el umbral de 1.0s'),1,2026-10-08T14:54:06Z,2026-10-08T14:54:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.512s — supera el umbral de 1.0s'),1,2026-10-08T14:56:44Z,2026-10-08T14:56:44Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.295s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:37Z,2026-10-08T14:54:37Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.966s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:15Z,2026-10-08T14:54:15Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.323s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:03Z,2026-10-08T14:55:03Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.003s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:18Z,2026-10-08T14:55:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.107s — supera el umbral de 1.0s'),1,2026-10-08T14:55:54Z,2026-10-08T14:55:54Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.993s — supera el umbral de 1.0s'),1,2026-10-08T14:53:56Z,2026-10-08T14:53:56Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.698s — supera el umbral de 1.0s'),1,2026-10-08T14:55:55Z,2026-10-08T14:55:55Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.997s — supera el umbral de 1.0s'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.712s — supera el umbral de 1.0s'),1,2026-10-08T14:55:31Z,2026-10-08T14:55:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.167s — supera el umbral de 1.0s'),1,2026-10-08T14:53:48Z,2026-10-08T14:53:48Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.398s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.014s — supera el umbral de 1.0s'),1,2026-10-08T14:55:10Z,2026-10-08T14:55:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.803s — supera el umbral de 1.0s'),1,2026-10-08T14:55:19Z,2026-10-08T14:55:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.200s — supera el umbral de 1.0s'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.106s — supera el umbral de 1.0s'),1,2026-10-08T14:54:25Z,2026-10-08T14:54:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.924s — supera el umbral de 1.0s'),1,2026-10-08T14:56:12Z,2026-10-08T14:56:12Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.757s — supera el umbral de 1.0s'),1,2026-10-08T14:55:36Z,2026-10-08T14:55:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.187s — supera el umbral de 1.0s'),1,2026-10-08T14:55:51Z,2026-10-08T14:55:51Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.181s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:13Z,2026-10-08T14:56:13Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.601s — supera el umbral de 1.0s'),1,2026-10-08T14:56:28Z,2026-10-08T14:56:28Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.184s — supera el umbral de 1.0s'),1,2026-10-08T14:54:37Z,2026-10-08T14:54:37Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.671s — supera el umbral de 1.0s'),1,2026-10-08T14:54:36Z,2026-10-08T14:54:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.641s — supera el umbral de 1.0s'),1,2026-10-08T14:55:23Z,2026-10-08T14:55:23Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.007s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:46Z,2026-10-08T14:53:46Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.140s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:38Z,2026-10-08T14:56:38Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.926s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:38Z,2026-10-08T14:54:38Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.176s — supera el umbral de 1.0s'),1,2026-10-08T14:56:37Z,2026-10-08T14:56:37Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.306s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:25Z,2026-10-08T14:54:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.198s — supera el umbral de 1.0s'),2,2026-10-08T14:53:46Z,2026-10-08T14:54:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.607s — supera el umbral de 1.0s'),2,2026-10-08T14:54:00Z,2026-10-08T14:54:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.609s — supera el umbral de 1.0s'),1,2026-10-08T14:55:28Z,2026-10-08T14:55:28Z
+PANEL,panel Jefe de Planta (RNF-03),Exception('Panel de Jefe de Planta tardó 3.122s — supera el umbral de 3.0s (TEX-17 CA-3)'),1,2026-10-08T14:53:47Z,2026-10-08T14:53:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.701s — supera el umbral de 1.0s'),1,2026-10-08T14:56:16Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.193s — supera el umbral de 1.0s'),1,2026-10-08T14:56:19Z,2026-10-08T14:56:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.595s — supera el umbral de 1.0s'),2,2026-10-08T14:56:39Z,2026-10-08T14:56:39Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.611s — supera el umbral de 1.0s'),1,2026-10-08T14:55:58Z,2026-10-08T14:55:58Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.559s — supera el umbral de 1.0s'),1,2026-10-08T14:56:03Z,2026-10-08T14:56:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.378s — supera el umbral de 1.0s'),1,2026-10-08T14:55:08Z,2026-10-08T14:55:08Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.618s — supera el umbral de 1.0s'),1,2026-10-08T14:53:36Z,2026-10-08T14:53:36Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.100s — supera el umbral de 1.0s'),1,2026-10-08T14:54:46Z,2026-10-08T14:54:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.404s — supera el umbral de 1.0s'),1,2026-10-08T14:54:05Z,2026-10-08T14:54:05Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.511s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:49Z,2026-10-08T14:53:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.588s — supera el umbral de 1.0s'),1,2026-10-08T14:56:25Z,2026-10-08T14:56:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.208s — supera el umbral de 1.0s'),1,2026-10-08T14:54:49Z,2026-10-08T14:54:49Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.076s — supera el umbral de 1.0s'),1,2026-10-08T14:54:46Z,2026-10-08T14:54:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.616s — supera el umbral de 1.0s'),1,2026-10-08T14:54:52Z,2026-10-08T14:54:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.699s — supera el umbral de 1.0s'),1,2026-10-08T14:56:48Z,2026-10-08T14:56:48Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.806s — supera el umbral de 1.0s'),1,2026-10-08T14:53:54Z,2026-10-08T14:53:54Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.442s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:34Z,2026-10-08T14:54:34Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.996s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:02Z,2026-10-08T14:56:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.194s — supera el umbral de 1.0s'),1,2026-10-08T14:56:19Z,2026-10-08T14:56:19Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.393s — supera el umbral de 1.0s'),1,2026-10-08T14:56:47Z,2026-10-08T14:56:47Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.770s — supera el umbral de 1.0s'),2,2026-10-08T14:54:27Z,2026-10-08T14:55:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.891s — supera el umbral de 1.0s'),1,2026-10-08T14:54:36Z,2026-10-08T14:54:36Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.817s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:41Z,2026-10-08T14:54:41Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.214s — supera el umbral de 1.0s'),1,2026-10-08T14:54:40Z,2026-10-08T14:54:40Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.649s — supera el umbral de 1.0s'),1,2026-10-08T14:56:14Z,2026-10-08T14:56:14Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.399s — supera el umbral de 1.0s'),1,2026-10-08T14:54:15Z,2026-10-08T14:54:15Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.386s — supera el umbral de 1.0s'),1,2026-10-08T14:55:29Z,2026-10-08T14:55:29Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.496s — supera el umbral de 1.0s'),2,2026-10-08T14:55:22Z,2026-10-08T14:55:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.778s — supera el umbral de 1.0s'),2,2026-10-08T14:54:27Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.013s — supera el umbral de 1.0s'),1,2026-10-08T14:55:20Z,2026-10-08T14:55:20Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.896s — supera el umbral de 1.0s'),1,2026-10-08T14:56:35Z,2026-10-08T14:56:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.082s — supera el umbral de 1.0s'),1,2026-10-08T14:53:34Z,2026-10-08T14:53:34Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.987s — supera el umbral de 1.0s'),2,2026-10-08T14:55:18Z,2026-10-08T14:56:16Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.494s — supera el umbral de 1.0s'),1,2026-10-08T14:55:22Z,2026-10-08T14:55:22Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.217s — supera el umbral de 1.0s'),1,2026-10-08T14:55:30Z,2026-10-08T14:55:30Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.421s — supera el umbral de 1.0s'),1,2026-10-08T14:56:14Z,2026-10-08T14:56:14Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.813s — supera el umbral de 1.0s'),1,2026-10-08T14:54:02Z,2026-10-08T14:54:02Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.598s — supera el umbral de 1.0s'),1,2026-10-08T14:54:03Z,2026-10-08T14:54:03Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.685s — supera el umbral de 1.0s'),1,2026-10-08T14:54:22Z,2026-10-08T14:54:22Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.001s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:46Z,2026-10-08T14:55:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.392s — supera el umbral de 1.0s'),1,2026-10-08T14:56:18Z,2026-10-08T14:56:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.083s — supera el umbral de 1.0s'),1,2026-10-08T14:55:40Z,2026-10-08T14:55:40Z
+POST,/api/inventory/process-despacho/,CatchResponseError('HTTP 400: El lote LOT-STR-N-Na ya no tiene stock disponible.'),1,2026-10-08T14:54:17Z,2026-10-08T14:54:17Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.600s — supera el umbral de 1.0s'),1,2026-10-08T14:53:46Z,2026-10-08T14:53:46Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.586s — supera el umbral de 1.0s'),2,2026-10-08T14:55:32Z,2026-10-08T14:56:30Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.899s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:16Z,2026-10-08T14:54:16Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.173s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:53:59Z,2026-10-08T14:53:59Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.993s — supera el umbral de 1.0s'),1,2026-10-08T14:54:17Z,2026-10-08T14:54:17Z
+POST,/api/inventory/process-despacho/,CatchResponseError('HTTP 400: El lote EN-N-LN ya no tiene stock disponible.'),29,2026-10-08T14:53:34Z,2026-10-08T14:56:43Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.792s — supera el umbral de 1.0s'),1,2026-10-08T14:55:52Z,2026-10-08T14:55:52Z
+GET,/api/inventory/stock/ (lotes del producto),HTTPError('404 Client Error: Not Found for url: /api/inventory/stock/ (lotes del producto)'),1,2026-10-08T14:56:04Z,2026-10-08T14:56:04Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.874s — supera el umbral de 1.0s'),1,2026-10-08T14:56:31Z,2026-10-08T14:56:31Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.383s — supera el umbral de 1.0s'),1,2026-10-08T14:54:18Z,2026-10-08T14:54:18Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.513s — supera el umbral de 1.0s'),1,2026-10-08T14:56:25Z,2026-10-08T14:56:25Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.516s — supera el umbral de 1.0s'),1,2026-10-08T14:56:26Z,2026-10-08T14:56:26Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.395s — supera el umbral de 1.0s'),1,2026-10-08T14:53:51Z,2026-10-08T14:53:51Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.005s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:55:06Z,2026-10-08T14:55:06Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.691s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:54:21Z,2026-10-08T14:54:21Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 4.168s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:06Z,2026-10-08T14:56:06Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.095s — supera el umbral de 1.0s'),1,2026-10-08T14:55:52Z,2026-10-08T14:55:52Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.799s — supera el umbral de 1.0s'),1,2026-10-08T14:55:10Z,2026-10-08T14:55:10Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.790s — supera el umbral de 1.0s'),1,2026-10-08T14:56:30Z,2026-10-08T14:56:30Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 2.601s — supera el umbral de 1.0s'),1,2026-10-08T14:56:23Z,2026-10-08T14:56:23Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.492s — supera el umbral de 1.0s'),1,2026-10-08T14:55:53Z,2026-10-08T14:55:53Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 3.290s — supera el umbral de 1.0s'),1,2026-10-08T14:55:05Z,2026-10-08T14:55:05Z
+GET,/api/inventory/bodegas/[id]/kardex/ (RNF-03),CatchResponseError('Kárdex tardó 3.888s — supera el umbral de 3.0s (TEX-22 CA-3)'),1,2026-10-08T14:56:35Z,2026-10-08T14:56:35Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.915s — supera el umbral de 1.0s'),1,2026-10-08T14:53:50Z,2026-10-08T14:53:50Z
+POST,/api/scanning/validate (en despacho),CatchResponseError('Escaneo tardó 1.886s — supera el umbral de 1.0s'),2,2026-10-08T14:55:20Z,2026-10-08T14:55:52Z

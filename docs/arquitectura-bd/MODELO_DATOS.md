@@ -2,6 +2,10 @@
 
 Este documento detalla los modelos de datos de TexCore y las reglas de negocio críticas implementadas.
 
+**Convenciones comunes a todos los modelos** (desde el 5-oct-2026, reglas Ruff `DJ001`/`DJ012`):
+- Los campos de texto opcionales (`CharField`/`TextField`) usan `''` como vacío: `blank=True, default=''`, columna `NOT NULL`. No hay texto `NULL`. Ver `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` y su lista de los 32 campos convertidos.
+- Los miembros de cada modelo siguen el orden de la guía de Django: campos y managers, `Meta`, métodos mágicos, `save()`, `get_absolute_url()` y métodos propios.
+
 ## 1. Aplicación: `gestion`
 
 ### `Sede`
@@ -9,7 +13,10 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 
 ### `Cliente`
 *   **limite_credito**: Límite máximo de deuda permitida.
-*   **saldo_pendiente**: Propiedad dinámica calculada sumando los `DetallePedido` de órdenes no pagadas.
+*   **saldo_pendiente**: Propiedad dinámica calculada como la suma de TODOS los `PedidoVenta` no
+    anulados (pagados o no, `total_con_iva - valor_retencion`) menos el total de `PagoCliente`
+    registrados — no se filtra por `esta_pagado` (`ClienteManager.get_queryset`, anotación
+    `saldo_calculado`).
 *   **vendedor_asignado**: Relación con el usuario responsable (Filtro de seguridad en API).
 *   **tiene_beneficio**: Flag para descuentos especiales (Solo modificable por Vendedores/Admins).
 
@@ -21,16 +28,17 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 *   **precio_base**: Costo mínimo de venta definido por la gerencia.
 *   **tipo**: Categorías (hilo, tela, quimico, subproducto, insumo, materia_prima).
 *   **unidad_medida**: Soporta `kg`, `metros` y `unidades`.
+*   **precisión métrica telas**: `cantidad_metros` utiliza `DECIMAL(12,4)` para precisión exacta en costeo y mermas.
 
 ## 2. Aplicación: `inventory`
 
 ### `StockBodega`
-Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.33 kg) para trazabilidad exacta.
+Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exacta.
 
-> **Nota de precisión (Mayo 2026):** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario` (que tiene `cantidad` con max 2 decimales en SQL Server), todos los valores se redondean con `.quantize(Decimal('0.01'))`. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
+> **Nota de precisión:** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario`, los valores se redondean con `.quantize(Decimal('0.01'))` para stock de kilos y `Decimal('0.0001')` para metros de tela. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
 
 ### `MovimientoInventario`
-*   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
+*   **Kardex**: Genera trazabilidad a partir de los movimientos. El saldo que muestran la pantalla y el Excel lo calcula la base en cada consulta (`inventory/services/kardex_service.py`: `SUM` para el saldo inicial y `SUM() OVER (ORDER BY fecha, id)` para el saldo corrido). `saldo_resultante` es solo una foto del stock del lote al registrar el movimiento (una transferencia guarda un lado, el despacho guarda 0 y las ediciones no recalculan los posteriores): no se usa como saldo de kárdex.
 *   **Auditoría**: Los cambios en movimientos existentes quedan registrados en `AuditLog`.
 *   **Integración Logística**: El campo `documento_ref` vincula movimientos con Pedidos, Órdenes de Producción o Guías de Despacho.
 
@@ -38,28 +46,30 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 
 ### `OrdenProduccion` (OP)
 *   **Ciclo de Vida**: Pendiente -> En Proceso -> Finalizada.
-*   **Asignación Atómica**: Vincula Producto, Fórmula de Color, Máquina y Operario.
+*   **Asignación Atómica**: Vincula Producto, Fórmula de Color, Área, Máquina y Operario.
 *   **Peso Neto Requerido**: Meta de producción que dispara el cierre automático al alcanzarse.
 
 ### `LoteProduccion`
-*   Registro granular de cada unidad producida (bobina/rollo).
+*   Registro granular de cada unidad producida (bobina/rollo/funda).
 *   Descuenta materias primas del inventario (teórico) basándose en la fórmula vinculada.
 
-### `EventoEtiqueta` — 2026-07-20
+### `EventoEtiqueta`
 *   Historial inmutable de cada evento de etiqueta física de un `LoteProduccion` (`related_name='etiquetas'`).
 *   `tipo_evento`: `ORIGINAL` / `REIMPRESION` / `REETIQUETADO`.
-*   `secuencia` (único por lote, siempre creciente) vs `version` (versión de **datos** — se
-    mantiene igual entre reimpresiones idénticas, solo se incrementa en `REETIQUETADO`).
+*   `secuencia` (único por lote, siempre creciente) vs `version` (versión de **datos** — se mantiene igual entre reimpresiones idénticas, solo se incrementa en `REETIQUETADO`).
 *   `anula_a` (self-FK) + `anulada`: cadena de versiones — el reetiquetado anula la etiqueta previa.
 *   `codigo_lote` **nunca cambia** por un reetiquetado — solo cambian datos secundarios.
 *   Ver detalle completo en [docs/modulos/GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md).
 
-### `FormulaColor` y `FaseReceta`
-*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos).
-*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.
-*   **Versión**: Control de cambios en recetas de laboratorio.
+### `FormulaColor`, `FaseReceta`, `ProcesoTintoreria` y `VersionFormula`
+*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos). La receta "viva" es la que se edita.
+*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto, Otro.
+*   **Fases**: cada `FaseReceta` apunta a un `ProcesoTintoreria` (catálogo **por sede**: Descrude, Tintura, Jabonado…, con tipo `pre_tratamiento`/`colorante`/`auxiliar`/`lavado`/`acabado`) y tiene `ciclo`, temperatura y tiempo. Reemplazó al antiguo enum de 5 fases (migración `0014`). `MaquinaProceso` registra qué procesos ejecuta cada máquina; `Maquina.volumen_bano_litros` es el volumen del baño (distinto de `capacidad_maxima`, kg/turno).
+*   **Versionado inmutable** (`VersionFormula`, migración `0015`): aprobar una fórmula en pruebas crea la versión oficial v1; editar una fórmula aprobada exige motivo y crea la versión N+1 oficial (la anterior queda intacta y deja de ser oficial). Cada versión guarda la receta completa como JSON (`snapshot`), incluido código y descripción de cada químico para que siga legible si el producto se renombra o se da de baja. Una sola versión oficial por fórmula (índice filtrado). Solo `es_oficial` es mutable; el resto y el borrado se rechazan.
+*   **Congelado en la OP**: `OrdenProduccion.version_formula` se fija al lanzar la orden (salir de `pendiente`) con la versión oficial vigente; sin versión oficial el lanzamiento se rechaza. Una orden lanzada no cambia de fórmula ni de versión. `OrdenProduccion.formula_color` y `version_formula` son `PROTECT`: una fórmula usada por órdenes no se puede borrar.
+*   Servicio: `gestion/services/versionado_formula.py` (`VersionadoFormulaService`).
 
-## 4. Gestión de Despacho y Microservicios
+## 4. Gestión de Despacho y Servicios Satélite
 
 ### `HistorialDespacho`
 *   Maestro de salida física que agrupa múltiples pedidos.
@@ -69,17 +79,15 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 *   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
 *   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
-> **[Sprint 6 — 2026-04-10]**
+## 5. Consultas de Reportes de Producción y Gerenciales
 
-## 3. Stored Procedures de Reportes de Producción
+Los reportes gerenciales y de producción se consultan directamente vía la API interna (`internal_api/services/reporting_data.py`) utilizando Django ORM con índices optimizados en SQL Server 2022 (`V2`, `V4`, `V5`). Los 21 Stored Procedures originales fueron eliminados como código muerto en la auditoría del 31 de agosto de 2026 para simplificar la arquitectura y eliminar overhead de traducción.
 
-Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el microservicio `reporting_excel` vía `SqlReportRepository.execute_sp()`.
-
-| SP | Parámetros | Descripción |
+| Consulta / Reporte | Parámetros | Descripción |
 |----|-----------|-------------|
 | `sp_GetOrdenesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Detalle de OPs con producto, fórmula de color, sede, área, máquina, operario y avance (%). Incluye OPs sin lotes aún. |
 | `sp_GetLotesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Lotes del período con `peso_bruto`, `tara`, `peso_neto`, `kg_por_hora` calculado, y duración en minutos. |
-| `sp_GetTendenciaProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Serie temporal diaria de kg producidos. Usa CTE `Calendario` para garantizar continuidad (días sin producción = 0). `OPTION(MAXRECURSION 365)`. |
+| `sp_GetTendenciaProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Serie temporal diaria de kg producidos. Usa CTE `Calendario` para garantizar continuidad. |
 
 **Nota**: `@SedeID = NULL` equivale a vista global (todas las sedes). El parámetro es nullable en todos los SPs.
 
@@ -87,20 +95,23 @@ Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`
 
 ```mermaid
 graph TD
-    FE[EjecutivosDashboard\nTabReportes] -->|GET /reporting/produccion/ordenes\n?fecha_inicio&fecha_fin&sede_id&format=xlsx| RE[reporting_excel\nFastAPI :8003]
-    RE -->|EXEC sp_GetOrdenesProduccionGerencial\n@FechaInicio, @FechaFin, @SedeID| SP[(SQL Server\nStored Procedure)]
-    SP -->|Resultset| RE
-    RE -->|SqlReportRepository.execute_sp| PD[Pandas DataFrame]
-    PD -->|ExcelFormatter / CsvFormatter| BLOB[Blob xlsx/csv]
-    BLOB -->|StreamingResponse| FE
-    FE -->|URL.createObjectURL + click| User[Descarga usuario]
+    FE[EjecutivosDashboard\nTabReportes] -->|GET /api/reporting/kardex/| DJ[Django Backend\nreporting_proxy]
+    DJ -->|POST /kardex/ con JWT RS256| RE[reporting_excel\nFastAPI :8002]
+    RE -->|GET /api/internal/v1/reports/* con JWT RS256| DJ
+    DJ -->|Execute SP / ORM Query| SP[(SQL Server 2022\nRCSI Mode)]
+    SP -->|Resultset| DJ
+    DJ -->|JSON Data| RE
+    RE -->|Pandas / openpyxl| BLOB[Blob xlsx]
+    BLOB -->|Response Stream| DJ
+    DJ -->|File Download| FE
 ```
+
 
 ### Flujo de datos: KPI Ejecutivo (Service Layer)
 
 ```mermaid
 graph TD
-    View[KpiEjecutivoView\ngestion/views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
+    View[KpiEjecutivoView\ngestion/views/kpi_views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
     View --> SvcE[ExecutiveKPIService\nobtener_kpis]
     SvcP -->|QuerySet ORM| OP[gestion_ordenproduccion\ngestion_loteproduccion]
     SvcE -->|QuerySet ORM + F expr| INV[inventory_stockbodega\ngestion_pedidoventa\nordencomprasugerida]
@@ -111,7 +122,7 @@ graph TD
     View -->|JSON serializado| FE[EjecutivosDashboard]
 ```
 
-## 4. Reversión de Pagos (Mayo 2026)
+## 6. Reversión de Pagos (Mayo 2026)
 
 ### `PagoCliente` — Reversión de abonos
 El `PagoReversionService` permite deshacer un `PagoCliente` registrado:
@@ -121,7 +132,7 @@ El `PagoReversionService` permite deshacer un `PagoCliente` registrado:
 - **Post-reversión**: `PaymentReconciler` se ejecuta automáticamente para re-reconciliar los pedidos via FIFO.
 - **Endpoints**: `POST /api/pagos-cliente/{id}/revertir/` (acción amigable) o `DELETE /api/pagos-cliente/{id}/` (con justificación en el body).
 
-## 5. Diagramas de Proceso
+## 7. Diagramas de Proceso
 
 ### Flujo de Venta vs Crédito
 ```mermaid

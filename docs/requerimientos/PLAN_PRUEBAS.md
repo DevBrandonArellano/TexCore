@@ -1,9 +1,27 @@
 # 🧪 Plan de Pruebas Técnico — TexCore — Sistema de gestión de órdenes de producción
 
+> **Registro histórico.** El plan de pruebas vigente es `PLAN_PRUEBAS_ISTQB.md` (20-oct-2026): niveles, técnicas, criterios de entrada y salida, entorno y trazabilidad. Este documento conserva los 112 casos `TC-xxx` de marzo a mayo de 2026.
+
 **Autor**: Senior SDET / QA Lead (ISTQB)
 **Fecha**: 2026-03-24
 **Proyecto**: TexCore — Sistema de gestión de órdenes de producción Textil
 **Stack**: Django (Backend) · React (Frontend) · SQL Server (Persistencia)
+
+> **Nota (2026-09-02, barrido de higiene Fase 4):** Este documento es un diseño de pruebas
+> point-in-time (marzo–mayo 2026). Los enlaces `models.py`/`views.py`/`serializers.py` de
+> `gestion/`/`inventory/` en las secciones 1.1, 3 y 6 apuntan a archivos monolíticos que **ya no
+> existen** — el God Files Split del 24-ago-2026 los dividió en paquetes:
+> - `gestion/models.py` → `gestion/models/{core,catalogo,produccion,formula,ventas,maquina,trazabilidad,costeo}.py`
+> - `gestion/views.py` → `gestion/views/{production_orden,production_lote,production_subproceso,sales,formula,catalog,core,kpi,...}_views.py`
+> - `gestion/serializers.py` → `gestion/serializers/{production,formula,sales,catalog,core}_serializers.py`
+> - `inventory/views.py` → `inventory/views/{stock,kardex,transferencia,despacho,...}_views.py`
+>
+> Re-mapear las ~64 referencias `archivo#Lxx-Lyy` de este documento línea por línea no es viable
+> de mantener (el propio número de línea vuelve a quedar desactualizado con cada cambio) y no es
+> el propósito de este documento (registro histórico del diseño de pruebas, no navegación de
+> código). Para la ubicación **actual** de cada test y su técnica ISTQB, usar
+> `docs/matriz_trazabilidad_pruebas.md` (mantenido activamente, apunta siempre a los archivos de
+> paquete vigentes) — este documento se conserva como evidencia del diseño original.
 
 ---
 
@@ -13,31 +31,34 @@
 
 | # | Módulo | Regla | Archivo fuente |
 |---|--------|-------|----------------|
-| RN-01 | Auditoría | Todo modelo `AuditableModelMixin` registra CREATE/UPDATE/DELETE en `AuditLog` con IP, usuario y justificación | [models.py](../gestion/models.py#L42-L151) |
-| RN-02 | Auditoría | Los modelos con `requiere_justificacion_auditoria=True` exigen `_justificacion_auditoria` en UPDATE/DELETE | [models.py](../gestion/models.py#L75-L86) |
+| RN-01 | Auditoría | Todo modelo `AuditableModelMixin` registra CREATE/UPDATE/DELETE en `AuditLog` con IP, usuario y justificación | [models/core.py](../../gestion/models/core.py) (`AuditableModelMixin`) |
+| RN-02 | Auditoría | Los modelos con `requiere_justificacion_auditoria=True` exigen `_justificacion_auditoria` en UPDATE/DELETE | [models/core.py](../../gestion/models/core.py) (`AuditableModelMixin.save/delete`) |
 | RN-03 | Multi-tenancy | Los usuarios no-admin solo ven registros de su propia sede; superusuarios/admin_sistemas/ejecutivo ven todas | Múltiples ViewSets |
-| RN-04 | Roles | 10 roles: admin_sistemas, admin_sede, ejecutivo, jefe_planta, jefe_area, tintorero, operario, bodeguero, despacho, vendedor | [permissions.py](../gestion/permissions.py) |
-| RN-05 | Vendedor | Solo ve productos tipo hilo/tela/subproducto; no químicos ni insumos | [views.py](../gestion/views.py#L275-L276) |
-| RN-06 | Cliente - Crédito | `saldo_proyectado > limite_credito` → bloqueo de nuevo pedido | [serializers.py](../gestion/serializers.py#L709-L712) |
-| RN-07 | Cliente - Vencido | Si existe cartera vencida → **bloqueo total** de nuevos pedidos | [serializers.py](../gestion/serializers.py#L716-L725) |
-| RN-08 | Cliente - Contado | Clientes con `plazo_credito_dias=0` no pueden tener >1 pedido impago | [serializers.py](../gestion/serializers.py#L728-L733) |
-| RN-09 | Detalle Pedido | `precio_unitario >= producto.precio_base` (no vender bajo costo) | [serializers.py](../gestion/serializers.py#L459-L462) |
-| RN-10 | Detalle Pedido | `subtotal = peso × precio_unitario`; `total_con_iva = subtotal × 1.15` si IVA | [models.py](../gestion/models.py#L610-L614) |
-| RN-11 | Producción | Transición estados OP: pendiente → en_proceso → finalizada (irreversible) | [serializers.py](../gestion/serializers.py#L581-L588) |
-| RN-12 | Empaquetado | Presentaciones: Baño=225 conos, Funda=15 conos, Cono=1 | [models.py](../gestion/models.py#L528-L540) |
-| RN-13 | Empaquetado | Peso bruto > tara (validación estricta); alerta si neto difiere >5% del requerido | [serializers.py](../gestion/serializers.py#L636-L662) |
-| RN-14 | Inventario | Compra/Producción → suma stock; Venta/Consumo → resta stock; Transferencia → atómica entre bodegas | [views.py](../inventory/views.py#L128-L152) |
-| RN-15 | Inventario | Salida rechazada si `stock < cantidad`; CheckConstraint `saldo_resultante >= 0` | [models.py](../inventory/models.py#L88-L96) |
-| RN-16 | Transferencia | `bodega_origen ≠ bodega_destino` | [serializers.py](../inventory/serializers.py#L64-L69) |
-| RN-17 | Edición Movimiento | Solo movimientos tipo COMPRA son editables; requiere razón ≥10 caracteres | [views.py](../inventory/views.py#L194-L198) |
-| RN-18 | Despacho | Escaneo de lote: valida existencia + stock > 0; descuenta todo el lote | [views.py](../inventory/views.py#L608-L654) |
-| RN-19 | Pagos | Reconciliación FIFO: pagos se aplican a pedidos en orden cronológico | [utils.py](../gestion/utils.py#L47-L99) |
-| RN-20 | Fórmulas | Duplicar formula: incrementa versión, copia fases+detalles, estado='en_pruebas' | [views.py](../gestion/views.py#L447-L501) |
-| RN-21 | Fórmulas | No se permiten insumos (productos) duplicados en la misma fórmula | [serializers.py](../gestion/serializers.py#L364-L374) |
-| RN-22 | Dosificación | Cálculo gr/L: `cantidad_gr = volumen_L × concentración`; Cálculo %: `cantidad_kg = (kg_tela × %) / 100` | [services_formula.py](../gestion/services_formula.py#L42-L81) |
-| RN-23 | MRP | Limpia requerimientos previos; calcula necesidades de pedidos y OPs; genera OCs sugeridas si `requerido > stock` | [mrp_engine.py](../inventory/services/mrp_engine.py#L20-L147) |
-| RN-24 | Máquinas | Estados: operativa / mantenimiento / inactiva; eficiencia = producción / capacidad_maxima × 100 | [models.py](../gestion/models.py#L220-L234) |
-| RN-25 | Registro Lote | Al registrar lote: consume materia prima, consume insumos de empaquetado, crea stock de salida, actualiza estado de la OP | [views.py](../gestion/views.py#L1023-L1135) |
+| RN-04 | Roles | 11 roles: admin_sistemas, admin_sede, ejecutivo, jefe_planta, jefe_area, tintorero, operario, empaquetado, bodeguero, despacho, vendedor | [permissions.py](../../gestion/permissions.py) |
+| RN-05 | Vendedor | Solo ve productos tipo hilo/tela/subproducto; no químicos ni insumos | [views/catalog_views.py](../../gestion/views/catalog_views.py) |
+| RN-06 | Cliente - Crédito | Pedido a crédito (`esta_pagado=False`): `saldo_proyectado > limite_credito` → bloqueo de nuevo pedido. Una venta pagada al momento no se bloquea | [serializers/sales_serializers.py](../../gestion/serializers/sales_serializers.py) (`PedidoVentaSerializer.validate`) |
+| RN-07 | Cliente - Vencido | Si existe cartera vencida → bloqueo de nuevos pedidos a crédito | [serializers/sales_serializers.py](../../gestion/serializers/sales_serializers.py) (`PedidoVentaSerializer.validate`) |
+| RN-08 | Cliente - Contado | Clientes con `plazo_credito_dias=0` no pueden tener >1 pedido impago | [serializers/sales_serializers.py](../../gestion/serializers/sales_serializers.py) (`PedidoVentaSerializer.validate`) |
+| RN-09 | Detalle Pedido | `precio_unitario >= producto.precio_base` (no vender bajo costo) | [serializers/sales_serializers.py](../../gestion/serializers/sales_serializers.py) (`DetallePedidoSerializer.validate`) |
+| RN-10 | Detalle Pedido | `subtotal = peso × precio_unitario`; `total_con_iva = subtotal × 1.15` si IVA | [models/ventas.py](../../gestion/models/ventas.py) (`DetallePedido.save`) |
+| RN-11 | Producción | Transición estados OP: pendiente → en_proceso → finalizada (irreversible) | [serializers/production_serializers.py](../../gestion/serializers/production_serializers.py) (`OrdenProduccionEstadoSerializer.validate_estado`) |
+| RN-12 | Empaquetado | Equivalencias de presentación (p. ej. hilos: 1 baño = 15 fundas = 225 conos) **configurables por sede**, sin constante del sistema (ADR-011) | [models/core.py](../../gestion/models/core.py) (`ConfiguracionEmpaqueSede`) |
+| RN-13 | Empaquetado | Peso bruto > tara (validación estricta); alerta si neto difiere >5% del requerido | [serializers/production_serializers.py](../../gestion/serializers/production_serializers.py) (`LoteProduccionSerializer.validate`) |
+| RN-14 | Inventario | Compra/Producción → suma stock; Venta/Consumo → resta stock; Transferencia → atómica entre bodegas | [views/movimiento_views.py](../../inventory/views/movimiento_views.py), [views/transferencia_views.py](../../inventory/views/transferencia_views.py) |
+| RN-15 | Inventario | Salida rechazada si `stock < cantidad`; CheckConstraint `saldo_resultante >= 0` | [models.py](../../inventory/models.py) (`MovimientoInventario.Meta.constraints`) |
+| RN-16 | Transferencia | `bodega_origen ≠ bodega_destino` | [serializers.py](../../inventory/serializers.py) |
+| RN-17 | Edición Movimiento | Solo movimientos tipo COMPRA son editables; requiere razón ≥10 caracteres | [views/movimiento_views.py](../../inventory/views/movimiento_views.py) (`MovimientoInventarioViewSet.update`) |
+| RN-18 | Despacho | Escaneo de lote: valida existencia + stock > 0; descuenta todo el lote | [views/despacho_views.py](../../inventory/views/despacho_views.py) (`ProcessDespachoAPIView`) |
+| RN-19 | Pagos | Reconciliación FIFO: pagos se aplican a pedidos en orden cronológico | [utils.py](../../gestion/utils.py) (`PaymentReconciler`) |
+| RN-20 | Fórmulas | Versionado (spec 2026-09-24): aprobar crea la versión oficial v1; editar una aprobada exige motivo ≥ 10 y crea la vN+1 oficial (la anterior queda inmutable); `duplicar` crea una **variante** nueva (código/color propios) en pruebas y sin versiones | `gestion/services/versionado_formula.py`, `gestion/views/formula_views.py` |
+| RN-20b | Fórmulas / OP | Al lanzar una OP (salir de `pendiente`) se congela `version_formula` con la versión oficial vigente; sin versión oficial se rechaza; una OP lanzada no cambia de fórmula ni de versión | `gestion/models/produccion.py` (`OrdenProduccion.save/clean`) |
+| RN-21 | Fórmulas | No se permiten insumos (productos) duplicados en la misma fórmula | [serializers/formula_serializers.py](../../gestion/serializers/formula_serializers.py) (`validate_fases`) |
+| RN-22 | Dosificación | Cálculo gr/L: `cantidad_gr = volumen_L × concentración`; Cálculo %: `cantidad_kg = (kg_tela × %) / 100` | [services_formula.py](../../gestion/services/services_formula.py) |
+| RN-23 | MRP | Por sede (ADR-012): requerimientos de cada orden abierta con la dosificación de su versión de fórmula (g/L y %, sin los químicos ya descargados); sugerencia de compra informativa si `requerido + stock_mínimo − disponible > 0`; lo que falta de pedidos es necesidad de producción y alimenta el MTS | [services/mrp/](../../inventory/services/mrp/) |
+| RN-24 | Máquinas | Estados: operativa / mantenimiento / inactiva; eficiencia = producción / capacidad_maxima × 100 | [models/maquina.py](../../gestion/models/maquina.py), [views/core_views.py](../../gestion/views/core_views.py) (`AreaViewSet.reporte_eficiencia`) |
+| RN-24b | Máquinas / OEE | Cambiar el estado **abre y cierra el paro** que registra la detención (ADR-013): a `mantenimiento`, uno planificado; a `inactiva`, uno no planificado (sí penaliza la Disponibilidad); a `operativa`, se cierra con la hora del cambio. Solo se cierran los de `origen='estado'`: un paro registrado a mano es histórico inmutable | [services/paro_por_estado.py](../../gestion/services/paro_por_estado.py) |
+| RN-24c | Máquinas / Historial | El historial de paros filtra por **solape** con el rango (un paro anterior aún abierto son días detenidos del rango) y las horas de cada paro se **acotan al rango**, de modo que dos rangos contiguos suman el total sin contarlo dos veces; rango por omisión 30 días y máximo 366 | [services/historial_paros.py](../../gestion/services/historial_paros.py) |
+| RN-25 | Registro Lote | Al registrar lote: consume materia prima, consume insumos de empaquetado, crea stock de salida, actualiza estado de la OP | [services/registro_lote.py](../../gestion/services/registro_lote.py) (`RegistroLoteService.registrar_lote`) |
 
 ### 1.2 Validaciones Identificadas
 
@@ -134,8 +155,11 @@ stateDiagram-v2
 
 | Estado Actual | Evento | Estado Siguiente | Válido |
 |--------------|--------|-----------------|--------|
-| pendiente | Registrar lote (parcial) | en_proceso | ✅ |
-| pendiente | Registrar lote (completa orden) | finalizada | ✅ |
+| pendiente | Registrar lote (parcial) | en_proceso | ✅ (congela `version_formula`) |
+| pendiente | Registrar lote (completa orden) | finalizada | ✅ (congela `version_formula`) |
+| pendiente | Registrar lote con fórmula **sin versión oficial** | — (rechazado, se revierte lote y stock) | ❌ |
+| en_proceso (OP sin `peso_neto_requerido`, producción continua) | Registrar lote | en_proceso (solo se finaliza con `completar_orden`) | ✅ |
+| en_proceso / finalizada | Cambiar `formula_color` o `version_formula` | — (rechazado) | ❌ |
 | en_proceso | Registrar lote (parcial) | en_proceso | ✅ |
 | en_proceso | Registrar lote (peso >= requerido) | finalizada | ✅ |
 | en_proceso | completar_orden=true | finalizada | ✅ |
@@ -161,9 +185,13 @@ stateDiagram-v2
 
 | Estado Actual | Evento | Estado Siguiente | Válido |
 |--------------|--------|-----------------|--------|
-| en_pruebas | Aprobación | aprobada | ✅ |
-| aprobada | Duplicar | en_pruebas (nueva versión) | ✅ |
-| en_pruebas | Duplicar | en_pruebas (nueva versión) | ✅ |
+| en_pruebas | Aprobar (`POST /aprobar/`, motivo ≥ 10) | aprobada + versión oficial v1 | ✅ |
+| en_pruebas | Editar | en_pruebas (en sitio, sin versionar) | ✅ |
+| aprobada | Editar con motivo | aprobada + versión oficial vN+1 (vN queda intacta) | ✅ |
+| aprobada | Editar sin motivo | — (400) | ❌ |
+| aprobada | Aprobar de nuevo | — (400) | ❌ |
+| cualquiera | Cambiar `estado` por PUT/POST | — (400: usar `/aprobar/`) | ❌ |
+| cualquiera | Duplicar (`{codigo, nombre_color}`) | fórmula **nueva** en_pruebas, sin versiones | ✅ |
 
 #### Orden de Compra Sugerida (MRP)
 
@@ -265,7 +293,7 @@ stateDiagram-v2
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
 |----|------|---|-------------|-----------------|-------------------|---------|
-| TC-040 | Funcional | A | Compra: entrada de material | `tipo="COMPRA"`, `cantidad=100`, `bodega_destino=1` | Stock +100, movimiento creado | Partición Equivalencia |
+| TC-040 | Funcional | A | Compra: recepción de materia prima F0-001 (única vía de compra desde el 1-oct-2026) | `POST /materia-prima/registrar-entrada/` con proveedor, producto, bodega, lote del proveedor, `cantidad=100`, costo | Stock +100, lote de MP y movimiento COMPRA enlazados; una COMPRA genérica en `/inventory/movimientos/` → 400 | Partición Equivalencia |
 | TC-041 | Funcional | A | Venta: salida con stock suficiente | `tipo="VENTA"`, `cantidad=50`, stock=100 | Stock 50, movimiento creado | Partición Equivalencia |
 | TC-042 | Funcional | A | Venta: salida con stock insuficiente | `tipo="VENTA"`, `cantidad=101`, stock=100 | 400 "Stock insuficiente. Disponible: 100" | BVA |
 | TC-043 | Funcional | A | Transferencia exitosa entre bodegas | Origen stock=100, transferir=50 | Origen=50, Destino+50, MovimientoInventario tipo TRANSFERENCIA | Transición Estados |
@@ -278,7 +306,14 @@ stateDiagram-v2
 | TC-050 | Funcional | M | Razón de cambio < 10 caracteres | `razon_cambio="corto"` (5 chars) | 400 "mínimo 10 caracteres" | BVA |
 | TC-051 | Funcional | M | Razón de cambio = 10 caracteres | `razon_cambio="1234567890"` | Acepta | BVA |
 | TC-052 | Funcional | M | Kardex: saldo progresivo correcto | Compra 100, Venta 30, Compra 50 | Saldo: 100 → 70 → 120 | Caja Blanca |
-| TC-053 | Funcional | M | Kardex con fecha_inicio: saldo anterior | Filtro `fecha_inicio`, movs previos totalizan 500 | Fila virtual "SALDO INICIAL"=500 | Caja Blanca |
+| TC-053 | Funcional | M | Kardex con fecha_inicio: saldo anterior | Filtro `fecha_inicio`, movs previos totalizan 500 | `saldo_inicial`=500 en la respuesta y el `saldo` de cada fila ya lo incluye (sin fila virtual) | Caja Blanca |
+| TC-053b | Funcional | A | Kardex paginado: el saldo continúa entre páginas | 5 entradas de 10, `page=2`, `page_size=2` | Saldos 30 y 40 | Caja Blanca |
+| TC-053c | Funcional | M | Kardex: `fecha_fin` incluye todo el día | Movimiento a las 23:59:59 del día fin y otro a las 00:00 del siguiente | Solo el primero | BVA |
+| TC-053d | Funcional | M | Kardex: `page_size` sobre el máximo | `page_size=501` con 502 movimientos | 500 filas | BVA |
+| TC-053e | Funcional | M | Kardex / export: filtro inválido | `fecha_inicio=2026-13-45` o `tipo=transferencia` | 400 con el motivo (antes 500 o «Ruta de reporte no permitida») | Partición Equivalencia |
+| TC-053f | No funcional | A | RNF-03 kárdex < 3000 ms | 5000 movimientos, última página del rango | < 3 s y ≤ 6 consultas | Rendimiento |
+| TC-053g | No funcional | A | RNF-03 panel Jefe de Planta < 3000 ms | 500 órdenes, 1500 lotes, las 9 peticiones del panel | < 3 s y ≤ 34 consultas | Rendimiento |
+| TC-053h | Seguridad | A | Aislamiento de órdenes por sede | Jefe de planta de la sede A | Lista solo órdenes de A; abrir una de B → 404; admin_sistemas/ejecutivo ven ambas | Tabla de Decisión |
 | TC-054 | Funcional | B | Alerta stock bajo mínimo | `stock=5`, `stock_minimo=10` | Aparece en AlertasStockAPIView con `faltante=5` | Partición Equivalencia |
 | TC-055 | Funcional | B | Sin alerta si stock >= mínimo | `stock=10`, `stock_minimo=10` | No aparece en alertas | BVA |
 
@@ -300,8 +335,14 @@ stateDiagram-v2
 |----|------|---|-------------|-----------------|-------------------|---------|
 | TC-070 | Funcional | A | Crear fórmula con fases y detalles | Fórmula con 3 fases, 2 detalles cada una | 201, todas las fases y detalles creados en transacción | Partición Equivalencia |
 | TC-071 | Funcional | A | Rechazar insumo duplicado en fórmula | Mismo `producto.id` en dos fases distintas | 400 "aparece mas de una vez" | Partición Equivalencia |
-| TC-072 | Funcional | A | Duplicar fórmula: versión incrementada | Fórmula v1 existente | Nueva fórmula con v2, estado='en_pruebas', misma estructura | Caja Blanca |
-| TC-073 | Funcional | M | Duplicar fórmula: código base correcto | Fórmula `codigo="FC-001-v1"` | Duplicada `codigo="FC-001-v2"` | Caja Blanca |
+| TC-072 | Funcional | A | Crear variante (duplicar) | Fórmula aprobada + `{codigo: "VAR-01", nombre_color}` | 201: fórmula nueva `VAR-01`, en_pruebas, v1, sin versiones, misma sede y estructura | Caja Blanca |
+| TC-073 | Funcional | M | Crear variante sin código o con código existente en la sede | `{}` / código repetido | 400 | Partición Equivalencia |
+| TC-073a | Funcional | A | Aprobar fórmula en pruebas | `POST /aprobar/ {motivo: "Aprobada tras prueba de laboratorio"}` | 201, versión 1 oficial, fórmula aprobada | Transición de Estados |
+| TC-073b | Funcional | A | Motivo de aprobación en el límite | motivo de 9 / 10 caracteres | 400 / 201 | Valores Límite |
+| TC-073c | Funcional | A | Editar fórmula aprobada | PUT con y sin `motivo` | con motivo: v2 oficial y v1 intacta; sin motivo: 400 | Transición de Estados |
+| TC-073d | Funcional | A | Historial y diff de versiones | `GET /versiones/`, `/versiones/1/diff/2/` | lista descendente; diff con el campo cambiado; PUT/DELETE → 405 | Caja Blanca |
+| TC-073e | Funcional | A | Lanzar OP con fórmula sin versión oficial | PATCH `estado=en_proceso` / registrar lote | 400; OP sigue pendiente; sin lote ni movimiento de stock | Transición de Estados |
+| TC-073f | Funcional | A | Versionar fórmula con OP lanzada | OP en proceso con v1; se edita la fórmula (v2) | la OP conserva v1 | Transición de Estados |
 | TC-074 | Funcional | A | Calcular dosificación gr/L | `kg_tela=100`, `relacion_bano=10`, concentración=2.5 gr/L | `vol=1000L`, `cantidad_gr=2500`, `cantidad_kg=2.5` | Caja Blanca |
 | TC-075 | Funcional | A | Calcular dosificación porcentaje | `kg_tela=100`, `porcentaje=3.0` | `cantidad_kg=(100×3)/100=3.0` | Caja Blanca |
 | TC-076 | Funcional | M | Fallback concentración a campo legacy | `tipo_calculo='gr_l'`, `concentracion_gr_l=null`, `gramos_por_kilo=5` | Usa 5 como concentración | Caja Blanca |
@@ -356,23 +397,6 @@ stateDiagram-v2
 - `global.URL.createObjectURL` y `global.URL.revokeObjectURL` mockeados para pruebas de descarga de Blob.
 - Estado `descargando: string | null` controla el bloqueo global de botones.
 
-### 4.10 Módulo: Descarga de Químicos (TDD — Mayo 2026)
-
-**Archivo de pruebas:** `gestion/tests/test_descarga_quimicos_tdd.py`  
-**Técnicas:** EP + BVA + Transición de Estado + Prueba de Reversión  
-**Cobertura:** Ciclo de vida completo de `DescargaQuimicosService` sobre SQL Server
-
-| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
-|----|------|---|-------------|-----------------|-------------------|---------|
-| TC-DQ-01 | Funcional | A | Descarga exitosa crea `DescargaQuimicoOP` con cantidad 2 decimales | OP con fórmula, `cantidad=1.555` | `DescargaQuimicoOP` creada con `cantidad=Decimal('1.56')` | BVA |
-| TC-DQ-02 | Funcional | A | `safe_get_or_create_stock` recibe objeto `producto`, no `producto_id` | Servicio invocado con OP válida | Sin `TypeError`; stock creado/actualizado correctamente | Caja Blanca |
-| TC-DQ-03 | Funcional | A | Reversión de descarga restaura stock exacto a 2 decimales | Descarga previa con `cantidad=1.333`, luego revertir | `StockBodega.cantidad` restaurado con `.quantize(0.01)` | BVA |
-| TC-DQ-04 | Funcional | A | Estado `DescargaQuimicoOP` transiciona a `revertida` tras reversión | Descarga en estado `activa` | `estado='revertida'`, `justificacion` registrada | Transición Estados |
-| TC-DQ-05 | Funcional | M | Reversión doble es idempotente | Revertir una descarga ya `revertida` | Sin cambio en stock; no genera duplicados | Partición Equivalencia |
-| TC-DQ-06 | Integración | A | Ciclo completo: OP → Descarga → Reversión → Stock consistente | OP con 3 químicos, descarga, revertir OP | Stocks de los 3 químicos igual al valor inicial | E2E |
-
-> **[Mayo 2026]** Suite creada como cobertura permanente tras resolución de D-07 y D-08. Validada contra SQL Server con `64/64 tests OK` (120.696s).
-
 ### 4.9 Módulo: Seguridad y Multi-Tenancy
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
@@ -388,6 +412,23 @@ stateDiagram-v2
 | TC-108 | Seguridad | A | Despacho Writer: ejecutivo no puede procesar | Ejecutivo POST /despacho/process/ | 403 (IsDespachoWriter excluye ejecutivo) | Partición Equivalencia |
 | TC-109 | Seguridad | A | Admin_sede puede crear bodegas | Admin_sede POST /bodegas/ | 201 Created | Partición Equivalencia |
 | TC-110 | Seguridad | M | Crear usuario sin sede (no admin) → error | Grupo='vendedor', `sede=null` | 400 "La sede es requerida" | Caja Blanca |
+
+### 4.10 Módulo: Descarga de Químicos (TDD — Mayo 2026)
+
+**Archivo de pruebas:** `gestion/tests/test_descarga_quimicos_tdd.py`  
+**Técnicas:** EP + BVA + Transición de Estado + Prueba de Reversión  
+**Cobertura:** Ciclo de vida completo de `DescargaQuimicosService` sobre SQL Server
+
+| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
+|----|------|---|-------------|-----------------|-------------------|---------|
+| TC-DQ-01 | Funcional | A | Descarga exitosa crea `DescargaQuimicoOP` con cantidad 2 decimales | OP con fórmula, `cantidad=1.555` | `DescargaQuimicoOP` creada con `cantidad=Decimal('1.56')` | BVA |
+| TC-DQ-02 | Funcional | A | `safe_get_or_create_stock` recibe objeto `producto`, no `producto_id` | Servicio invocado con OP válida | Sin `TypeError`; stock creado/actualizado correctamente | Caja Blanca |
+| TC-DQ-03 | Funcional | A | Reversión de descarga restaura stock exacto a 2 decimales | Descarga previa con `cantidad=1.333`, luego revertir | `StockBodega.cantidad` restaurado con `.quantize(0.01)` | BVA |
+| TC-DQ-04 | Funcional | A | Estado `DescargaQuimicoOP` transiciona a `revertida` tras reversión | Descarga en estado `activa` | `estado='revertida'`, `justificacion` registrada | Transición Estados |
+| TC-DQ-05 | Funcional | M | Reversión doble es idempotente | Revertir una descarga ya `revertida` | Sin cambio en stock; no genera duplicados | Partición Equivalencia |
+| TC-DQ-06 | Integración | A | Ciclo completo: OP → Descarga → Reversión → Stock consistente | OP con 3 químicos, descarga, revertir OP | Stocks de los 3 químicos igual al valor inicial | E2E |
+
+> **[Mayo 2026]** Suite creada como cobertura permanente tras resolución de D-07 y D-08. Validada contra SQL Server con `64/64 tests OK` (120.696s). Nota 2026-09-02: `test_descarga_quimicos_tdd.py` recibió 6 tests adicionales en el barrido de higiene Fase 6 (ver `docs/matriz_trazabilidad_pruebas.md`) — esta cifra de 64 es histórica, no la cuenta actual.
 
 ---
 
@@ -410,24 +451,24 @@ stateDiagram-v2
 
 ## 6. Defectos Identificados y Corregidos
 
-Todos los defectos identificados han sido corregidos. Ver detalle de los primeros 6 en [Walkthrough de Correcciones QA](walkthrough_correcciones_qa.md). Los defectos D-07 en adelante fueron detectados y corregidos mediante la suite TDD de Mayo 2026.
+Todos los defectos identificados han sido corregidos. D-01 a D-06 vienen de la auditoría de QA de abril de 2026. Los defectos D-07 en adelante fueron detectados y corregidos mediante la suite TDD de Mayo 2026.
 
 | # | Severidad | Archivo | Descripción | Estado |
 |---|----------|---------|-------------|--------|
-| D-01 | **ALTA** | [views.py L305](../gestion/views.py#L305) | `ProveedorViewSet.get_queryset()`: usa variable `sede_id` sin definirla previamente → NameError en runtime | ✅ CORREGIDO |
-| D-02 | MEDIA | [serializers.py L682](../gestion/serializers.py#L682) | `PedidoVentaSerializer.get_fecha_pedido()` tiene `read_only_fields` como código muerto dentro del método | ✅ CORREGIDO |
-| D-03 | MEDIA | [views.py L786](../gestion/views.py#L786) | `requisitos_materiales`: usa `DetalleFormula.objects.filter(formula_color=...)` en lugar de `fase__formula` | ✅ CORREGIDO |
-| D-04 | BAJA | [models.py L167](../inventory/models.py#L167) | `DetalleHistorialDespachoPedido.__str__` referencia `self.fecha_despacho` que no existe en el modelo | ✅ CORREGIDO |
-| D-05 | MEDIA | [utils.py L75](../gestion/utils.py#L75) | `PaymentReconciler`: no consideraba IVA ni `valor_retencion` en el cálculo del total | ✅ CORREGIDO |
-| D-06 | BAJA | [mrp_engine.py L60](../inventory/services/mrp_engine.py#L60) | MRP tomaba la primera fórmula aprobada globalmente en vez de la vinculada al producto del pedido | ✅ CORREGIDO |
-| D-07 | **ALTA** | [services/descarga_quimicos.py](../gestion/services/descarga_quimicos.py) | `DescargaQuimicosService`: pasaba `producto_id` (int) en lugar del objeto `producto` a `safe_get_or_create_stock` → `TypeError` en runtime | ✅ CORREGIDO |
-| D-08 | **ALTA** | [services/descarga_quimicos.py](../gestion/services/descarga_quimicos.py) | Descargas y reversiones de químicos no aplicaban `.quantize(Decimal('0.01'))` → `DataError: ensure no more than 2 decimal places` en SQL Server | ✅ CORREGIDO |
-| D-09 | **ALTA** | [views.py](../gestion/views.py) | `perform_update`: `ValidationError` usada sin importar `rest_framework.exceptions.ValidationError` → `NameError` en runtime | ✅ CORREGIDO |
-| D-10 | **ALTA** | [views.py](../gestion/views.py) | `OrdenProduccionViewSet.get_permissions()`: sobreescribía completamente los permisos del decorador `@action`, ignorando `IsTintoreroOrAdmin` para `stock_quimicos` → 403 para rol `tintorero` | ✅ CORREGIDO |
-| D-11 | MEDIA | [views.py](../gestion/views.py) | `stock_quimicos` endpoint: `.values()` sobre campo FK retorna `'producto__id'` (doble guión); el test y el cliente esperaban `'producto_id'` → refactorizado con `.annotate()` + `.values('producto_id', ...)` | ✅ CORREGIDO |
-| D-12 | MEDIA | [views.py](../gestion/views.py) | Método `rechazar` en `LoteProduccion`: `LoteProduccion.peso_neto_producido` almacena más de 2 decimales; `MovimientoInventario.cantidad` acepta solo 2 → `DataError` al rechazar. Se aplicó `.quantize(Decimal('0.01'))` en 4 puntos del método | ✅ CORREGIDO |
-| D-13 | MEDIA | [tests_integrados.py](../gestion/tests_integrados.py) / [tests_jefe_area.py](../gestion/tests_jefe_area.py) | `create_user` en `setUp` no inyectaba `sede=self.sede` ni `area=self.area` → fallos de acceso multi-tenancy en Jefes de Área y Operarios | ✅ CORREGIDO |
-| D-14 | BAJA | [migrations/0051](../gestion/migrations/) | `0051_fix_token_blacklist_mssql` no estaba trackeado en git → faltaba en el contenedor Docker → `ProgrammingError: objeto UQ__token_bl__ es dependiente de columna token_id` al crear DB de tests | ✅ CORREGIDO |
+| D-01 | **ALTA** | [views/catalog_views.py](../../gestion/views/catalog_views.py) | `ProveedorViewSet.get_queryset()`: usa variable `sede_id` sin definirla previamente → NameError en runtime | ✅ CORREGIDO |
+| D-02 | MEDIA | [serializers/sales_serializers.py](../../gestion/serializers/sales_serializers.py) | `PedidoVentaSerializer.get_fecha_pedido()` tiene `read_only_fields` como código muerto dentro del método | ✅ CORREGIDO |
+| D-03 | MEDIA | [views/production_orden_views.py](../../gestion/views/production_orden_views.py) | `requisitos_materiales`: usa `DetalleFormula.objects.filter(formula_color=...)` en lugar de `fase__formula` | ✅ CORREGIDO |
+| D-04 | BAJA | [models.py](../../inventory/models.py) | `DetalleHistorialDespachoPedido.__str__` referencia `self.fecha_despacho` que no existe en el modelo | ✅ CORREGIDO |
+| D-05 | MEDIA | [utils.py](../../gestion/utils.py) | `PaymentReconciler`: no consideraba IVA ni `valor_retencion` en el cálculo del total | ✅ CORREGIDO |
+| D-06 | BAJA | `inventory/services/mrp_engine.py` (reemplazado por [services/mrp/](../../inventory/services/mrp/), ADR-012) | MRP tomaba la primera fórmula aprobada globalmente en vez de la vinculada al producto del pedido | ✅ CORREGIDO |
+| D-07 | **ALTA** | [services/descarga_quimicos.py](../../gestion/services/descarga_quimicos.py) | `DescargaQuimicosService`: pasaba `producto_id` (int) en lugar del objeto `producto` a `safe_get_or_create_stock` → `TypeError` en runtime | ✅ CORREGIDO |
+| D-08 | **ALTA** | [services/descarga_quimicos.py](../../gestion/services/descarga_quimicos.py) | Descargas y reversiones de químicos no aplicaban `.quantize(Decimal('0.01'))` → `DataError: ensure no more than 2 decimal places` en SQL Server | ✅ CORREGIDO |
+| D-09 | **ALTA** | [views/](../../gestion/views/) | `perform_update`: `ValidationError` usada sin importar `rest_framework.exceptions.ValidationError` → `NameError` en runtime | ✅ CORREGIDO |
+| D-10 | **ALTA** | [views/production_orden_views.py](../../gestion/views/production_orden_views.py) | `OrdenProduccionViewSet.get_permissions()`: sobreescribía completamente los permisos del decorador `@action`, ignorando `IsTintoreroOrAdmin` para `stock_quimicos` → 403 para rol `tintorero` | ✅ CORREGIDO |
+| D-11 | MEDIA | [views/production_orden_views.py](../../gestion/views/production_orden_views.py) | `stock_quimicos` endpoint: `.values()` sobre campo FK retorna `'producto__id'` (doble guión); el test y el cliente esperaban `'producto_id'` → refactorizado con `.annotate()` + `.values('producto_id', ...)` | ✅ CORREGIDO |
+| D-12 | MEDIA | [views/production_lote_views.py](../../gestion/views/production_lote_views.py) | Método `rechazar` en `LoteProduccion`: `LoteProduccion.peso_neto_producido` almacena más de 2 decimales; `MovimientoInventario.cantidad` acepta solo 2 → `DataError` al rechazar. Se aplicó `.quantize(Decimal('0.01'))` en 4 puntos del método | ✅ CORREGIDO |
+| D-13 | MEDIA | [tests_integrados.py](../../gestion/tests/tests_integrados.py) / [tests_jefe_area.py](../../gestion/tests/tests_jefe_area.py) | `create_user` en `setUp` no inyectaba `sede=self.sede` ni `area=self.area` → fallos de acceso multi-tenancy en Jefes de Área y Operarios | ✅ CORREGIDO |
+| D-14 | BAJA | [migrations/](../../gestion/migrations/) (hoy `0002_fix_token_blacklist_mssql`) | `0051_fix_token_blacklist_mssql` no estaba trackeado en git → faltaba en el contenedor Docker → `ProgrammingError: objeto UQ__token_bl__ es dependiente de columna token_id` al crear DB de tests | ✅ CORREGIDO |
 
 ---
 
@@ -452,4 +493,4 @@ Todos los defectos identificados han sido corregidos. Ver detalle de los primero
 > **[Mayo 2026]** ★★ 6 casos TDD nuevos para Descarga de Químicos (`test_descarga_quimicos_tdd.py`). Suite completa: **64/64 tests OK** sobre SQL Server ✅
 
 > [!NOTE]
-> Los **6 defectos** identificados en la auditoría de QA (sección 6) han sido corregidos en su totalidad. Ver [Walkthrough de Correcciones QA](walkthrough_correcciones_qa.md) para el detalle de cada corrección.
+> Los **6 defectos** identificados en la auditoría de QA (sección 6, D-01 a D-06) han sido corregidos en su totalidad.

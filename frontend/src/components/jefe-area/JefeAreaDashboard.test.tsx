@@ -1,3 +1,13 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el card de Estado de Máquinas / que las peticiones aun no resuelven / que
+ *   las peticiones resuelven / un error en alguna peticion / kpis cargados.
+ * - Análisis de valores límite (BVA): motivo vacío o en blanco.
+ * - Transición de estados (STT): el card de Estado de Máquinas / un error al cambiar el estado de una maquina
+ *   / ordenes pendientes / ninguna orden pendiente.
+ * - Caja blanca (CB): ramas de error — un error en alguna peticion / un error al cambiar el estado de una
+ *   maquina / un error al guardar la maquina editada.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -7,7 +17,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, LineaProduccion } from '../../lib/types';
 
-// Mock axios / apiClient — JefeAreaDashboard usa apiClient directamente
+// Mock de axios / apiClient — JefeAreaDashboard usa apiClient directamente
 // y ManageMaquinas usa useQuery (TanStack Query) sobre apiClient
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -17,11 +27,11 @@ const mockDelete = vi.fn();
 
 vi.mock('axios', () => {
   const mockAxiosInstance = {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
-    put: (...args: any[]) => mockPut(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     interceptors: {
       request: { use: vi.fn(), eject: vi.fn() },
       response: { use: vi.fn(), eject: vi.fn() },
@@ -36,8 +46,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -55,8 +65,11 @@ vi.mock('../../lib/auth', () => ({
 // "+ Nueva Máquina" (renderizado de verdad) no quede duplicado con el de este dashboard.
 
 // Mock de hijos ya testeados en sus propios archivos — foco en la lógica propia de JefeAreaDashboard
+vi.mock('./ReporteEficienciaArea', () => ({
+  ReporteEficienciaArea: (props: import('react').ComponentProps<typeof import('./ReporteEficienciaArea').ReporteEficienciaArea>) => <div data-testid="reporte-eficiencia-mock">area:{props.areaId}</div>,
+}));
 vi.mock('../produccion/EtapasProduccion', () => ({
-  EtapasProduccion: (props: any) => <div data-testid="etapas-produccion-mock">EtapasProduccion area:{props.areaId}</div>,
+  EtapasProduccion: (props: import('react').ComponentProps<typeof import('../produccion/EtapasProduccion').EtapasProduccion>) => <div data-testid="etapas-produccion-mock">EtapasProduccion area:{props.areaId}</div>,
 }));
 
 vi.mock('../produccion/FlujoProduccion', () => ({
@@ -64,7 +77,7 @@ vi.mock('../produccion/FlujoProduccion', () => ({
 }));
 
 vi.mock('../produccion/TrazabilidadProducto', () => ({
-  TrazabilidadProducto: (props: any) => (
+  TrazabilidadProducto: (props: import('react').ComponentProps<typeof import('../produccion/TrazabilidadProducto').TrazabilidadProducto>) => (
     <div data-testid="trazabilidad-producto-mock">
       TrazabilidadProducto orden:{props.ordenId} allowRegister:{String(props.allowRegister)}
     </div>
@@ -198,8 +211,8 @@ const LOTE_1: LoteProduccion = {
   hora_final: '2026-07-13T12:00:00',
 };
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/kpi-area/': KPI_1,
     '/maquinas/': [],
     '/ordenes-produccion/': [],
@@ -214,7 +227,14 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
   // Prefijo más largo (más específico) primero — evita que '/maquinas/' capture
   // rutas más específicas como '/maquinas/1/oee/' por coincidir antes.
   const keysByLength = Object.keys(data).sort((a, b) => b.length - a.length);
-  mockGet.mockImplementation((url: string) => {
+  mockGet.mockImplementation((url: string, config?: { params?: { page?: number; page_size?: number } }) => {
+    // El listado de lotes siempre viene paginado (LotesProduccionPagination).
+    if (url === '/lotes-produccion/') {
+      const lotes = data[url] as LoteProduccion[];
+      const { page = 1, page_size = 30 } = config?.params ?? {};
+      const results = lotes.slice((page - 1) * page_size, page * page_size);
+      return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results } });
+    }
     for (const key of keysByLength) {
       if (url.startsWith(key)) return Promise.resolve({ data: data[key] });
     }
@@ -228,7 +248,7 @@ describe('JefeAreaDashboard', () => {
     mockEndpoints();
   });
 
-  it('el card de Estado de Máquinas no tiene un botón propio de "Nueva Máquina" duplicado', async () => {
+  it('dado el card de Estado de Máquinas cuando se renderiza entonces no duplica el botón "Nueva Máquina"', async () => {
     renderComponent();
 
     await waitFor(() => {
@@ -314,7 +334,7 @@ describe('JefeAreaDashboard', () => {
       renderComponent();
 
       await waitFor(() => {
-        const alertasCard = screen.getByText('Alertas Activas').closest('div.flex-shrink-0')?.parentElement;
+        const alertasCard = screen.getByText('Alertas Activas').closest('div.shrink-0')?.parentElement;
         expect(within(alertasCard as HTMLElement).getByText('2')).toBeInTheDocument();
       });
     });
@@ -411,10 +431,11 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByText('Registrar Paro de Máquina')).toBeInTheDocument();
     });
 
-    it('dado lotes producidos hoy para una maquina cuando carga entonces calcula el porcentaje de carga', async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const loteHoy: LoteProduccion = { ...LOTE_1, maquina: 1, peso_neto_producido: 50, hora_final: `${today}T12:00:00` };
-      mockEndpoints({ '/maquinas/': [MAQUINA_1], '/lotes-produccion/': [loteHoy] });
+    it('dado eficiencia del dia de una maquina cuando carga entonces muestra el porcentaje de carga del servidor', async () => {
+      mockEndpoints({
+        '/maquinas/': [MAQUINA_1],
+        '/maquinas/1/eficiencia/': { maquina: 'Máquina A', capacidad_maxima: 100, produccion_hoy: 50, eficiencia_porcentaje: 50 },
+      });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('50%')).toBeInTheDocument());
@@ -459,9 +480,9 @@ describe('JefeAreaDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al cambiar el estado de la máquina.'));
     });
 
-    it('dado el dialogo de edicion de maquina cuando se modifican nombre, capacidad y estado y se guarda entonces envia el PUT actualizado', async () => {
+    it('dado el dialogo de edicion de maquina cuando se modifican nombre, capacidad y estado y se guarda entonces envia el PATCH actualizado', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_1] });
-      mockPut.mockResolvedValueOnce({ data: {} });
+      mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
@@ -471,31 +492,32 @@ describe('JefeAreaDashboard', () => {
       await userEvent.clear(nombreInput);
       await userEvent.type(nombreInput, 'Máquina A Renovada');
 
-      const capacidadInput = screen.getByLabelText(/Capacidad/);
+      const dialogo = screen.getByRole('dialog');
+      const capacidadInput = within(dialogo).getByLabelText(/Capacidad/);
       await userEvent.clear(capacidadInput);
       await userEvent.type(capacidadInput, '150');
 
-      await userEvent.click(screen.getByRole('combobox'));
+      await userEvent.click(within(dialogo).getAllByRole('combobox')[0]);
       await userEvent.click(await screen.findByRole('option', { name: 'Mantenimiento' }));
 
       mockGet.mockClear();
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() =>
-        expect(mockPut).toHaveBeenCalledWith('/maquinas/1/', expect.objectContaining({
+        expect(mockPatch).toHaveBeenCalledWith('/maquinas/1/', expect.objectContaining({
           nombre: 'Máquina A Renovada',
-          capacidad_maxima: 150,
+          capacidad_maxima: '150',
           estado: 'mantenimiento',
           area: 1,
         }))
       );
-      expect(toastSuccessMock).toHaveBeenCalledWith('Máquina actualizada correctamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Máquina actualizada');
       await waitFor(() => expect(mockGet).toHaveBeenCalled());
     });
 
-    it('dado un error al guardar la maquina editada cuando falla el PUT entonces muestra un toast de error', async () => {
+    it('dado un error al guardar la maquina editada cuando falla el PATCH entonces muestra un toast de error', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_1] });
-      mockPut.mockRejectedValueOnce(new Error('500'));
+      mockPatch.mockRejectedValueOnce(new Error('500'));
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
@@ -507,13 +529,13 @@ describe('JefeAreaDashboard', () => {
 
     it('dado clic en un operario del dialogo de maquina cuando se marca y desmarca su checkbox entonces alterna su seleccion y se envia en el guardado', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_2], '/users/': [OPERARIO_1] });
-      mockPut.mockResolvedValueOnce({ data: {} });
+      mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina B')).toBeInTheDocument());
       await userEvent.click(screen.getByTitle('Editar máquina'));
 
-      const checkbox = screen.getByLabelText('operario1');
+      const checkbox = within(screen.getByRole('dialog')).getByLabelText('operario1');
       expect(checkbox).not.toBeChecked();
 
       await userEvent.click(checkbox);
@@ -526,7 +548,7 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() =>
-        expect(mockPut).toHaveBeenCalledWith('/maquinas/2/', expect.objectContaining({ operarios: [5] }))
+        expect(mockPatch).toHaveBeenCalledWith('/maquinas/2/', expect.objectContaining({ operarios: [5] }))
       );
     });
 
@@ -541,7 +563,35 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => expect(screen.queryByText('Editar Máquina')).not.toBeInTheDocument());
-      expect(mockPut).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it('dado una maquina editada desde su tarjeta cuando se guarda entonces Gestion de Maquinas vuelve a consultar su listado', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1] });
+      mockPatch.mockResolvedValueOnce({ data: {} });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      await userEvent.click(screen.getByTitle('Editar máquina'));
+      mockGet.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/maquinas/?area=1'));
+    });
+
+    it('dado una maquina creada desde Gestion de Maquinas cuando se guarda entonces el panel refresca sus datos', async () => {
+      mockPost.mockResolvedValueOnce({ data: { id: 9 } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('No hay máquinas registradas')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: '+ Nueva Máquina' }));
+      const dialogo = screen.getByRole('dialog');
+      await userEvent.type(within(dialogo).getByLabelText('Nombre de la Máquina'), 'Secadora 1');
+      await userEvent.type(within(dialogo).getByLabelText(/Capacidad/), '80');
+      mockGet.mockClear();
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/kpi-area/'));
     });
   });
 
@@ -575,7 +625,7 @@ describe('JefeAreaDashboard', () => {
       expect(mockPatch).not.toHaveBeenCalled();
     });
 
-    it('dado seleccion de maquina y operario cuando se hace clic en asignar entonces envia el patch correcto y refresca', async () => {
+    it('dado seleccion de maquina y operario cuando se hace clic en asignar entonces completa los detalles, inicia la orden y refresca', async () => {
       mockEndpoints({ '/ordenes-produccion/': [ORDEN_PENDIENTE], '/maquinas/': [MAQUINA_1], '/users/': [OPERARIO_1] });
       mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
@@ -593,10 +643,10 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: /Asignar/ }));
 
       await waitFor(() =>
-        expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/10/', {
+        expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/10/completar_detalles/', {
           maquina_asignada: 1,
           operario_asignado: 5,
-          estado: 'en_proceso',
+          iniciar: true,
         })
       );
       expect(toastSuccessMock).toHaveBeenCalledWith('Orden asignada e iniciada correctamente.');
@@ -626,7 +676,7 @@ describe('JefeAreaDashboard', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /Asignar/ }));
 
-      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al asignar la orden.'));
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al asignar la orden.', expect.anything()));
     });
   });
 
@@ -683,62 +733,76 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByText('80 Kg')).toBeInTheDocument();
     });
 
-    it('dado clic en Rechazar cuando el usuario ingresa un motivo entonces envía la justificación al endpoint y refresca', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('Tela con manchas de tintura');
-      vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado clic en Ver ficha cuando se abre entonces muestra la ficha del lote', async () => {
+      mockEndpoints({ '/lotes-produccion/': [LOTE_1], '/lotes-produccion/1/genealogia/': {
+        lote_codigo: 'L-001', producto: 'Hilo rojo', peso_neto: 80, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
+        operario: 'operario1', maquina: 'Máquina A', fechas: { inicio: '', final: '' },
+        orden_produccion: { codigo: 'OP-20', formula_color: null }, quimicos_consumidos: [],
+      } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: 'Ver ficha' }));
+
+      expect(await screen.findByText('Hilo rojo')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/genealogia/');
+    });
+
+    it('dado clic en Rechazar cuando confirma un motivo entonces envía la justificación, avisa y recarga la tabla', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
       mockGet.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), 'Tela con manchas de tintura');
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar lote' }));
 
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
-
-      // Bug fix R1: el backend exige `justificacion` no vacía; el frontend debe enviarla
+      // El backend exige `justificacion` no vacía (ISO 9001).
       await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
         '/lotes-produccion/1/rechazar/',
         { justificacion: 'Tela con manchas de tintura' },
       ));
-      expect(window.alert).toHaveBeenCalledWith('Lote rechazado y movimientos revertidos.');
-      await waitFor(() => expect(mockGet).toHaveBeenCalled());
+      expect(toastSuccessMock).toHaveBeenCalledWith('Lote rechazado y movimientos revertidos.');
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', expect.anything()));
+      await waitFor(() => expect(screen.queryByLabelText('Motivo del rechazo')).not.toBeInTheDocument());
     });
 
-    it('dado clic en Rechazar cuando el usuario cancela el prompt entonces no llama al endpoint de rechazo', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue(null);
+    it('dado el diálogo de rechazo cuando cancela entonces no llama al endpoint', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
     });
 
-    it('dado clic en Rechazar cuando el motivo queda vacío entonces avisa y no llama al endpoint', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('   ');
-      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado motivo vacío o en blanco cuando abre el diálogo entonces no permite confirmar', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
-
-      expect(alertMock).toHaveBeenCalledWith('Debes indicar un motivo para rechazar el lote.');
-      expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      expect(screen.getByRole('button', { name: 'Rechazar lote' })).toBeDisabled();
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), '   ');
+      expect(screen.getByRole('button', { name: 'Rechazar lote' })).toBeDisabled();
     });
 
-    it('dado un error al rechazar un lote cuando falla la peticion entonces muestra una alerta de error', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('Motivo válido');
-      vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado un error al rechazar un lote cuando falla la peticion entonces avisa y mantiene el diálogo abierto', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockRejectedValueOnce(new Error('500'));
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), 'Motivo válido');
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar lote' }));
 
-      await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Error al rechazar el lote.'));
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al rechazar el lote.'));
+      expect(screen.getByLabelText('Motivo del rechazo')).toBeInTheDocument();
     });
 
     const makeLotes = (count: number): LoteProduccion[] =>
@@ -748,67 +812,67 @@ describe('JefeAreaDashboard', () => {
         codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
       }));
 
-    it('dado mas de 20 lotes cuando se hace clic en Siguiente y Anterior entonces navega entre paginas', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+    it('dado mas de 30 lotes cuando se hace clic en Siguiente y Anterior entonces navega entre paginas', async () => {
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Anterior/ })).toBeDisabled();
 
       await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }));
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
-      expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
+      expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled();
 
       await userEvent.click(screen.getByRole('button', { name: /Anterior/ }));
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
     });
 
     it('dado el input de ir a pagina cuando se escribe un numero y se presiona Enter entonces salta a esa pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '2{Enter}');
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
-      expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
+      expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument();
     });
 
     it('dado el input de ir a pagina cuando pierde el foco con un numero valido entonces salta a esa pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '2');
       await userEvent.tab();
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
     });
 
     it('dado un numero invalido en el input de ir a pagina cuando pierde el foco entonces no cambia de pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '99');
       await userEvent.tab();
 
       expect(screen.getByText('L-001')).toBeInTheDocument();
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
     });
   });
 
@@ -844,6 +908,7 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByRole('heading', { name: 'Máquinas' })).toBeInTheDocument();
       expect(screen.getByTestId('etapas-produccion-mock')).toHaveTextContent('area:1');
       expect(screen.getByTestId('flujo-produccion-mock')).toBeInTheDocument();
+      expect(screen.getByTestId('reporte-eficiencia-mock')).toHaveTextContent('area:1');
     });
 
     it('dado el panel cargado cuando renderiza entonces muestra la card de Lineas de Produccion', async () => {

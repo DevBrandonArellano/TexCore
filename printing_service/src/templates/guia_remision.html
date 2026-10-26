@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Guía de Remisión {{ numero }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 1.2cm 1.5cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                font-size: 7pt;
+                color: #94a3b8;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 9pt;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid #0f766e;
+            padding-bottom: 8px;
+            margin-bottom: 4px;
+        }
+        .header-left h1 { font-size: 15pt; font-weight: bold; color: #0f766e; text-transform: uppercase; }
+        .header-left p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+        .header-right { text-align: right; }
+        .header-right .doc-title { font-size: 12pt; font-weight: bold; color: #334155; text-transform: uppercase; }
+        .header-right .doc-numero { font-size: 11pt; font-weight: bold; color: #0f766e; font-family: 'Courier New', monospace; margin-top: 2px; }
+        .header-right p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+
+        .aviso-informativo {
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 4px;
+            padding: 5px 10px;
+            margin-bottom: 12px;
+            font-size: 7.5pt;
+            color: #92400e;
+            text-align: center;
+        }
+
+        .box {
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .box-title {
+            background-color: #0f766e;
+            color: #ffffff;
+            font-size: 8pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3pt;
+            padding: 5px 10px;
+        }
+        .box-body { padding: 8px 10px; }
+
+        .grid-2 { display: flex; gap: 16px; }
+        .grid-2 > div { flex: 1; }
+
+        .field-label { font-size: 7pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.2pt; }
+        .field-value { font-size: 9pt; color: #1e293b; margin-bottom: 6px; }
+
+        table.detalle-table { width: 100%; border-collapse: collapse; }
+        table.detalle-table thead tr { background-color: #f1f5f9; }
+        table.detalle-table th {
+            color: #334155;
+            padding: 6px;
+            text-align: left;
+            font-size: 7.5pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 2px solid #cbd5e1;
+        }
+        table.detalle-table td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; font-size: 8.5pt; }
+        .text-right { text-align: right; }
+        .font-mono { font-family: 'Courier New', monospace; }
+
+        .destinatario-block { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e1; }
+        .destinatario-block:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+        .firmas {
+            display: flex;
+            gap: 24px;
+            margin-top: 28px;
+        }
+        .firma-box { flex: 1; text-align: center; }
+        .firma-linea { border-top: 1px solid #334155; margin-top: 28px; padding-top: 4px; font-size: 8pt; color: #475569; }
+
+        .footer {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
+            margin-top: 14px;
+            font-size: 7pt;
+            color: #94a3b8;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>{{ empresa_nombre }}</h1>
+            {% if empresa_ruc %}<p>RUC: {{ empresa_ruc }}</p>{% endif %}
+            <p>Punto de partida: {{ punto_partida }}</p>
+        </div>
+        <div class="header-right">
+            <div class="doc-title">Guía de Remisión</div>
+            <div class="doc-numero">Nº {{ numero }}</div>
+            <p>Emisión: {{ fecha_emision }}</p>
+        </div>
+    </div>
+
+    <div class="aviso-informativo">
+        Documento informativo de acompañamiento de mercadería — no constituye comprobante electrónico
+        autorizado por el SRI.
+    </div>
+
+    <div class="box">
+        <div class="box-title">Datos del Traslado</div>
+        <div class="box-body grid-2">
+            <div>
+                <div class="field-label">Motivo del traslado</div>
+                <div class="field-value">{{ motivo_traslado }}</div>
+            </div>
+            <div>
+                <div class="field-label">Inicio de transporte</div>
+                <div class="field-value">{{ fecha_inicio_transporte }}</div>
+            </div>
+            <div>
+                <div class="field-label">Fin de transporte</div>
+                <div class="field-value">{{ fecha_fin_transporte }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box">
+        <div class="box-title">Datos del Transporte</div>
+        <div class="box-body grid-2">
+            <div>
+                <div class="field-label">Modalidad</div>
+                <div class="field-value">{{ 'Transporte propio' if transporte_propio else 'Transportista contratado' }}</div>
+            </div>
+            {% if not transporte_propio %}
+            <div>
+                <div class="field-label">Transportista</div>
+                <div class="field-value">{{ transportista_nombre or '—' }}{% if transportista_ruc %} (RUC {{ transportista_ruc }}){% endif %}</div>
+            </div>
+            {% endif %}
+            <div>
+                <div class="field-label">Placa del vehículo</div>
+                <div class="field-value font-mono">{{ placa_vehiculo or '—' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box">
+        <div class="box-title">Destinatario{{ 's' if destinatarios | length > 1 else '' }}</div>
+        <div class="box-body">
+            {% for dest in destinatarios %}
+            <div class="destinatario-block">
+                <div class="grid-2">
+                    <div>
+                        <div class="field-label">Razón social</div>
+                        <div class="field-value">{{ dest.razon_social }}</div>
+                    </div>
+                    <div>
+                        <div class="field-label">Identificación</div>
+                        <div class="field-value font-mono">{{ dest.identificacion or '—' }}</div>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div>
+                        <div class="field-label">Dirección de entrega</div>
+                        <div class="field-value">{{ dest.direccion or '—' }}</div>
+                    </div>
+                    {% if dest.documento_sustento %}
+                    <div>
+                        <div class="field-label">Documento de sustento</div>
+                        <div class="field-value">{{ dest.documento_sustento }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="box">
+        <div class="box-title">Detalle de la Mercadería</div>
+        <div class="box-body">
+            <table class="detalle-table" aria-label="Detalle de mercadería transportada">
+                <thead>
+                    <tr>
+                        <th style="width: 15%">Código</th>
+                        <th style="width: 55%">Descripción</th>
+                        <th class="text-right" style="width: 30%">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in detalles %}
+                    <tr>
+                        <td class="font-mono">{{ item.codigo or '—' }}</td>
+                        <td>{{ item.descripcion }}</td>
+                        <td class="text-right font-mono">{{ "%.2f"|format(item.cantidad) }} {{ item.unidad }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="firmas">
+        <div class="firma-box"><div class="firma-linea">Entrega (Despacho)</div></div>
+        <div class="firma-box"><div class="firma-linea">Transporte</div></div>
+        <div class="firma-box"><div class="firma-linea">Recibe (Destinatario)</div></div>
+    </div>
+
+    <div class="footer">
+        Documento interno generado por TexCore Printing Service — No tiene validez como comprobante oficial del SRI.
+    </div>
+</body>
+</html>

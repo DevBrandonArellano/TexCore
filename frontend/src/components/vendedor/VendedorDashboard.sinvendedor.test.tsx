@@ -1,4 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP), clase válida: que el perfil no tiene un id de vendedor.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -53,7 +57,7 @@ describe('VendedorDashboard — Exportación de ventas sin vendedor identificado
   beforeEach(() => {
     vi.clearAllMocks();
     window.history.pushState({}, '', '/');
-    (apiClient.get as any).mockImplementation(() => Promise.resolve({ data: [] }));
+    (apiClient.get as Mock).mockImplementation(() => Promise.resolve({ data: [] }));
   });
 
   it('dado que el perfil no tiene un id de vendedor cuando se intenta exportar el reporte de ventas entonces muestra un toast pidiendo reiniciar sesión', async () => {

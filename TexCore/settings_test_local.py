@@ -11,6 +11,7 @@ Uso:
 Las variables de entorno obligatorias de ``settings.py`` se inyectan aquí con
 valores ficticios deterministas — nunca se usan contra recursos reales.
 """
+
 import os
 from pathlib import Path
 
@@ -18,6 +19,28 @@ from pathlib import Path
 os.environ.setdefault("SECRET_KEY", "test-secret-key-local-only")
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
+
+# RS-19: claves de cifrado en reposo. Deterministas y solo de prueba.
+os.environ.setdefault(
+    "FIELD_ENCRYPTION_KEYS",
+    "dwh7QzsrN1sGwqaYI4L_uE_KyxtOZ7XyJ4KS6qljFmA=",  # pragma: allowlist secret
+)
+os.environ.setdefault(
+    "BLIND_INDEX_KEY",
+    "Slp7cvUFBcFzchQ5hXNVMCPl-v7ExwFySsj5xHRZ7Dw",  # pragma: allowlist secret
+)
+
+# DATABASES también es Fail Fast en settings.py (barrido de higiene Fase 5.7) —
+# aunque este módulo sobreescribe DATABASES a SQLite justo debajo, la ejecución
+# de settings.py completa primero vía `from TexCore.settings import *`, así que
+# necesita valores (ficticios, nunca se usan) para no abortar antes de llegar ahí.
+os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
+os.environ.setdefault("DB_NAME", ":memory:")
+os.environ.setdefault("DB_USER", "unused")
+os.environ.setdefault("DB_PASSWORD", "unused")
+os.environ.setdefault("DB_HOST", "unused")
+os.environ.setdefault("DB_PORT", "0")
+os.environ.setdefault("DB_DRIVER", "unused")
 
 # --- Claves JWT internas (reporting_proxy / internal_api) ------------------
 # manage.py carga .env/.env.test vía python-dotenv, pero pytest no pasa por
@@ -27,13 +50,24 @@ os.environ.setdefault("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
 # replicamos eso aquí para el harness local.
 try:
     from dotenv import load_dotenv
+
     _env_test = Path(__file__).resolve().parent.parent / ".env.test"
     if _env_test.exists():
         load_dotenv(_env_test, override=False)
 except ImportError:
-    pass
+    _env_test = Path(__file__).resolve().parent.parent / ".env.test"
+    if _env_test.exists():
+        with Path(_env_test).open(encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    _v = _v.strip()
+                    if (_v.startswith('"') and _v.endswith('"')) or (_v.startswith("'") and _v.endswith("'")):
+                        _v = _v[1:-1]
+                    os.environ.setdefault(_k.strip(), _v)
 
-from TexCore.settings import *  # noqa: E402, F401, F403
+from TexCore.settings import *  # noqa: F403
 
 # ---------------------------------------------------------------------------
 # Base de datos — SQLite en memoria (rápida, sin dependencias externas)
@@ -45,23 +79,4 @@ DATABASES = {
     }
 }
 
-# ---------------------------------------------------------------------------
-# Rendimiento — MD5 es mucho más rápido que bcrypt en tests
-# ---------------------------------------------------------------------------
-PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-
-# ---------------------------------------------------------------------------
-# Celery — síncrono; sin broker en tests
-# ---------------------------------------------------------------------------
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
-
-# ---------------------------------------------------------------------------
-# Logging — silenciar para mantener limpia la salida de tests
-# ---------------------------------------------------------------------------
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": True,
-    "handlers": {"null": {"class": "logging.NullHandler"}},
-    "root": {"handlers": ["null"], "level": "CRITICAL"},
-}
+from TexCore.settings_test_common import *  # noqa: E402, F403

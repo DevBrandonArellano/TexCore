@@ -1,0 +1,80 @@
+# Requisitos de infraestructura para producción
+
+> **Versión medida:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Vigencia:** revisada contra la versión actual de `MES` (migraciones hasta `gestion/0009`, 14-oct-2026); el dimensionamiento no cambia.
+> **Propósito:** dimensionar el servidor de producción para que cumpla el RNF-03 de la tesis.
+> **Evidencia de rendimiento:** `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
+
+## 1. Criterio y servidor de destino
+
+| Elemento | Detalle |
+|---|---|
+| Requisito (RNF-03, Tabla 8) | «Motor de base de datos Microsoft SQL Server. Consultas de inventario y producción < 3 segundos. Validación de escaneo QR en bodega < 2500 ms.» |
+| Servidor (§5.3 de la tesis) | Máquina virtual Ubuntu Server en Hyper-V, en la infraestructura física de Interfibra S.A. |
+| Base de datos | SQL Server 2022, con la edición que licencia la organización (`MSSQL_PID`) |
+| Despliegue | `infrastructure/docker/docker-compose.prod.yml`: Nginx, Django/DRF con Gunicorn, `scanning_service`, `printing_service`, `reporting_excel` y SQL Server, cada uno en su contenedor |
+
+## 2. Cómo se midió
+
+- **Entorno:** la configuración de despliegue de producción, con 3 años de operación simulada de 4 empresas: 25 222 lotes, ~290 000 movimientos de inventario y ~1 000 000 de registros de auditoría.
+- **Carga:** Locust (`scripts/loadtest/locustfile.py`) con usuarios repartidos entre los 11 roles, cada uno con las acciones que su rol permite, a 10 usuarios/s y durante 6 minutos por corrida.
+- **Medición del servidor:** `docker stats` cada 5 s y el Query Store de SQL Server.
+
+## 3. Configuración por contenedor
+
+Los recursos se fijan en el `.env.prod` del servidor (plantilla: `.env.prod.example`). El compose no lleva valores fijos.
+
+| Variable | Hasta 100 usuarios | Hasta 250 usuarios |
+|---|---|---|
+| `DB_CPUS` | 3 | 6 |
+| `DB_MEMORY_LIMIT_MB` | 3072 | 6144 |
+| `BACKEND_CPUS` | 3 | 3 medidos (al 100 % de su CPU); se recomiendan 4 a 6 |
+| `BACKEND_MEMORY_LIMIT_MB` | 3072 | 3072 |
+| `BACKEND_WORKERS` | 20 | 20 |
+| Resultado RNF-03 | ✅ p95 del escaneo de 89 ms, del panel de planta de 220 ms y del kárdex de 610 ms | ✅ p95 del escaneo de 200 ms, del panel de planta de 380 ms y del kárdex de 390 ms |
+
+**Picos medidos por contenedor** (CPU: 100 % equivale a un núcleo; RAM en uso):
+
+| Contenedor | 100 usuarios | 250 usuarios |
+|---|---|---|
+| db | 316 % · 2,7 GB | 288 % · 2,9 GB |
+| backend | 142 % · 1,7 GB | 303 % · 2,1 GB (tope de su límite de 3 CPU) |
+| reporting_excel | 105 % · 0,28 GB | 101 % · 0,36 GB |
+| scanning | 19 % · 0,11 GB | 24 % · 0,11 GB |
+| printing | 5 % · 0,06 GB | 7 % · 0,06 GB |
+| nginx | 3 % · 0,02 GB | 4 % · 0,02 GB |
+| **Total simultáneo** | **5,1 núcleos · 4,8 GB** | **6,9 núcleos · 5,3 GB** |
+
+## 4. Tamaño de la máquina virtual
+
+El tamaño se obtiene de los límites de la sección 3, más los satélites y un margen para el sistema operativo y Docker.
+
+| Concurrencia | vCPU | RAM | Base del cálculo |
+|---|---|---|---|
+| Hasta 100 usuarios | **8** | **10 GB** | Límites de BD (3/3 GB) y backend (3/3 GB), más los satélites (~1,5 núcleos y 0,5 GB). Pico medido de 5,1 núcleos y 4,8 GB |
+| Hasta 250 usuarios | **12 a 14** | **14 a 16 GB** | BD con 6/6 GB y backend con 4 a 6 CPU. El backend con 4 a 6 CPU es una recomendación: se midió con 3, al 100 % |
+
+**Disco:** sistema operativo, imágenes, volumen de la base y respaldos. El respaldo completo de la base con 3 años de datos pesa 170 MB. La retención de respaldos la fija la organización.
+
+## 5. Despliegue sobre una base con datos
+
+- Las migraciones `gestion/0004`–`0008` tardan **~52 s** sobre la base de 3 años. La más larga es el relleno de auditoría (`0005`), con 37 s.
+- Antes de migrar se toma un respaldo `COPY_ONLY` de la base (170 MB en 5,2 s).
+- El `HEALTHCHECK` del backend tolera la migración: tiene un `start-period` de 600 s y pasa a `healthy` apenas responde.
+
+## 6. Condiciones de operación
+
+1. **`mem_limit` siempre definido en el backend.** Cada worker de Gunicorn es un proceso Django completo. Sin límite, la memoria crece sin techo al subir `BACKEND_WORKERS`.
+2. **`MSSQL_MEMORY_LIMIT_MB` igual a `DB_MEMORY_LIMIT_MB`.** El compose de producción ya los vincula. Si SQL Server cree tener más memoria de la que le da Docker, queda bloqueado.
+3. **`BACKEND_WORKERS` no sigue la regla `2 × CPU + 1`.** El tráfico espera sobre todo a SQL Server: con 3 CPU se usan 20 workers.
+4. **Exportaciones a Excel:** `reporting_excel` corre en un solo proceso. La tesis no fija umbral para las exportaciones. Con 100 usuarios, el p50 es de 2,4 s y el máximo, de 5,5 s. Con 250, la exportación de lotes llega a un p50 de 11 s.
+5. **Satélites sin límites propios:** `scanning_service`, `printing_service` y `reporting_excel` no declaran `cpus`/`mem_limit`. Se recomienda fijarlos con los picos de la sección 3 más un margen.
+6. **Límite de Nginx de 100 peticiones/s por IP** (`api_zone`). No interviene con usuarios reales, cada uno con su IP. Una prueba de carga desde una sola máquina debe tenerlo en cuenta.
+7. **Solo HTTPS:** el puerto 80 redirige a 443 (`NGINX_REDIRIGIR_HTTP=1`). Una prueba de carga contra el servidor usa `--host=https://…` y `LOADTEST_CA_BUNDLE`.
+
+## 7. Archivos de respaldo
+
+| Escenario | Archivos (`scripts/loadtest/resultados/`) |
+|---|---|
+| 100 usuarios, BD 3 CPU | `final_100_2026-10-08_stats.csv`, `_failures.csv`, `_stats_history.csv`, `_docker_stats.csv` |
+| 250 usuarios, BD 6 CPU | `db6cpu_250_2026-10-08_stats.csv`, `_failures.csv`, `_stats_history.csv`, `_docker_stats.csv` |

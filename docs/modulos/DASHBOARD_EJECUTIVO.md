@@ -20,11 +20,11 @@ Resumen de toda la información disponible en el apartado de Bodegueros, para us
 | `/api/lotes-produccion/` | GET | Lotes de producción | - | Lista de lotes |
 | `/api/proveedores/` | GET | Lista de proveedores | - | Lista de proveedores |
 
-### Reporting Excel (microservicio puerto 8002)
+### Reporting Excel (servicio satélite puerto 8002)
 
 | Endpoint | Método | Descripción | Parámetros |
 |----------|--------|-------------|------------|
-| `/api/reporting/export/kardex` | GET | Exportar Kardex a Excel/CSV | `bodega_id`, `producto_id`, `proveedor_id`, `fecha_inicio`, `fecha_fin`, `lote_codigo`, `format` |
+| `/api/reporting/export/kardex` | GET | Exportar Kardex a Excel/CSV (columnas: fecha, tipo, documento, producto, bodega origen/destino, entrada, salida y —con `producto_id`— saldo corrido) | `bodega_id`, `producto_id`, `fecha_inicio`, `fecha_fin`, `lote_codigo`, `tipo` (`entrada`/`salida`), `format` |
 
 ---
 
@@ -112,13 +112,14 @@ interface LoteTrazabilidad {
 - **Tab Inventario**: usa `InventoryDashboard`
 - **Tab Alertas**: usa `AlertasStockView`
 
-### InventoryDashboard (6 tabs)
-1. **Stock Actual** – tabla con búsqueda, paginación
-2. **Entrada** – formulario Registrar Entrada (COMPRA)
-3. **Transferencias** – formulario Transferir entre bodegas
-4. **Transformación** – `TransformationView`
-5. **Kardex** – filtros: bodega, producto, proveedor, fechas, lote. Tabla de movimientos. Export Excel.
-6. **Reportes** – Retro-Kardex (stock a fecha) y Consulta de Lote (trazabilidad)
+### InventoryDashboard (7 tabs, actualizado 1-oct-2026)
+1. **Stock** – tabla con búsqueda, paginación
+2. **Recepción** – `RegistrarEntradaView`: recepción de materia prima F0-001 (`POST /api/materia-prima/registrar-entrada/`, multipart con certificado). Es la única vía de compra: crea el lote de MP y el movimiento COMPRA enlazado; una COMPRA genérica en `/api/inventory/movimientos/` se rechaza con 400.
+3. **Materia prima** – `MateriaPrimaView`: lotes de MP de las bodegas visibles (`GET /api/materia-prima/`, filtros proveedor y `disponible`)
+4. **Transfer** – formulario Transferir entre bodegas de la misma sede
+5. **Transform** – `TransformationView`
+6. **Kardex** – filtros: bodega, producto, proveedor, fechas, lote. Tabla de movimientos. Export Excel. Debajo, `StockAFechaView`: stock a fecha de corte (`GET /api/inventory/retro-kardex/`)
+7. **Reportes** – `ReportesView`: reportes Excel del servicio de reportes
 
 ---
 
@@ -238,7 +239,7 @@ type TendenciaResponse = Array<{
 
 ## 9. Reporting Excel — Endpoints de Exportación (Sprint 6)
 
-Microservicio `reporting_excel` (puerto 8003). Prefijo de ruta Nginx: `/reporting/`.
+Servicio satélite `reporting_excel` (puerto 8003). Prefijo de ruta Nginx: `/reporting/`.
 
 ### Endpoints disponibles
 

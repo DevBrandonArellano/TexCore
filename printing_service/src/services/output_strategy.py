@@ -3,12 +3,15 @@ Strategy Pattern para formatos de salida del printing_service.
 OCP: agregar un nuevo formato (HTML, PNG) solo requiere crear una nueva clase
 que implemente OutputStrategy, sin modificar los routers ni el servicio.
 """
+
 import io
 import logging
 from typing import Protocol, runtime_checkable
 
-from fastapi.responses import StreamingResponse, PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from jinja2 import Environment
+
+from .zpl_sanitizer import sanitize_zpl_context
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,7 @@ class PdfOutputStrategy:
 
     def render(self, template_name: str, context: dict, filename: str) -> StreamingResponse:
         from weasyprint import HTML  # Import tardío: WeasyPrint no disponible en tests
+
         template = self._env.get_template(template_name)
         html_content = template.render(**context)
         pdf_bytes = HTML(string=html_content).write_pdf()
@@ -55,5 +59,7 @@ class ZplOutputStrategy:
 
     def render(self, template_name: str, context: dict, filename: str) -> PlainTextResponse:
         template = self._env.get_template(template_name)
-        zpl_content = template.render(**context)
+        # ZPL no tiene autoescape (no es HTML): un '^'/'~' sin sanear en texto
+        # libre (producto_desc, empresa) rompería el stream ZPL, ver zpl_sanitizer.
+        zpl_content = template.render(**sanitize_zpl_context(context))
         return PlainTextResponse(zpl_content)

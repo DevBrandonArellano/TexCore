@@ -1,18 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, AlertTriangle } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { abrirPdfEnPestana } from '../../lib/abrirPdf';
 import { PedidoVenta } from '../../lib/types';
+import { usePagination } from '../../hooks/usePagination';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { datosDeError, estadoHttp } from '../../lib/apiError';
+import { toArray } from '../../lib/collections';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface ItemIncompleto {
     requerido: number;
@@ -20,26 +26,66 @@ interface ItemIncompleto {
     faltante: number;
 }
 
-interface ScannedItem {
-    lote_codigo: string;
+interface LineaLote {
     producto_id: number;
     producto_nombre: string;
     peso: number;
 }
 
+interface ScannedItem {
+    lote_codigo: string;
+    producto_id: number;
+    producto_nombre: string;
+    peso: number;
+    /** Filas vendibles del lote: la de su producto primero y las agregadas a mano. */
+    lineas: LineaLote[];
+}
+
+/**
+ * Líneas del lote que salen con estos pedidos (misma regla que process-despacho): la del
+ * producto del lote siempre; las de productos agregados a mano solo si alguien las pide.
+ */
+function lineasQueSalen(item: ScannedItem, productosPedidos: Set<number>): LineaLote[] {
+    return item.lineas.filter((linea, idx) => idx === 0 || productosPedidos.has(linea.producto_id));
+}
+
 const ITEMS_PER_PAGE = 20;
+const SIN_PEDIDOS: PedidoVenta[] = [];
+
+/** Productos que piden los pedidos seleccionados. */
+function idsProductosPedidos(selectedPedidos: number[], pedidos: PedidoVenta[]): Set<number> {
+    const ids = new Set<number>();
+    pedidos
+        .filter(p => selectedPedidos.includes(p.id))
+        .forEach(p => p.detalles?.forEach(det => ids.add(Number(det.producto))));
+    return ids;
+}
 
 export function DespachoDashboard() {
-    const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
     const [selectedPedidos, setSelectedPedidos] = useState<number[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // despachado_parcial: pedidos con un despacho previo incompleto siguen
+    // en la cola hasta que se termine de despachar lo que falta.
+    const cargaPedidos = useCargaRemota(
+        () =>
+            apiClient
+                .get<PedidoVenta[]>('/pedidos-venta/?estado=pendiente,despachado_parcial&limit=100')
+                .then((response) => toArray<PedidoVenta>(response.data))
+                .catch((error: unknown) => {
+                    console.error("Error fetching orders", error);
+                    toast.error("Error al cargar pedidos pendientes");
+                    throw error;
+                }),
+        'pedidos-por-despachar',
+    );
+    const pedidos = cargaPedidos.datos ?? SIN_PEDIDOS;
+    const isLoading = cargaPedidos.cargando;
+    const { recargar: fetchPedidos } = cargaPedidos;
     const [isDespachoMode, setIsDespachoMode] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const searchTerm = searchParams.get('search') || '';
-    const [currentPage, setCurrentPage] = useState(1);
 
-    // Dispatch/Scanning State
+    // Estado de despacho/escaneo
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [barcodeInput, setBarcodeInput] = useState("");
     const [isValidating, setIsValidating] = useState(false);
@@ -49,74 +95,47 @@ export function DespachoDashboard() {
     const [showIncompleteModal, setShowIncompleteModal] = useState(false);
     const [itemsIncompletos, setItemsIncompletos] = useState<Record<string, ItemIncompleto>>({});
 
-    // Aggregated Requirements
-    const [requirements, setRequirements] = useState<{ [key: string]: { required: number, scanned: number } }>({});
-
     const barcodeInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        fetchPedidos();
-    }, []);
-
-    // Focus barcode input when in despacho mode
+    // Enfoca el input del código de barras en modo despacho
     useEffect(() => {
         if (isDespachoMode && barcodeInputRef.current) {
             barcodeInputRef.current.focus();
         }
     }, [isDespachoMode, scannedItems]);
 
-    // Recalculate requirements when selected orders change
-    useEffect(() => {
-        if (selectedPedidos.length === 0) return;
-
+    // Requerimientos agregados de los pedidos seleccionados frente a lo escaneado.
+    const requirements = useMemo(() => {
         const reqs: { [key: string]: { required: number, scanned: number } } = {};
 
         selectedPedidos.forEach(pid => {
             const pedido = pedidos.find(p => p.id === pid);
             if (!pedido) return;
 
-            pedido.detalles?.forEach((det: any) => {
-                // Assuming detail has product name/description. If not, fallback to ID.
-                // In production, backend serializes 'producto_descripcion' or 'producto_nombre'
+            pedido.detalles?.forEach((det) => {
+                // En producción, el backend serializa 'producto_descripcion' o 'producto_nombre'
                 const prodName = det.producto_descripcion || `Producto ${det.producto}`;
                 if (!reqs[prodName]) {
                     reqs[prodName] = { required: 0, scanned: 0 };
                 }
-                reqs[prodName].required += parseFloat(det.peso);
+                reqs[prodName].required += parseFloat(String(det.peso));
             });
         });
 
-        // Update scanned counts
+        // Update scanned counts: cada línea del lote suma a su producto; un producto que
+        // nadie pidió igual aparece (excedente) para que el despachador lo vea.
+        const productosPedidos = idsProductosPedidos(selectedPedidos, pedidos);
         scannedItems.forEach(item => {
-            if (reqs[item.producto_nombre]) {
-                reqs[item.producto_nombre].scanned += item.peso;
-            } else {
-                // Scanned item not in requirements (extra or wrong item?)
-                // Add it to track it anyway
-                if (!reqs[item.producto_nombre]) {
-                    reqs[item.producto_nombre] = { required: 0, scanned: 0 };
+            lineasQueSalen(item, productosPedidos).forEach(linea => {
+                if (!reqs[linea.producto_nombre]) {
+                    reqs[linea.producto_nombre] = { required: 0, scanned: 0 };
                 }
-                reqs[item.producto_nombre].scanned += item.peso;
-            }
+                reqs[linea.producto_nombre].scanned += linea.peso;
+            });
         });
 
-        setRequirements(reqs);
-
+        return reqs;
     }, [selectedPedidos, pedidos, scannedItems]);
-
-
-    const fetchPedidos = async () => {
-        try {
-            setIsLoading(true);
-            const response = await apiClient.get<PedidoVenta[]>('/pedidos-venta/?estado=pendiente&limit=100');
-            setPedidos(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
-        } catch (error) {
-            console.error("Error fetching orders", error);
-            toast.error("Error al cargar pedidos pendientes");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const toggleSelection = (id: number) => {
         setSelectedPedidos(prev =>
@@ -127,10 +146,10 @@ export function DespachoDashboard() {
     const handleStartDespacho = () => {
         if (selectedPedidos.length === 0) return;
 
-        // Verify all selected orders belong to same client
+        // Verifica que todas las órdenes seleccionadas pertenezcan al mismo cliente
         const firstOrder = pedidos.find(p => p.id === selectedPedidos[0]);
-        // Note: checking client ID or name correctness depends on dataset quality. 
-        // Ideally enforce strict check.
+        // Nota: la verificación del ID o nombre del cliente depende de la calidad de los datos. 
+        // Idealmente, aplicar una verificación estricta.
         const differentClient = selectedPedidos.some(pid => {
             const p = pedidos.find(o => o.id === pid);
             return p?.cliente !== firstOrder?.cliente;
@@ -146,9 +165,10 @@ export function DespachoDashboard() {
 
     const handleScan = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!barcodeInput.trim()) return;
+        const codigoEscaneado = barcodeInput.trim();
+        if (!codigoEscaneado) return;
 
-        if (scannedItems.some(i => i.lote_codigo === barcodeInput.trim())) {
+        if (scannedItems.some(i => i.lote_codigo === codigoEscaneado)) {
             toast.warning("Este lote ya fue escaneado.");
             setBarcodeInput("");
             return;
@@ -156,19 +176,32 @@ export function DespachoDashboard() {
 
         setIsValidating(true);
         try {
-            // Call scanning microservice to validate lote
-            const res = await apiClient.post('/scanning/validate', { code: barcodeInput.trim() });
+            // Llama al microservicio de escaneo para validar el lote
+            const res = await apiClient.post('/scanning/validate', { code: codigoEscaneado });
 
             if (res.data.valid) {
+                const lote = res.data.lote;
+                const principal: LineaLote = {
+                    producto_id: lote.producto_id,
+                    producto_nombre: lote.producto_nombre,
+                    peso: parseFloat(lote.peso),
+                };
                 const newItem: ScannedItem = {
-                    lote_codigo: res.data.lote.codigo,
-                    producto_id: res.data.lote.producto_id,
-                    producto_nombre: res.data.lote.producto_nombre,
-                    peso: parseFloat(res.data.lote.peso)
+                    lote_codigo: lote.codigo,
+                    ...principal,
+                    lineas: lote.productos?.length
+                        ? lote.productos.map((p: LineaLote & { peso: string }) => ({
+                            producto_id: p.producto_id,
+                            producto_nombre: p.producto_nombre,
+                            peso: parseFloat(p.peso),
+                        }))
+                        : [principal],
                 };
 
                 setScannedItems(prev => [...prev, newItem]);
-                toast.success(`Lote ${newItem.lote_codigo} agregado (${newItem.peso}kg)`);
+                const pesoQueSale = lineasQueSalen(newItem, idsProductosPedidos(selectedPedidos, pedidos))
+                    .reduce((total, linea) => total + linea.peso, 0);
+                toast.success(`Lote ${newItem.lote_codigo} agregado (${pesoQueSale}kg)`);
             } else {
                 toast.error(res.data.reason || "Lote no válido o no disponible");
             }
@@ -189,14 +222,14 @@ export function DespachoDashboard() {
     const submitDespacho = async (confirmarIncompleto: boolean) => {
         setProcessing(true);
         try {
-            await apiClient.post('/inventory/process-despacho/', {
+            const { data } = await apiClient.post('/inventory/process-despacho/', {
                 pedidos: selectedPedidos,
                 lotes: scannedItems.map(i => i.lote_codigo),
                 confirmar_incompleto: confirmarIncompleto,
             });
 
             toast.success("Despacho procesado exitosamente");
-            handlePrintDocuments();
+            handlePrintDocuments(data?.despacho_id);
 
             setShowIncompleteModal(false);
             setIsDespachoMode(false);
@@ -205,9 +238,10 @@ export function DespachoDashboard() {
             setItemsIncompletos({});
             fetchPedidos();
 
-        } catch (error: any) {
-            if (error?.response?.status === 409 && error.response.data?.items_incompletos) {
-                setItemsIncompletos(error.response.data.items_incompletos);
+        } catch (error) {
+            const datos = datosDeError(error) as { items_incompletos?: typeof itemsIncompletos } | undefined;
+            if (estadoHttp(error) === 409 && datos?.items_incompletos) {
+                setItemsIncompletos(datos.items_incompletos);
                 setShowIncompleteModal(true);
             } else {
                 console.error("Dispatch error", error);
@@ -221,14 +255,15 @@ export function DespachoDashboard() {
     const handleFinalize = () => submitDespacho(false);
     const handleConfirmIncomplete = () => submitDespacho(true);
 
-    const handlePrintDocuments = async () => {
-        // Generate/Print PDF for each order
+    const handlePrintDocuments = async (despachoId?: number) => {
+        // Nota de venta acotada a lo despachado en ESTE evento (historial_id) —
+        // si el despacho fue parcial, no debe imprimir el pedido completo.
+        const query = despachoId ? `?historial_id=${despachoId}` : '';
         for (const pid of selectedPedidos) {
             try {
-                const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/`, { responseType: 'blob' });
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                // Open in new tab is better for multiple downloads
-                window.open(url, '_blank');
+                const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/${query}`, { responseType: 'blob' });
+                // Se abre en pestaña nueva para permitir varias descargas
+                abrirPdfEnPestana(response.data);
             } catch (e) {
                 console.error("Print error", e);
                 toast.error(`Error al imprimir pedido #${pid}`);
@@ -242,16 +277,12 @@ export function DespachoDashboard() {
         p.id.toString().includes(searchTerm)
     );
 
-    const totalPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
-    const safePage = Math.min(Math.max(1, currentPage), totalPages);
-    const paginatedPedidos = filteredPedidos.slice(
-        (safePage - 1) * ITEMS_PER_PAGE,
-        safePage * ITEMS_PER_PAGE
-    );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+    const {
+        currentPage: safePage,
+        setCurrentPage,
+        totalPages,
+        paginatedItems: paginatedPedidos,
+    } = usePagination(filteredPedidos, ITEMS_PER_PAGE, { resetKey: searchTerm });
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
@@ -273,7 +304,7 @@ export function DespachoDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Scanning Area */}
+                    {/* Área de escaneo */}
                     <Card className="h-fit">
                         <CardHeader>
                             <CardTitle>Pistoleo de Etiquetas</CardTitle>
@@ -312,7 +343,14 @@ export function DespachoDashboard() {
                                             scannedItems.map((item, idx) => (
                                                 <TableRow key={idx}>
                                                     <TableCell className="font-mono text-xs">{item.lote_codigo}</TableCell>
-                                                    <TableCell className="text-xs truncate max-w-[150px]">{item.producto_nombre}</TableCell>
+                                                    <TableCell className="text-xs truncate max-w-[150px]">
+                                                        {item.producto_nombre}
+                                                        {lineasQueSalen(item, idsProductosPedidos(selectedPedidos, pedidos)).slice(1).map(linea => (
+                                                            <div key={linea.producto_id} className="text-muted-foreground">
+                                                                {`+ ${linea.producto_nombre} (${linea.peso.toFixed(2)})`}
+                                                            </div>
+                                                        ))}
+                                                    </TableCell>
                                                     <TableCell className="text-right font-bold">{item.peso.toFixed(2)}</TableCell>
                                                     <TableCell>
                                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleRemoveItem(idx)}>
@@ -328,7 +366,7 @@ export function DespachoDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Requirements Status */}
+                    {/* Estado de requisitos */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Estado de la Carga</CardTitle>
@@ -428,7 +466,7 @@ export function DespachoDashboard() {
         );
     }
 
-    // Default Selection Mode
+    // Modo de selección por defecto
     return (
         <div className="space-y-6 p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -493,7 +531,7 @@ export function DespachoDashboard() {
                         </TableHeader>
                         <TableBody>
                             {paginatedPedidos.map(pedido => {
-                                const totalPeso = pedido.detalles?.reduce((acc: number, d: any) => acc + parseFloat(d.peso), 0) || 0;
+                                const totalPeso = pedido.detalles?.reduce((acc: number, d) => acc + parseFloat(String(d.peso)), 0) || 0;
                                 return (
                                     <TableRow key={pedido.id} className={`cursor-pointer ${selectedPedidos.includes(pedido.id) ? "bg-slate-50" : ""}`} onClick={() => toggleSelection(pedido.id)}>
                                         <TableCell onClick={e => e.stopPropagation()}>
@@ -504,7 +542,14 @@ export function DespachoDashboard() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col">
-                                                <span className="font-bold">#{pedido.guia_remision || pedido.id}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold">#{pedido.guia_remision || pedido.id}</span>
+                                                    {pedido.estado === 'despachado_parcial' && (
+                                                        <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200">
+                                                            Parcial
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <span className="text-xs text-muted-foreground date">{format(new Date(pedido.fecha_pedido), 'dd MMM yyyy', { locale: es })}</span>
                                             </div>
                                         </TableCell>
@@ -532,52 +577,12 @@ export function DespachoDashboard() {
                         </TableBody>
                     </Table>
                     {filteredPedidos.length > 0 && (
-                        <div className="flex items-center justify-between mt-4">
-                            <span className="text-sm text-muted-foreground">
-                                Página {safePage} de {totalPages}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                    disabled={safePage === 1}
-                                >
-                                    <ChevronLeft className="w-4 h-4 mr-1" />
-                                    Anterior
-                                </Button>
-                                <span className="flex items-center gap-1 text-sm">
-                                    <span className="text-muted-foreground">Ir a</span>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={totalPages}
-                                        defaultValue={safePage}
-                                        key={safePage}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                                if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                                            }
-                                        }}
-                                        onBlur={(e) => {
-                                            const v = parseInt(e.target.value, 10);
-                                            if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                                        }}
-                                        className="w-14 h-8 text-center py-0 px-1"
-                                    />
-                                </span>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                    disabled={safePage === totalPages}
-                                >
-                                    Siguiente
-                                    <ChevronRight className="w-4 h-4 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ControlesPaginacion
+                          currentPage={safePage}
+                          totalPages={totalPages}
+                          setCurrentPage={setCurrentPage}
+                          className="mt-4"
+                        />
                     )}
                 </CardContent>
             </Card>

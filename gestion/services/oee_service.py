@@ -22,23 +22,23 @@ de derivarlos de los datos existentes de TexCore):
   que `KPIAreaView`).
 - **OEE** = Disponibilidad × Rendimiento × Calidad.
 """
+
 from decimal import Decimal
 
-from django.db.models import Sum, F, DurationField, ExpressionWrapper, Q
+from django.db.models import DurationField, ExpressionWrapper, F, Q, Sum
 
-from gestion.models import LoteProduccion, ParoMaquina, Maquina
+from gestion.models import LoteProduccion, Maquina, ParoMaquina
 
 DURACION_TURNO_HORAS = 8
 
 
 class OeeService:
-
     @staticmethod
     def _run_time_horas(lotes_qs) -> float:
         agregado = lotes_qs.annotate(
-            duracion=ExpressionWrapper(F('hora_final') - F('hora_inicio'), output_field=DurationField())
-        ).aggregate(total=Sum('duracion'))
-        total = agregado['total']
+            duracion=ExpressionWrapper(F("hora_final") - F("hora_inicio"), output_field=DurationField())
+        ).aggregate(total=Sum("duracion"))
+        total = agregado["total"]
         return total.total_seconds() / 3600 if total else 0.0
 
     @staticmethod
@@ -57,11 +57,11 @@ class OeeService:
         disponibilidad = (run_time_h / denom_disponibilidad) if denom_disponibilidad > 0 else 0.0
 
         agregados_calidad = lotes_qs.aggregate(
-            total_neto=Sum('peso_neto_producido'),
-            neto_primera=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='primera')),
+            total_neto=Sum("peso_neto_producido"),
+            neto_primera=Sum("peso_neto_producido", filter=Q(clasificacion_calidad="primera")),
         )
-        total_neto = float(agregados_calidad['total_neto'] or 0)
-        neto_primera = float(agregados_calidad['neto_primera'] or 0)
+        total_neto = float(agregados_calidad["total_neto"] or 0)
+        neto_primera = float(agregados_calidad["neto_primera"] or 0)
         calidad = (neto_primera / total_neto) if total_neto > 0 else 0.0
 
         capacidad = float(capacidad_maxima or 0)
@@ -71,11 +71,11 @@ class OeeService:
         oee = disponibilidad * rendimiento * calidad
 
         return {
-            'disponibilidad': round(disponibilidad, 4),
-            'rendimiento': round(rendimiento, 4),
-            'calidad': round(calidad, 4),
-            'oee': round(oee, 4),
-            'downtime_min': round(downtime_h * 60, 2),
+            "disponibilidad": round(disponibilidad, 4),
+            "rendimiento": round(rendimiento, 4),
+            "calidad": round(calidad, 4),
+            "oee": round(oee, 4),
+            "downtime_min": round(downtime_h * 60, 2),
         }
 
     @staticmethod
@@ -83,25 +83,29 @@ class OeeService:
         # desde/hasta=None => sin acotar (mismo comportamiento "histórico completo"
         # que el resto de KPIAreaView, que hoy no filtra por fecha).
         if desde is not None:
-            queryset = queryset.filter(**{f'{campo_desde}__gte': desde})
+            queryset = queryset.filter(**{f"{campo_desde}__gte": desde})
         if hasta is not None:
-            queryset = queryset.filter(**{f'{campo_hasta}__lte': hasta})
+            queryset = queryset.filter(**{f"{campo_hasta}__lte": hasta})
         return queryset
 
     @staticmethod
     def calcular_oee_maquina(maquina: Maquina, desde=None, hasta=None) -> dict:
         lotes_qs = OeeService._filtrar_rango(
-            LoteProduccion.objects.filter(maquina=maquina), 'hora_inicio', 'hora_final', desde, hasta)
+            LoteProduccion.objects.filter(maquina=maquina), "hora_inicio", "hora_final", desde, hasta
+        )
         paros_qs = OeeService._filtrar_rango(
-            ParoMaquina.objects.filter(maquina=maquina), 'inicio', 'inicio', desde, hasta)
+            ParoMaquina.objects.filter(maquina=maquina), "inicio", "inicio", desde, hasta
+        )
         return OeeService._calcular(lotes_qs, paros_qs, maquina.capacidad_maxima)
 
     @staticmethod
     def calcular_oee_area(area, desde=None, hasta=None) -> dict:
         maquinas = Maquina.objects.filter(area=area)
         lotes_qs = OeeService._filtrar_rango(
-            LoteProduccion.objects.filter(maquina__in=maquinas), 'hora_inicio', 'hora_final', desde, hasta)
+            LoteProduccion.objects.filter(maquina__in=maquinas), "hora_inicio", "hora_final", desde, hasta
+        )
         paros_qs = OeeService._filtrar_rango(
-            ParoMaquina.objects.filter(maquina__in=maquinas), 'inicio', 'inicio', desde, hasta)
-        capacidad_total = maquinas.aggregate(total=Sum('capacidad_maxima'))['total'] or Decimal('0')
+            ParoMaquina.objects.filter(maquina__in=maquinas), "inicio", "inicio", desde, hasta
+        )
+        capacidad_total = maquinas.aggregate(total=Sum("capacidad_maxima"))["total"] or Decimal("0")
         return OeeService._calcular(lotes_qs, paros_qs, capacidad_total)

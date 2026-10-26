@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin clientes / loading true / clientes existentes / nuevo cliente / datos
+ *   validos.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -9,22 +14,22 @@ import { Cliente } from '../../lib/types';
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -56,13 +61,7 @@ const CLIENTE_2: Cliente = {
   is_active: true,
 };
 
-function renderComponent(props: Partial<{
-  clientes: Cliente[];
-  onClienteCreate: (data: any) => Promise<boolean>;
-  onClienteUpdate: (id: number, data: any) => Promise<boolean>;
-  onClienteDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageClientes>> = {}) {
   const defaults = {
     clientes: [] as Cliente[],
     onClienteCreate: vi.fn().mockResolvedValue(true),
@@ -274,5 +273,34 @@ describe('ManageClientes', () => {
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
     expect(screen.getByText('RUC-021')).toBeInTheDocument();
     expect(screen.queryByText('RUC-001')).not.toBeInTheDocument();
+  });
+
+  it('dado mas de 20 clientes cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchos: Cliente[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, ruc_cedula: `RUC-${String(i + 1).padStart(3, '0')}`, nombre_razon_social: `Cliente ${i + 1}`,
+      direccion_envio: 'Dirección genérica', nivel_precio: 'normal', tiene_beneficio: false,
+      saldo_pendiente: 0, limite_credito: 0, plazo_credito_dias: 0, is_active: true,
+    })) as Cliente[];
+    renderComponent({ clientes: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 clientes cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchos: Cliente[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, ruc_cedula: `RUC-${String(i + 1).padStart(3, '0')}`, nombre_razon_social: `Cliente ${i + 1}`,
+      direccion_envio: 'Dirección genérica', nivel_precio: 'normal', tiene_beneficio: false,
+      saldo_pendiente: 0, limite_credito: 0, plazo_credito_dias: 0, is_active: true,
+    })) as Cliente[];
+    renderComponent({ clientes: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
 });

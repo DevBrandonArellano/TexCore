@@ -4,11 +4,12 @@ SRP: contiene TODA la lógica de negocio del dominio de despacho.
 DIP: depende de ILoteRepository (abstracción), no de SQLAlchemy directamente.
 No conoce HTTP, no conoce FastAPI, no conoce SQLAlchemy.
 """
-import logging
-from typing import Optional
 
+import logging
+
+from ..domain.models import AlcanceSede
 from ..repositories.base import ILoteRepository
-from ..schemas.validate import LoteInfo, ValidateResponse
+from ..schemas.validate import LoteInfo, ProductoLote, ValidateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +25,25 @@ class LoteValidationService:
     def __init__(self, repository: ILoteRepository) -> None:
         self._repo = repository
 
-    def validate(self, codigo: str) -> ValidateResponse:
+    def validate(self, codigo: str, alcance: AlcanceSede) -> ValidateResponse:
         """
         Valida un código de lote escaneado.
 
         Args:
             codigo: Código del lote ya limpiado (strip) por el schema Pydantic.
+            alcance: Sede del usuario que escanea; un lote de otra sede no se encuentra.
 
         Returns:
             ValidateResponse con valid=True y datos del lote, o valid=False con razón.
         """
         logger.info("Iniciando validación de lote", extra={"sd": {"code": codigo[:8]}})
 
-        lote = self._repo.get_lote_by_codigo(codigo)
+        # Sin sede y sin ver todas, el usuario no ve ningún lote: ni se consulta a Django.
+        if alcance.sede_id is None and not alcance.ve_todas:
+            logger.warning("Usuario sin sede", extra={"sd": {"code": codigo[:8]}})
+            return ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
+
+        lote = self._repo.get_lote_by_codigo(codigo, alcance)
         if lote is None:
             logger.warning("Lote no encontrado", extra={"sd": {"code": codigo[:8]}})
             return ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
@@ -63,6 +70,7 @@ class LoteValidationService:
             "Validación exitosa",
             extra={"sd": {"valid": "true", "producto_id": producto.id, "bodega_id": bodega.id}},
         )
+        lineas = lote.productos if isinstance(lote.productos, list) else []
         return ValidateResponse(
             valid=True,
             lote=LoteInfo(
@@ -72,5 +80,16 @@ class LoteValidationService:
                 peso=str(stock.cantidad),
                 bodega_id=bodega.id,
                 bodega_nombre=bodega.nombre,
+                peso_total=str(sum(linea.cantidad for linea in lineas)) if lineas else None,
+                productos=[
+                    ProductoLote(
+                        producto_id=linea.producto.id,
+                        producto_nombre=linea.producto.descripcion,
+                        peso=str(linea.cantidad),
+                        bodega_id=linea.bodega.id,
+                        bodega_nombre=linea.bodega.nombre,
+                    )
+                    for linea in lineas
+                ],
             ),
         )

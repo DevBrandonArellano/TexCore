@@ -1,0 +1,176 @@
+/**
+ * Utilidad para formatear errores de la API en mensajes amigables con notas explicativas.
+ * Cumple estrictamente ISO 27001 (seguridad de la información / prevención de fuga de datos)
+ * y ISO 25010 (usabilidad y retroalimentación informativa).
+ */
+
+import type { AxiosError } from 'axios';
+
+export interface FormattedError {
+  message: string;
+  note?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+/*Mapa de nombres técnicos de campos del backend a etiquetas amigables del dominio */
+const FIELD_LABELS: Record<string, string> = {
+  peso_neto_producido: 'Peso Neto Producido',
+  peso_merma: 'Peso de Merma',
+  tipo_merma: 'Tipo de Merma',
+  unidades_empaque: 'Unidades de Empaque',
+  presentacion: 'Presentación',
+  maquina: 'Máquina Asignada',
+  operario: 'Operario',
+  turno: 'Turno',
+  hora_inicio: 'Hora de Inicio',
+  hora_final: 'Hora Final',
+  justificacion: 'Justificación',
+  motivo: 'Motivo',
+  codigo_lote: 'Código de Lote',
+  orden_produccion: 'Orden de Producción',
+  monto: 'Monto de Pago',
+  cliente: 'Cliente',
+  bodega_origen: 'Bodega de Origen',
+  bodega_destino: 'Bodega de Destino',
+  lote_origen_id: 'Lote de Origen',
+  cantidad_kg: 'Cantidad (Kg)',
+};
+
+/*Convierte una clave snake_case a título limpio si no está en el mapa */
+function getFieldLabel(key: string): string {
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+/*Descarta términos técnicos que revelan detalles internos (SQL, trazas de pila, URLs, tablas de BD, detalles del ORM) */
+function sanitizeMessage(text: string): string {
+  if (!text) return 'Solicitud no procesada.';
+
+  const str = String(text);
+
+  // Verifica si la cadena contiene fugas de detalles técnicos (BD, traza de pila o código)
+  const leakPatterns = [
+    /SQL/i,
+    /IntegrityError/i,
+    /CheckConstraint/i,
+    /ForeignKey/i,
+    /dbo\./i,
+    /gestion_/i,
+    /CK_/i,
+    /FK_/i,
+    /PK_/i,
+    /Traceback/i,
+    /AxiosError/i,
+    /\/api\//i,
+    /http/i,
+    /0x[0-9a-fA-F]+/i,
+  ];
+
+  const hasLeak = leakPatterns.some((pattern) => pattern.test(str));
+  if (hasLeak) {
+    return 'La operación no pudo ser procesada por una restricción de datos.';
+  }
+
+  return str;
+}
+
+/** Cuerpo de error del backend: DRF (`detail`, campos), `{ error }` o el sobre unificado. */
+interface CuerpoError {
+  detail?: string;
+  error?: string | { message?: string };
+  non_field_errors?: string[];
+  [campo: string]: unknown;
+}
+
+export function formatApiError(error: unknown): FormattedError {
+  if (!error) {
+    return {
+      message: 'Ocurrió un error inesperado.',
+      note: 'Nota: Intente nuevamente o consulte al equipo de supervisión.',
+    };
+  }
+
+  const axErr = error as AxiosError<CuerpoError | string>;
+  // Network / Offline errors (No tech details exposed)
+  if (axErr.code === 'ERR_NETWORK' || !axErr.response) {
+    return {
+      message: 'Sin comunicación con la red central.',
+      note: 'Nota: Verifique su conexión de red local en la planta.',
+    };
+  }
+
+  const status = axErr.response.status;
+  const data = axErr.response.data;
+
+  // 403 Forbidden
+  if (status === 403) {
+    return {
+      message: 'Acceso restringido.',
+      note: 'Nota: Su usuario no cuenta con los permisos o rol requeridos para esta acción.',
+    };
+  }
+
+  // 500+ Internal Server Error (Sanitized - no DB stack traces exposed)
+  if (status >= 500) {
+    return {
+      message: 'No se pudo completar la operación.',
+      note: 'Nota: Inconveniente en el servicio central. Si persiste, notifique a soporte con la fecha y hora actual.',
+    };
+  }
+
+  // Cadena HTML o respuestas no JSON del servidor (p. ej. pasarelas 502/504)
+  if (typeof data === 'string') {
+    const cleanStr = sanitizeMessage(data);
+    return {
+      message: cleanStr.startsWith('<') ? 'Respuesta no válida del servidor.' : cleanStr,
+      note: 'Nota: Verifique los datos ingresados e intente de nuevo.',
+    };
+  }
+
+  const rawErrorMsg = typeof data?.error === 'object' ? data?.error?.message : data?.error;
+  let mainMessage = data?.detail || rawErrorMsg || data?.non_field_errors?.[0];
+  const fieldErrors: Record<string, string> = {};
+
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    Object.entries(data).forEach(([key, val]) => {
+      if (key !== 'detail' && key !== 'error' && key !== 'non_field_errors') {
+        const strVal = Array.isArray(val) ? String(val[0]) : String(val);
+        fieldErrors[getFieldLabel(key)] = sanitizeMessage(strVal);
+      }
+    });
+  }
+
+  if (!mainMessage) {
+    const fieldKeys = Object.keys(fieldErrors);
+    if (fieldKeys.length > 0) {
+      const firstKey = fieldKeys[0];
+      mainMessage = `${firstKey}: ${fieldErrors[firstKey]}`;
+    } else {
+      mainMessage = 'Solicitud no procesada.';
+    }
+  }
+
+  mainMessage = sanitizeMessage(String(mainMessage));
+
+  // Determina la nota explicativa amigable según el contexto de negocio
+  let note = 'Nota: Por favor revise la información ingresada en el formulario.';
+
+  const msgLower = mainMessage.toLowerCase();
+  if (msgLower.includes('merma') && (msgLower.includes('mayor') || msgLower.includes('excede') || msgLower.includes('superar'))) {
+    note = 'Nota: La merma registrada no puede ser superior a la cantidad requerida en la orden de producción.';
+  } else if (msgLower.includes('permiso') || msgLower.includes('área') || msgLower.includes('area')) {
+    note = 'Nota: Asegúrese de estar operando dentro del área asignada a su turno.';
+  } else if (msgLower.includes('justificacion') || msgLower.includes('motivo') || msgLower.includes('justificación')) {
+    note = 'Nota: Ingrese un motivo claro de al menos 10 caracteres para el registro de auditoría.';
+  } else if (msgLower.includes('positivo') || msgLower.includes('rango') || msgLower.includes('mayor a 0')) {
+    note = 'Nota: Verifique que las cantidades ingresadas sean valores numéricos mayores a cero.';
+  }
+
+  return {
+    message: mainMessage,
+    note,
+    fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+  };
+}

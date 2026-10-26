@@ -45,7 +45,7 @@ Se ha implementado un sistema completo de **descarga automática de químicos** 
 
 ## Módulos Implementados
 
-### 1. Backend - Modelos (`gestion/models.py`)
+### 1. Backend - Modelos (`gestion/models/produccion.py`)
 
 #### Cambios a `OrdenProduccion`
 ```python
@@ -100,7 +100,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 
 ---
 
-### 3. Backend - Views (`gestion/views.py`)
+### 3. Backend - Views (`gestion/views/production_orden_views.py`)
 
 #### `OrdenProduccionViewSet`
 
@@ -109,6 +109,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 - Log de auditoría
 
 **`perform_update(serializer)`**
+- Si la OP ya fue lanzada (salió de `pendiente`), `formula_color` no puede cambiar: `OrdenProduccion.clean()` lo rechaza (regla 5 del spec de recetas versionadas, 2026-09-24). El cambio de fórmula solo es posible con la OP en `pendiente`.
 - Valida `justificacion` obligatoria si `inventario_descontado == True`
 - Detecta cambios en `peso_neto_requerido` o `formula_color`
 - Ejecuta `ajustar_descarga_op()` si hubo cambios; sino `descargar_para_op()` si es primera vez
@@ -126,7 +127,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 
 ---
 
-### 4. Backend - Serializers (`gestion/serializers.py`)
+### 4. Backend - Serializers (`gestion/serializers/production_serializers.py`)
 
 **`OrdenProduccionSerializer` (actualizado)**
 - Nuevos campos: `bodega_quimicos`, `bodega_quimicos_nombre`, `inventario_descontado` (read-only), `fecha_modificacion`
@@ -294,7 +295,7 @@ StockQuimicosDashboard renderiza:
 
 ### Tests de Integración a Implementar
 
-**Archivo:** `gestion/tests_integrados.py`
+**Archivo:** `gestion/tests/tests_integrados.py`
 
 ```python
 # Caso 1: Crear OP con fórmula y bodega → verifica DescargaQuimicoOP + MovimientoInventario
@@ -326,7 +327,7 @@ StockQuimicosDashboard renderiza:
 python manage.py migrate gestion 0022
 
 # Ejecutar tests
-python manage.py test gestion.tests_integrados.UnifiedBusinessLogicTestCase -v 2
+python manage.py test gestion.tests.tests_integrados.UnifiedBusinessLogicTestCase -v 2
 
 # Verificar endpoints
 python manage.py shell
@@ -365,8 +366,9 @@ npm run test -- StockQuimicosDashboard
 
 - **Plan maestro:** `/home/Adminbrandon/.claude/plans/cheerful-wiggling-blum.md`
 - **Service Layer pattern:** `gestion/services/descarga_quimicos.py`
-- **DosificacionCalculator reutilizado:** `gestion/services_formula.py`
-- **Patrón de reversión base:** `gestion/views.py` (action `rechazar_lote`)
+- **DosificacionCalculator reutilizado:** `gestion/services/services_formula.py`
+- **Recetas versionadas:** `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. La descarga calcula con `calcular_dosificacion_de_orden` (`gestion/services/services_formula.py`), la misma regla que usan el MRP y los requisitos de materiales: con `litros_bano`, desde `orden.version_formula.snapshot` (o la receta oficial si la orden aún no se lanzó); sin litros, receta viva con relación de baño 1:10.
+- **Patrón de reversión base:** `gestion/views/production_lote_views.py` (action `rechazar`)
 - **Thread-safe utility:** `inventory/utils.py::safe_get_or_create_stock`
 
 ---

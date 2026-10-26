@@ -1,0 +1,277 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): loteCodigo / cambio de tab a adelante / error de backend / un error de red
+ *   sin respuesta / un error con objeto en vez de string.
+ * - Caja blanca (CB): ramas de error — error de backend / un error de red sin respuesta / un error con objeto
+ *   en vez de string.
+ */
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { PanelGenealogia } from './PanelGenealogia';
+
+const mockGet = vi.fn();
+vi.mock('../../../lib/axios', () => ({
+  default: {
+    get: (...args: unknown[]) => mockGet(...args),
+  },
+}));
+
+const DATA_ATRAS = {
+  nodo_raiz: {
+    id: 10,
+    codigo_lote: 'LOT-TERM-001',
+    producto_codigo: 'TEL-ALGODON',
+    producto_descripcion: 'Tela Algodón Jersey',
+    producto_tipo: 'producto_terminado',
+    peso_neto_producido: '150.000',
+    clasificacion_calidad: 'PRIMERA',
+    orden_produccion_codigo: 'OP-2026-100',
+  },
+  ancestros: [
+    {
+      id: 5,
+      codigo_lote: 'LOT-HILO-001',
+      producto_codigo: 'HILO-20',
+      producto_descripcion: 'Hilo 20/1 Crudo',
+      producto_tipo: 'producto_intermedio',
+      peso_neto_producido: '160.000',
+      clasificacion_calidad: 'PRIMERA',
+      orden_produccion_codigo: 'OP-2026-050',
+    },
+  ],
+  aristas: [
+    {
+      padre_id: 5,
+      padre_codigo: 'LOT-HILO-001',
+      hijo_id: 10,
+      hijo_codigo: 'LOT-TERM-001',
+      cantidad_usada: '155.000',
+      corrida_codigo: 'CORR-01',
+      maquina: 'Telar Circular Mayer',
+      operario: 'Juan Perez',
+    },
+  ],
+  materias_primas_origen: [
+    {
+      id: 1,
+      lote_proveedor: 'PROV-MP-99',
+      proveedor_nombre: 'Hilandería Central S.A.',
+      producto_codigo: 'MP-ALGODON-FIBRA',
+      fecha_recepcion: '2026-09-01',
+      numero_documento_entrada: 'FAC-8899',
+      asociado_a_lote_codigo: 'LOT-HILO-001',
+    },
+  ],
+  total_ancestros: 1,
+  total_materias_primas: 1,
+};
+
+const DATA_ADELANTE = {
+  nodo_raiz: {
+    id: 5,
+    codigo_lote: 'LOT-HILO-001',
+    producto_codigo: 'HILO-20',
+    producto_descripcion: 'Hilo 20/1 Crudo',
+    producto_tipo: 'producto_intermedio',
+    peso_neto_producido: '160.000',
+    clasificacion_calidad: 'PRIMERA',
+  },
+  descendientes: [
+    {
+      id: 10,
+      codigo_lote: 'LOT-TERM-001',
+      producto_codigo: 'TEL-ALGODON',
+      producto_descripcion: 'Tela Algodón Jersey',
+      producto_tipo: 'producto_terminado',
+      peso_neto_producido: '150.000',
+    },
+  ],
+  aristas: [],
+  despachos_clientes: [
+    {
+      lote_id: 10,
+      lote_codigo: 'LOT-TERM-001',
+      pedido_codigo: 'PED-2026-77',
+      cliente_nombre: 'Confecciones Textiles S.A.',
+      cliente_ruc: '1790011223001',
+      peso_despachado: '150.000',
+      fecha_despacho: '2026-09-15T14:30:00',
+    },
+  ],
+  total_descendientes: 1,
+  total_clientes_afectados: 1,
+};
+
+describe('PanelGenealogia', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('dado loteCodigo cuando abre modal entonces consulta api con direccion atras por defecto y muestra ancestros y materias primas', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+
+    render(
+      <PanelGenealogia loteCodigo="LOT-TERM-001" />
+    );
+
+    expect(screen.getByText('Cargando grafo de genealogía...')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {
+        params: { codigo: 'LOT-TERM-001', direccion: 'atras' },
+      });
+    });
+
+    await waitFor(() => {
+      // Raíz
+      expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1);
+      // Ancestros: el código aparece en el nodo, en la arista y en la materia prima asociada
+      expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Telar Circular Mayer')).toBeInTheDocument();
+      // Materia prima
+      expect(screen.getByText('Hilandería Central S.A.')).toBeInTheDocument();
+      expect(screen.getByText(/FAC-8899/)).toBeInTheDocument();
+    });
+  });
+
+  it('dado cambio de tab a adelante cuando cambia direccion entonces consulta api con direccion adelante y muestra recall de clientes', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    mockGet.mockResolvedValueOnce({ data: DATA_ADELANTE });
+
+    render(
+      <PanelGenealogia loteCodigo="LOT-HILO-001" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Cambiar a Trace-Forward (Recall). Radix Tabs activa en mousedown, no en click:
+    // fireEvent.click no cambia la pestaña; userEvent simula la secuencia real.
+    const tabRecall = screen.getByRole('tab', { name: /Trace-Forward/i });
+    await userEvent.click(tabRecall);
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {
+        params: { codigo: 'LOT-HILO-001', direccion: 'adelante' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Confecciones Textiles S.A.')).toBeInTheDocument();
+      expect(screen.getByText(/1790011223001/)).toBeInTheDocument();
+      expect(screen.getByText(/Atención Recall:/)).toBeInTheDocument();
+    });
+  });
+
+  it('dado error de backend cuando falla la consulta entonces muestra mensaje de error', async () => {
+    mockGet.mockRejectedValueOnce({
+      response: { data: { error: 'No existe un lote de producción con código LOT-ERR.' } },
+    });
+
+    render(
+      <PanelGenealogia loteCodigo="LOT-ERR" />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/No existe un lote de producción con código LOT-ERR/)).toBeInTheDocument();
+    });
+  });
+
+  it('dado un error de red sin respuesta cuando falla entonces muestra el mensaje generico', async () => {
+    mockGet.mockRejectedValueOnce(new Error('network'));
+
+    render(<PanelGenealogia loteCodigo="LOT-ERR" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No se pudo cargar el grafo de genealogía del lote.')).toBeInTheDocument();
+    });
+  });
+
+  it('dado un error con objeto en vez de string cuando falla entonces lo serializa como JSON', async () => {
+    mockGet.mockRejectedValueOnce({ response: { data: { error: { campo: ['inválido'] } } } });
+
+    render(<PanelGenealogia loteCodigo="LOT-ERR" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/"campo":\["inválido"\]/)).toBeInTheDocument();
+    });
+  });
+
+
+  it('dado datos sin totales precalculados cuando renderiza entonces usa la longitud de los arreglos', async () => {
+    const { total_ancestros, total_materias_primas, ...sinTotales } = DATA_ATRAS;
+    mockGet.mockResolvedValueOnce({ data: sinTotales });
+
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
+
+    await waitFor(() => expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('dado un ancestro sin clasificacion de calidad cuando renderiza entonces no muestra insignia de calidad', async () => {
+    const { clasificacion_calidad, ...ancestroSinClasificacion } = DATA_ATRAS.ancestros[0];
+    mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, ancestros: [ancestroSinClasificacion] } });
+
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
+
+    await waitFor(() => expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1));
+    // Solo el nodo raíz conserva su insignia PRIMERA; el ancestro sin clasificación no la muestra
+    expect(screen.getAllByText('PRIMERA')).toHaveLength(1);
+  });
+
+  it('dado un ancestro de segunda calidad cuando renderiza entonces usa la insignia secundaria', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { ...DATA_ATRAS, ancestros: [{ ...DATA_ATRAS.ancestros[0], clasificacion_calidad: 'SEGUNDA' }] },
+    });
+
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
+
+    await waitFor(() => expect(screen.getByText('SEGUNDA')).toBeInTheDocument());
+  });
+
+  it('dado una arista sin maquina corrida ni operario cuando renderiza entonces omite esos campos', async () => {
+    const { maquina, corrida_codigo, operario, ...aristaMinima } = DATA_ATRAS.aristas[0];
+    mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, aristas: [aristaMinima] } });
+
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
+
+    await waitFor(() => expect(screen.getByText(/155.000 kg/)).toBeInTheDocument());
+    expect(screen.queryByText(/Telar Circular Mayer/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Juan Perez/)).not.toBeInTheDocument();
+  });
+
+  it('dado click en actualizar cuando hace click entonces vuelve a consultar la genealogia', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
+    await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
+
+    mockGet.mockClear();
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    fireEvent.click(screen.getByRole('button', { name: /Actualizar/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {
+      params: { codigo: 'LOT-TERM-001', direccion: 'atras' },
+    }));
+  });
+
+  it('dado un despacho sin cliente ruc ni fecha y con cantidad_vendida cuando renderiza entonces usa los respaldos', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    mockGet.mockResolvedValueOnce({
+      data: {
+        ...DATA_ADELANTE,
+        despachos_clientes: [{
+          lote_id: 10, lote_codigo: 'LOT-TERM-001', cantidad_vendida: '75.000',
+        }],
+      },
+    });
+
+    render(<PanelGenealogia loteCodigo="LOT-HILO-001" />);
+    await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Trace-Forward/i }));
+
+    await waitFor(() => expect(screen.getByText('Cliente Final')).toBeInTheDocument());
+    expect(screen.getByText(/75.000 kg/)).toBeInTheDocument();
+  });
+});

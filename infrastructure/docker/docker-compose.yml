@@ -1,12 +1,24 @@
 services:
   db:
     build: ../../database
+    # Límites de recursos ajustables por máquina — ver DB_CPUS/DB_MEMORY_LIMIT_MB
+    # en .env (no editar estos valores aquí, cambiar el .env de cada entorno).
+    cpus: ${DB_CPUS:-2}
+    mem_limit: ${DB_MEMORY_LIMIT_MB:-4096}m
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
+      # SQL Server debe saber que tiene el MISMO límite que le puso Docker
+      # arriba (mem_limit) — si no, intenta reservar más RAM de la que
+      # existe y el contenedor queda "atorado" (encontrado en la auditoría
+      # de performance del 2026-08-31: sin este valor, SQL Server se quedaba
+      # pegado a ~4GB de forma constante, sin margen para el resto del stack).
+      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
     ports:
-      - "1433:1433"
+      # Solo loopback: SSMS local conecta a localhost,1433; la red de la
+      # planta no alcanza la BD (auditoría M-4). En producción no se publica.
+      - "127.0.0.1:1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
@@ -21,13 +33,25 @@ services:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile
     restart: on-failure
-    command: sh /app/infrastructure/docker/entrypoint.sh python manage.py runserver 0.0.0.0:8000
+    # CPUs ajustables por máquina — ver BACKEND_CPUS/BACKEND_WORKERS en .env.
+    cpus: ${BACKEND_CPUS:-2}
+    # gunicorn en vez de 'runserver': mismo mecanismo que producción
+    # (docker-compose.prod.yml + Dockerfile.prod), así que una prueba de
+    # carga en dev refleja lo que va a pasar en producción. '--reload' imita
+    # el autoreload de 'runserver' para no perder la comodidad de desarrollo.
+    # BACKEND_WORKERS controla cuántos procesos worker levanta — regla
+    # general (2 x BACKEND_CPUS) + 1 (ver auditoría de performance
+    # 2026-08-31: con solo 3 workers colapsó bajo 100 usuarios concurrentes).
+    command: sh /app/infrastructure/docker/entrypoint.sh gunicorn --reload --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     volumes:
       - ../../:/app
     ports:
       - "8000:8000"
     environment:
       - SECRET_KEY=insecure-dev-key
+      # RS-19: claves de desarrollo, no sirven para producción.
+      - FIELD_ENCRYPTION_KEYS=${FIELD_ENCRYPTION_KEYS:-g5dLOjt6b67-KsjBugmB7RgRyIptRFfP76DoJ96aONs=}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY:-yXfHHKpCQyfsts6J3c8iW4uY4_mwygwkHC1h9LnDhF4}
       - DEBUG=True
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
@@ -40,10 +64,15 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      - PRINTING_SERVICE_URL=http://printing:8001
+      - TRAZABILIDAD_BASE_URL=${TRAZABILIDAD_BASE_URL:-http://localhost/trazabilidad}
       - INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - SCANNING_SERVICE_SECRET=${SCANNING_SERVICE_SECRET:-scanning-dev-secret}
       - REPORTING_SERVICE_SECRET=${REPORTING_SERVICE_SECRET:-reporting-dev-secret}
+      # Este compose sí levanta Redis + celery_worker: se habilita ?async=true
+      # en exportaciones de reportes (apagado por defecto en settings.py).
+      - REPORTES_ASYNC_HABILITADO=true
     depends_on:
       db:
         condition: service_healthy
@@ -108,10 +137,11 @@ services:
     build:
       context: ../../printing_service
       dockerfile: Dockerfile
+    environment:
+      - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      - AUDIT_DB_PATH=/data/logs.db
     ports:
       - "8001:8001"
-    environment:
-      - AUDIT_DB_PATH=/data/logs.db
     volumes:
       - ../../printing_service/src:/app/src
       - printing_audit_data:/data
@@ -127,9 +157,11 @@ services:
       - ../../reporting_excel/src:/app/src
       - reporting_audit_data:/data
     environment:
+      # DJANGO_INTERNAL_URL solo se usa para el healthcheck (GET /api/health/)
+      # — este servicio ya no llama a Django para consultar datos de reportes
+      # (auditoría de performance 2026-08-31: el backend le manda los datos
+      # ya resueltos a POST /generate, sin salto de vuelta).
       - DJANGO_INTERNAL_URL=http://backend:8000
-      - SERVICE_NAME=reporting_excel
-      - SERVICE_SECRET=${REPORTING_SERVICE_SECRET:-reporting-dev-secret}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - CORS_ALLOWED_ORIGINS=http://backend:8000
       - AUDIT_DB_PATH=/data/logs.db
@@ -140,7 +172,7 @@ services:
   redis:
     image: redis:6-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   celery_worker:
     build:
@@ -152,6 +184,9 @@ services:
       - ../../:/app
     environment:
       - SECRET_KEY=insecure-dev-key
+      # RS-19: claves de desarrollo, no sirven para producción.
+      - FIELD_ENCRYPTION_KEYS=${FIELD_ENCRYPTION_KEYS:-g5dLOjt6b67-KsjBugmB7RgRyIptRFfP76DoJ96aONs=}
+      - BLIND_INDEX_KEY=${BLIND_INDEX_KEY:-yXfHHKpCQyfsts6J3c8iW4uY4_mwygwkHC1h9LnDhF4}
       - DEBUG=True
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
@@ -162,6 +197,9 @@ services:
       - DB_DRIVER=ODBC Driver 18 for SQL Server
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Solo el backend migra: si ambos corren `migrate` a la vez sobre una base
+      # vacía, SQL Server aborta uno por interbloqueo (error 1205).
+      - MIGRAR_AL_INICIAR=0
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
@@ -170,7 +208,7 @@ services:
       - SCANNING_SERVICE_SECRET=${SCANNING_SERVICE_SECRET:-scanning-dev-secret}
       - REPORTING_SERVICE_SECRET=${REPORTING_SERVICE_SECRET:-reporting-dev-secret}
     depends_on:
-      db:
+      backend:
         condition: service_healthy
       redis:
         condition: service_started

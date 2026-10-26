@@ -1,3 +1,11 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): que el perfil esta cargado / datos aun no resueltos / formulas y quimicos
+ *   existentes / respuesta paginada con resultados / error en la peticion.
+ * - Análisis de valores límite (BVA): pathname sin stock.
+ * - Transición de estados (STT): filtros de estado y sustrato en la url.
+ * - Caja blanca (CB): ramas de error — error en la peticion.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -11,10 +19,10 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    put: (...args: any[]) => mockPut(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -22,8 +30,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -32,22 +40,32 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('./FormulaQuimica', () => ({
-  FormulaQuimica: (props: any) => (
+  FormulaQuimica: (props: import('react').ComponentProps<typeof import('./FormulaQuimica').FormulaQuimica>) => (
     <div data-testid="formula-quimica-mock">
-      <span>formulas-count:{props.formulas.length}</span>
-      <span>quimicos-count:{props.quimicos.length}</span>
+      <span>formulas-count:{props.formulas?.length}</span>
+      <span>quimicos-count:{props.quimicos?.length}</span>
+      <span>procesos-count:{props.procesos?.length}</span>
       <span>loading:{String(props.loading)}</span>
       <span>can-delete:{String(props.canDelete)}</span>
-      <button onClick={() => props.onFormulaCreate({ codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
+      <button onClick={() => props.onFormulaCreate?.({ codigo: 'F1', nombre_color: 'Rojo', estado: 'en_pruebas', fases: [] })}>
         crear-formula
       </button>
-      <button onClick={() => props.onFormulaUpdate(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
+      <button onClick={() => props.onFormulaUpdate?.(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'en_pruebas', fases: [] })}>
         actualizar-formula
       </button>
-      <button onClick={() => props.onFormulaDuplicate(1)}>duplicar-formula</button>
-      <button onClick={() => props.onFormulaDelete(1)}>eliminar-formula</button>
-      <button onClick={() => props.onExportDosificador(1)}>exportar-formula</button>
+      <button onClick={() => props.onFormulaCrearVersion?.(1, 'Ensayo tras laboratorio')}>crear-version</button>
+      <button onClick={() => props.onFormulaMarcarOficial?.(1, 2)}>marcar-oficial</button>
+      <button onClick={() => props.onFormulaDerivar?.(1, { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 })}>derivar-formula</button>
+      <button onClick={() => props.onFormulaDuplicate?.(1, { codigo: 'F1-B', nombre_color: 'ROJO B' })}>duplicar-formula</button>
+      <button onClick={() => props.onFormulaDelete?.(1)}>eliminar-formula</button>
+      <button onClick={() => props.onExportDosificador?.(1)}>exportar-formula</button>
     </div>
+  ),
+}));
+
+vi.mock('./ManageProcesosTintoreria', () => ({
+  ManageProcesosTintoreria: ({ onCatalogoCambiado }: { onCatalogoCambiado?: () => void }) => (
+    <button data-testid="procesos-mock" onClick={() => onCatalogoCambiado?.()}>Procesos Mock</button>
   ),
 }));
 
@@ -58,10 +76,13 @@ vi.mock('./StockQuimicosDashboard', () => ({
 const FORMULA_1 = { id: 1, codigo: 'F1', nombre_color: 'Rojo Carmesí' };
 const QUIMICO_1 = { id: 1, codigo: 'Q1', descripcion: 'Soda Cáustica' };
 
-function mockFetch(formulas: any = [], quimicos: any = []) {
+const PROCESO_1 = { id: 1, codigo: 'DESCRUDE', nombre: 'Descrude', tipo: 'pre_tratamiento', activo: true };
+
+function mockFetch(formulas: unknown[] = [], quimicos: unknown[] = [], procesos: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/formula-colors/')) return Promise.resolve({ data: formulas });
     if (url === '/chemicals/') return Promise.resolve({ data: quimicos });
+    if (url === '/procesos-tintoreria/?activo=true') return Promise.resolve({ data: procesos });
     return Promise.resolve({ data: [] });
   });
 }
@@ -144,9 +165,29 @@ describe('TintoreroDashboard', () => {
     renderAt('/tintoreria');
 
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
-    expect(screen.getByRole('tab', { name: 'Fórmulas Químicas' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Stock Disponible' })).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Stock de Químicos' })).toHaveAttribute('data-state', 'inactive');
     expect(screen.getByTestId('formula-quimica-mock')).toBeInTheDocument();
+  });
+
+  it('dado pathname que contiene procesos cuando monta entonces la pestaña activa es procesos', async () => {
+    mockFetch([], []);
+    renderAt('/procesos');
+
+    await waitFor(() => expect(screen.getByTestId('procesos-mock')).toBeInTheDocument());
+    expect(screen.getByRole('tab', { name: 'Procesos' })).toHaveAttribute('data-state', 'active');
+  });
+
+  it('dado un cambio en el catalogo de procesos cuando se notifica entonces recarga los procesos activos de las recetas', async () => {
+    mockFetch([], [], [PROCESO_1]);
+    renderAt('/procesos');
+    await waitFor(() => expect(screen.getByTestId('procesos-mock')).toBeInTheDocument());
+    const llamadasProcesos = () => mockGet.mock.calls.filter(([url]) => url === '/procesos-tintoreria/?activo=true').length;
+    await waitFor(() => expect(llamadasProcesos()).toBe(1));
+
+    screen.getByTestId('procesos-mock').click();
+
+    await waitFor(() => expect(llamadasProcesos()).toBe(2));
   });
 
   it('dado pathname que contiene stock cuando monta entonces la pestaña activa es stock y se muestra su contenido', async () => {
@@ -154,8 +195,8 @@ describe('TintoreroDashboard', () => {
     renderAt('/tintoreria/stock');
 
     await waitFor(() => expect(screen.getByTestId('stock-quimicos-mock')).toBeInTheDocument());
-    expect(screen.getByRole('tab', { name: 'Stock Disponible' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Fórmulas Químicas' })).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByRole('tab', { name: 'Stock de Químicos' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'inactive');
     expect(screen.getByTestId('stock-quimicos-mock')).toBeInTheDocument();
   });
 
@@ -171,7 +212,7 @@ describe('TintoreroDashboard', () => {
 
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Formula creada exitosamente.'));
     expect(mockPost).toHaveBeenCalledWith('/formula-colors/', expect.objectContaining({ codigo: 'F1' }));
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
   });
 
   it('dado clic en crear formula cuando la peticion falla entonces muestra un toast de error con el detalle', async () => {
@@ -199,7 +240,7 @@ describe('TintoreroDashboard', () => {
     expect(mockPut).toHaveBeenCalledWith('/formula-colors/1/', expect.objectContaining({ codigo: 'F1' }));
   });
 
-  it('dado clic en duplicar formula cuando la peticion tiene exito entonces refresca los datos', async () => {
+  it('dado clic en crear variante cuando la peticion tiene exito entonces envia codigo y color y refresca', async () => {
     mockFetch([], []);
     mockPost.mockResolvedValueOnce({ data: {} });
     renderAt('/tintoreria');
@@ -209,8 +250,65 @@ describe('TintoreroDashboard', () => {
 
     screen.getByText('duplicar-formula').click();
 
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/duplicar/'));
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+      '/formula-colors/1/duplicar/', { codigo: 'F1-B', nombre_color: 'ROJO B' }));
+    expect(toastSuccessMock).toHaveBeenCalledWith('Variante creada en pruebas.');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+  });
+
+  it('dado el catalogo de procesos cuando carga entonces pide solo los activos y los pasa al hijo', async () => {
+    mockFetch([], [], [PROCESO_1]);
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('procesos-count:1')).toBeInTheDocument());
+    expect(mockGet).toHaveBeenCalledWith('/procesos-tintoreria/?activo=true');
+  });
+
+  it('dado clic en crear version cuando la peticion tiene exito entonces envia observaciones y anuncia el ensayo', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { numero: 2, es_oficial: false } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('crear-version').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Versión v2 guardada como ensayo.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/versiones/', { observaciones: 'Ensayo tras laboratorio' });
+  });
+
+  it('dado clic en crear version cuando el backend rechaza entonces muestra su mensaje de error', async () => {
+    mockFetch([], []);
+    mockPost.mockRejectedValueOnce({ response: { data: { success: false, error: { code: 400, message: 'Observaciones invalidas.' } } } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('crear-version').click();
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Observaciones invalidas.'));
+  });
+
+  it('dado clic en marcar oficial cuando la peticion tiene exito entonces anuncia la version oficial', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { numero: 2, es_oficial: true } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('marcar-oficial').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Versión v2 marcada como oficial.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/versiones/2/marcar-oficial/', {});
+  });
+
+  it('dado clic en derivar cuando la peticion tiene exito entonces anuncia la formula derivada', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { id: 5, codigo: 'D1' } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('derivar-formula').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula derivada creada: D1.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/derivar/', { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 });
   });
 
   it('dado clic en eliminar formula cuando el usuario confirma entonces elimina y muestra un toast de exito', async () => {
@@ -307,7 +405,7 @@ describe('TintoreroDashboard', () => {
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
     screen.getByText('duplicar-formula').click();
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al duplicar la formula.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al crear la variante.'));
   });
 
   it('dado clic en eliminar formula cuando la peticion falla entonces muestra un toast de error', async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -12,44 +12,41 @@ import {
   Eye,
   RefreshCw,
 } from 'lucide-react';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+
+const SIN_STOCK: StockQuimico[] = [];
 
 export function StockQuimicosDashboard() {
   const { profile } = useAuth();
-  const [stock, setStock] = useState<StockQuimico[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedChemical, setSelectedChemical] = useState<StockQuimico | null>(null);
   const [descargas, setDescargas] = useState<DescargaQuimicoOP[]>([]);
   const [showDescargas, setShowDescargas] = useState(false);
 
   const sede_id = profile?.user.sede;
 
-  const fetchStock = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get<StockQuimico[]>(
-        `/ordenes-produccion/stock-quimicos/?sede_id=${sede_id}`
-      );
-      setStock(response.data);
-    } catch (error) {
-      console.error('Error al cargar stock de químicos', error);
-      toast.error('No se pudo cargar el stock de químicos.');
-    } finally {
-      setLoading(false);
-    }
-  }, [sede_id]);
-
-  useEffect(() => {
-    if (sede_id) {
-      fetchStock();
-    }
-  }, [sede_id, fetchStock]);
+  const carga = useCargaRemota(
+    () =>
+      apiClient
+        .get<StockQuimico[]>(`/ordenes-produccion/stock-quimicos/?sede_id=${sede_id}`)
+        .then((response) => response.data)
+        .catch((error: unknown) => {
+          console.error('Error al cargar stock de químicos', error);
+          toast.error('No se pudo cargar el stock de químicos.');
+          throw error;
+        }),
+    sede_id,
+    { habilitado: !!sede_id },
+  );
+  const stock = carga.datos ?? SIN_STOCK;
+  const loading = carga.cargando;
+  const fetchStock = carga.recargar;
 
   const handleViewDescargas = async (chemical: StockQuimico) => {
     setSelectedChemical(chemical);
     try {
       // Buscar descargas del químico en las últimas 30 días
       const response = await apiClient.get<DescargaQuimicoOP[]>(
-        `/gestion/descarga-quimico-op/?producto_id=${chemical.producto_id}&limit=50`
+        `/ordenes-produccion/descargas-quimico/?producto_id=${chemical.producto_id}&sede_id=${sede_id}&limit=50`
       );
       setDescargas(response.data);
       setShowDescargas(true);
@@ -65,7 +62,7 @@ export function StockQuimicosDashboard() {
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
       {/* Header */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Stock de Químicos en Tintorería</h1>
         <p className="text-muted-foreground">
           Monitorea el inventario de insumos químicos. {alertaCount > 0 && (
@@ -74,7 +71,7 @@ export function StockQuimicosDashboard() {
         </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Tarjetas de estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -159,6 +156,7 @@ export function StockQuimicosDashboard() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          aria-label={`Ver historial de ${item.producto_descripcion}`}
                           onClick={() => handleViewDescargas(item)}
                         >
                           <Eye className="w-4 h-4" />

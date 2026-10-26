@@ -66,7 +66,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 ## Módulos Implementados
 
-### 1. Backend — Modelo (`gestion/models.py`)
+### 1. Backend — Modelo (`gestion/models/produccion.py`)
 
 #### Nuevo Modelo: `EventoEtiqueta`
 
@@ -137,7 +137,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 **`@action generate_pdf_label` (F5)**
 - GET `/lotes-produccion/{id}/generate-pdf-label/` — passthrough a `/pdf/etiqueta` del
-  microservicio. `503` si el microservicio no responde.
+  servicio satélite. `503` si el servicio satélite no responde.
 
 **`@action etiquetas`**
 - GET `/lotes-produccion/{id}/etiquetas/` — historial completo de eventos del lote
@@ -146,8 +146,8 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 **`@action reimprimir` (F2)**
 - POST `/lotes-produccion/{id}/reimprimir/` — body `{motivo (requerido), detalle_motivo?, formato?}`.
 - `400` si falta `motivo`. Llama a `EventoEtiquetaService.registrar_reimpresion`, reenvía al
-  microservicio con `tipo_evento='REIMPRESION'` para el sello visual, y hace *fallback* al ZPL
-  local si el microservicio no responde.
+  servicio satélite con `tipo_evento='REIMPRESION'` para el sello visual, y hace *fallback* al ZPL
+  local si el servicio satélite no responde.
 - Permiso: cualquier rol con acceso al lote (`operario`, `empaquetado`, `jefe_area`, `jefe_planta`, admins).
 
 **`@action reetiquetar` (F4)**
@@ -165,7 +165,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 ---
 
-### 4. Microservicio `printing_service` (F2 + F5)
+### 4. Servicio Satélite `printing_service` (F2 + F5)
 
 Ver detalle completo en [docs/arquitectura/MICROSERVICIO_IMPRESION.md](../arquitectura/MICROSERVICIO_IMPRESION.md).
 
@@ -292,7 +292,7 @@ POST /lotes-produccion/{id}/reetiquetar/ {cambios, motivo, detalle_motivo, forma
   - `Automático (Zebra → PDF)`
   - `Zebra ZPL Nativo`
   - `PDF Universal (Navegador)`
-- La selección se persiste automáticamente en `localStorage` (`texcore_preferred_printer`) y es consumida de forma transparente por `printLabel` en [printing.ts](file:///d:/Universidad%20Udla/7%20SEPTIMO%20SEMESTRE%20MARZO%20AGOSTO%202026/Proyecto%20de%20Tesis/Desarrollo/TexCore/frontend/src/lib/printing.ts).
+- La selección se persiste automáticamente en `localStorage` (`texcore_preferred_printer`) y es consumida de forma transparente por `printLabel` en [printing.ts](../../frontend/src/lib/printing.ts).
 
 ---
 
@@ -314,4 +314,69 @@ frontend/src/components/empaquetado/EmpaquetadoDashboard.test.tsx  # flujo de re
 - ✅ Selector de impresora/formato preferido por estación con persistencia en `localStorage`.
 - ✅ In-situ supervisor override en `@action reetiquetar` backend + frontend `ReetiquetarModal.tsx`.
 - ✅ Control de tolerancia de pesaje ($\pm 10\%$) con confirmación explícita de desvío.
+
+---
+
+## Actualización 2026-08-25 — F6/F7: piezas secuenciales, QR configurable e historial visible
+
+> Nota: `gestion/views/production_views.py` (referenciado arriba) se dividió el 2026-08-21 en un
+> paquete por dominio; la lógica de etiquetas descrita en este documento vive ahora en
+> `gestion/views/production_lote_views.py` (mismo contenido, archivo distinto).
+
+### F6 — Piezas secuenciales (lotes con varias unidades físicas)
+
+`LoteProduccion.unidades_empaque` (ej. "12 rollos por caja") ya existía como campo, pero
+`generate_zpl`/`reimprimir`/`reetiquetar` solo generaban **una** etiqueta por lote sin importar
+cuántas piezas físicas representa — el operador tenía que reimprimir manualmente pieza por pieza.
+
+- Nuevo `LoteProduccionViewSet._generar_zpl_completo(data, sello=None)` (reemplaza las llamadas
+  sueltas a `PrintingService.generate_zpl_label`): si `unidades_empaque > 1`, genera una etiqueta
+  ZPL por pieza (payload con `pieza`/`piezas_totales` añadidos) y las concatena en un solo string.
+  Cada bloque `^XA..^XZ` es una etiqueta física independiente para la Zebra — el frontend no
+  requirió ningún cambio porque `printLabel` ya reenvía el string completo tal cual.
+- `printing_service`: `EtiquetaRequest` gana los campos opcionales `pieza`/`piezas_totales`;
+  `etiqueta.zpl` imprime "PIEZA i/N" cuando `piezas_totales > 1`. Lotes de una sola pieza (el caso
+  normal) no ven ningún cambio de comportamiento.
+- `CAMBIOS_REETIQUETADO_PERMITIDOS` ya incluía `unidades_empaque` — reetiquetar de 1 a N piezas ya
+  funciona con este cambio sin tocar el whitelist.
+
+### F7 — QR de trazabilidad configurable por entorno + acceso restringido a la red interna
+
+El QR de la etiqueta (`qr_data` en `_build_zpl_payload`) apunta a `settings.TRAZABILIDAD_BASE_URL`,
+que existía como setting pero nunca se declaraba en ningún `.env`/docker-compose (caía siempre al
+default hardcodeado `https://app.texcore.com/trazabilidad`). Ahora se propaga desde `.env` (mismo
+patrón que `PRINTING_SERVICE_URL`) y resuelve a una nueva ruta de frontend `/trazabilidad/:codigo`
+(`TrazabilidadPorCodigoPage.tsx`) + endpoint backend `GET /api/trazabilidad-lote/<codigo_lote>/`.
+
+`nginx/nginx.conf` restringe `location /trazabilidad` a la red interna de la organización
+(`allow 192.168.1.0/24` + rangos de loopback/Docker necesarios para probar desde el propio host;
+`deny all; return 444;` para cualquier otra IP — un escaneo fuera de la red "se ve caído", no un 403
+que confirme que el servidor existe). Ver `docs/arquitectura/GUIA_DESPLIEGUE.md` §3.5 para ajustar la red
+permitida en cada instalación.
+
+**Limitación conocida:** `codigo_lote` no es único a nivel de BD (`unique_together` con
+`orden_produccion`) — el endpoint de trazabilidad-por-código resuelve la ambigüedad devolviendo el
+lote más reciente por `hora_final`.
+
+### Historial de Etiquetas visible en Empaquetado
+
+El endpoint `GET /lotes-produccion/{id}/etiquetas/` ya existía (documentado en la sección 3 de este
+mismo archivo) pero nunca se mostraba en ninguna UI. Nuevo `HistorialEtiquetasModal.tsx` — lista los
+eventos del lote (secuencia, tipo, versión, motivo, usuario, fecha, vigente/anulada) con un botón para
+reimprimir la etiqueta vigente desde ahí mismo (reutiliza `ReimprimirModal`). Accesible desde
+"Historial Reciente" en `EmpaquetadoDashboard.tsx` y desde `BuscadorLotes.tsx`.
+
+También se quitó el degradado (`bg-gradient-to-r ... bg-clip-text text-transparent`) del título
+"Estación de Empaque" — queda en color sólido.
+
+### Tests (actualización)
+
+```
+gestion/tests/test_production_views.py  # +4: generate_zpl/reimprimir/reetiquetar con varias piezas
+printing_service/tests/unit/test_printing_endpoints.py  # etiqueta.zpl con pieza/piezas_totales
+frontend/src/components/empaquetado/HistorialEtiquetasModal.test.tsx  # nuevo, 6 tests
+frontend/src/components/empaquetado/EmpaquetadoDashboard.test.tsx  # +1 (ver historial), 2 fixes
+                                                                    # de queries ambiguas por el
+                                                                    # botón nuevo en la misma fila
+```
 

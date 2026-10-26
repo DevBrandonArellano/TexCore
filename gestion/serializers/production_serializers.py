@@ -1,0 +1,700 @@
+import logging
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
+
+from gestion.models import (
+    Bodega,
+    ComponenteMezclaOP,
+    ConsumoLoteDetalle,
+    CostoLoteProduccion,
+    DescargaQuimicoOP,
+    EtapaProduccion,
+    FormulaColor,
+    LineaProduccion,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    ParoMaquina,
+    Producto,
+    TransferenciaInterarea,
+    TransformacionProducto,
+)
+from gestion.models.produccion import CODIGO_LOTE_REGEX
+from gestion.services.historial_paros import HistorialParosService
+
+from ._common import ALPHANUMERIC_ACCENTS_REGEX, ConservarOmitidosEnPutMixin
+
+logger = logging.getLogger(__name__)
+
+
+class DosificacionLitrosSerializer(serializers.Serializer):
+    """Entrada de POST /ordenes-produccion/{id}/calcular-dosificacion/ (spec 2026-09-24
+    §7): el peso lo aporta la propia orden, el ingeniero solo fija los litros."""
+
+    litros_bano = serializers.DecimalField(
+        max_digits=10, decimal_places=2, help_text="Litros de bano fijados por el ingeniero tintorero."
+    )
+
+    def validate_litros_bano(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Los litros de bano deben ser mayores a cero.")
+        return value
+
+
+class CompletarDetallesOrdenSerializer(serializers.Serializer):
+    """Entrada de PATCH /ordenes-produccion/{id}/completar_detalles/ (Jefe de Área).
+    El alcance (sede y área de la orden) lo valida la vista; aquí solo existencia y tipo."""
+
+    producto_entrada = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all(), required=False)
+    producto_salida = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all(), required=False)
+    bodega_entrada = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    bodega_salida = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    bodega_quimicos = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    maquina_asignada = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False)
+    operario_asignado = serializers.PrimaryKeyRelatedField(queryset=get_user_model().objects.all(), required=False)
+    formula_color = serializers.PrimaryKeyRelatedField(queryset=FormulaColor.objects.all(), required=False)
+    iniciar = serializers.BooleanField(required=False, default=False)
+
+
+class MaquinaSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
+    area_nombre = serializers.CharField(source="area.nombre", read_only=True)
+    operarios_nombres = serializers.SerializerMethodField()
+    bodega_entrada_nombre = serializers.CharField(source="bodega_entrada.nombre", read_only=True)
+    bodega_salida_nombre = serializers.CharField(source="bodega_salida.nombre", read_only=True)
+    producto_merma_detail = serializers.SerializerMethodField()
+    bodega_merma_detail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Maquina
+        fields = [
+            "id",
+            "nombre",
+            "capacidad_maxima",
+            "volumen_bano_litros",
+            "eficiencia_ideal",
+            "estado",
+            "area",
+            "area_nombre",
+            "operarios",
+            "operarios_nombres",
+            "producto_merma",
+            "producto_merma_detail",
+            "bodega_merma",
+            "bodega_merma_detail",
+            "bodega_entrada",
+            "bodega_entrada_nombre",
+            "bodega_salida",
+            "bodega_salida_nombre",
+        ]
+        extra_kwargs = {"operarios": {"required": False}}
+
+    def get_operarios_nombres(self, obj):
+        return [u.username for u in obj.operarios.all()]
+
+    def get_producto_merma_detail(self, obj):
+        if not obj.producto_merma:
+            return None
+        return {
+            "id": obj.producto_merma.id,
+            "codigo": obj.producto_merma.codigo,
+            "descripcion": obj.producto_merma.descripcion,
+            "tipo": obj.producto_merma.tipo,
+        }
+
+    def get_bodega_merma_detail(self, obj):
+        if not obj.bodega_merma:
+            return None
+        return {
+            "id": obj.bodega_merma.id,
+            "nombre": obj.bodega_merma.nombre,
+        }
+
+
+class ParoMaquinaSerializer(serializers.ModelSerializer):
+    """Downtime de máquina con reason code (Seis Grandes Pérdidas — OEE for Operators).
+    Revalida fin > inicio aquí (además de ParoMaquina.clean()) para que la API
+    devuelva 400 con el detalle del campo en vez de un 500 si el modelo lo rechaza."""
+
+    maquina_nombre = serializers.CharField(source="maquina.nombre", read_only=True)
+    categoria_display = serializers.CharField(source="get_categoria_display", read_only=True)
+    duracion_minutos = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = ParoMaquina
+        fields = [
+            "id",
+            "maquina",
+            "maquina_nombre",
+            "inicio",
+            "fin",
+            "categoria",
+            "categoria_display",
+            "planificado",
+            "descripcion",
+            "turno",
+            "usuario",
+            "duracion_minutos",
+            "origen",
+        ]
+        extra_kwargs = {
+            "usuario": {"required": False},
+            # El origen lo decide el sistema: `estado` solo lo pone ParoPorEstadoService.
+            "origen": {"read_only": True},
+        }
+
+    def validate(self, attrs):
+        fin = attrs.get("fin", getattr(self.instance, "fin", None))
+        inicio = attrs.get("inicio", getattr(self.instance, "inicio", None))
+        if fin is not None and inicio is not None and fin <= inicio:
+            raise serializers.ValidationError({"fin": "La fecha de fin debe ser posterior a la fecha de inicio."})
+        return attrs
+
+
+class ParoMaquinaHistorialSerializer(ParoMaquinaSerializer):
+    """Fila del historial de mantenimiento del Jefe de Área: agrega el área, quién lo registró,
+    si sigue en curso y las horas detenidas, para que la tabla y el PDF no calculen nada."""
+
+    area_nombre = serializers.CharField(source="maquina.area.nombre", read_only=True)
+    usuario_nombre = serializers.SerializerMethodField()
+    en_curso = serializers.SerializerMethodField()
+    horas = serializers.SerializerMethodField()
+
+    class Meta(ParoMaquinaSerializer.Meta):
+        fields = [
+            *ParoMaquinaSerializer.Meta.fields,
+            "area_nombre",
+            "usuario_nombre",
+            "en_curso",
+            "horas",
+        ]
+
+    def get_usuario_nombre(self, obj) -> str | None:
+        if not obj.usuario:
+            return None
+        return obj.usuario.get_full_name() or obj.usuario.username
+
+    def get_en_curso(self, obj) -> bool:
+        return obj.fin is None
+
+    def get_horas(self, obj) -> float | None:
+        """Horas detenidas dentro del rango consultado (el servicio las acota igual que el resumen)."""
+        filtros = self.context.get("filtros")
+        if filtros is None:
+            return round(obj.duracion_minutos / 60, 2) if obj.fin else None
+        return round(HistorialParosService.horas_en_rango(obj.inicio, obj.fin, filtros), 2)
+
+
+class LineaProduccionSerializer(serializers.ModelSerializer):
+    """Serializer de Células de Manufactura Flexibles.
+
+    'compartida' es informativo para el Jefe de Área (recurso repartido entre
+    líneas activas); la capacidad y las colas de trabajo se agregan por ÁREA,
+    no por línea (evita duplicidad fantasma de capacidad)."""
+
+    area_nombre = serializers.CharField(source="area.nombre", read_only=True)
+    maquinas = serializers.PrimaryKeyRelatedField(many=True, queryset=Maquina.objects.all(), required=False)
+    maquinas_detail = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = LineaProduccion
+        fields = [
+            "id",
+            "nombre",
+            "descripcion",
+            "estado",
+            "area",
+            "area_nombre",
+            "maquinas",
+            "maquinas_detail",
+            "fecha_creacion",
+            "fecha_modificacion",
+        ]
+        read_only_fields = ["fecha_creacion", "fecha_modificacion"]
+
+    def get_maquinas_detail(self, obj):
+        # 'compartida' = la máquina pertenece a MÁS DE UNA línea ACTIVA.
+        # num_lineas_activas viene anotado por el Prefetch del ViewSet; el
+        # fallback cubre usos del serializer fuera de ese queryset.
+        detalle = []
+        for m in obj.maquinas.all():
+            num_activas = getattr(m, "num_lineas_activas", None)
+            if num_activas is None:
+                num_activas = m.lineas_produccion.filter(estado="activa").count()
+            detalle.append(
+                {
+                    "id": m.id,
+                    "nombre": m.nombre,
+                    "estado": m.estado,
+                    "compartida": num_activas > 1,
+                }
+            )
+        return detalle
+
+    def validate_nombre(self, value):
+        if not ALPHANUMERIC_ACCENTS_REGEX.match(value or ""):
+            raise serializers.ValidationError("Solo letras, números y espacios (Ñ y acentos permitidos).")
+        return value
+
+    def validate(self, data):
+        # Resolver valores efectivos en PATCH parcial
+        area = data.get("area") or (self.instance.area if self.instance else None)
+        maquinas = data.get("maquinas")
+        if maquinas is None and self.instance:
+            maquinas = list(self.instance.maquinas.all())
+
+        # Regla 1: toda máquina de la línea debe pertenecer a su misma área.
+        # Que una máquina ya esté en OTRA línea no es error: es el recurso
+        # compartido de la célula flexible.
+        if area and maquinas:
+            ajenas = [m.nombre for m in maquinas if m.area_id != area.id]
+            if ajenas:
+                raise serializers.ValidationError(
+                    {"maquinas": f"Estas máquinas no pertenecen al área '{area.nombre}': {', '.join(ajenas)}."}
+                )
+
+        # Regla 2: un jefe_area (no admin) solo gestiona líneas de SU área
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if (
+            user
+            and not user.is_superuser
+            and user.groups.filter(name="jefe_area").exists()
+            and not user.groups.filter(name__in=["admin_sistemas", "jefe_planta"]).exists()
+            and area
+            and area != user.area
+        ):
+            raise serializers.ValidationError({"area": "Solo puedes gestionar líneas de tu propia área."})
+        return data
+
+
+class OrdenProduccionEstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdenProduccion
+        fields = ["estado"]
+
+    def validate_estado(self, value):
+        estado_actual = self.instance.estado if self.instance else None
+
+        # Validar lógica de negocio textilera
+        if estado_actual == "finalizada" and value != "finalizada":
+            raise serializers.ValidationError("No se puede retornar una orden finalizada a estados anteriores.")
+
+        return value
+
+
+class ComponenteMezclaOPSerializer(serializers.ModelSerializer):
+    producto_detail = serializers.SerializerMethodField(read_only=True)
+    bodega_detail = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ComponenteMezclaOP
+        fields = ["id", "orden", "producto", "producto_detail", "bodega", "bodega_detail", "porcentaje", "cantidad_kg"]
+        read_only_fields = ["cantidad_kg"]
+
+    def get_producto_detail(self, obj):
+        return {
+            "id": obj.producto.id,
+            "codigo": obj.producto.codigo,
+            "descripcion": obj.producto.descripcion,
+            "tipo": obj.producto.tipo,
+        }
+
+    def get_bodega_detail(self, obj):
+        return {"id": obj.bodega.id, "nombre": obj.bodega.nombre}
+
+    def validate_porcentaje(self, value):
+        if value <= 0 or value > 100:
+            raise serializers.ValidationError("El porcentaje debe ser mayor a 0 y máximo 100.")
+        return value
+
+    def validate(self, data):
+        # Calcula cantidad_kg automáticamente
+        orden = data.get("orden") or (self.instance.orden if self.instance else None)
+        if orden and "porcentaje" in data:
+            data["cantidad_kg"] = (data["porcentaje"] / Decimal("100") * orden.peso_neto_requerido).quantize(
+                Decimal("0.001")
+            )
+        return data
+
+
+class OrdenProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
+    componentes_mezcla = ComponenteMezclaOPSerializer(many=True, read_only=True)
+    producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
+    producto_salida_detail = serializers.SerializerMethodField(read_only=True)
+    peso_producido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    area_nombre = serializers.CharField(source="area.nombre", read_only=True)
+    relacion_bano = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = OrdenProduccion
+        fields = [
+            "id",
+            "codigo",
+            "estado",
+            "prioridad",
+            "producto_entrada",
+            "producto_entrada_detail",
+            "producto_salida",
+            "producto_salida_detail",
+            "bodega_entrada",
+            "bodega_salida",
+            "bodega_quimicos",
+            "formula_color",
+            "version_formula",
+            "peso_neto_requerido",
+            "peso_producido",
+            "litros_bano",
+            "relacion_bano",
+            "area",
+            "area_nombre",
+            "sede",
+            "maquina_asignada",
+            "operario_asignado",
+            "observaciones",
+            "inventario_descontado",
+            "fecha_inicio_planificada",
+            "fecha_fin_planificada",
+            "componentes_mezcla",
+        ]
+        # version_formula la congela el modelo al lanzar la orden (reglas 4-5).
+        # relacion_bano se deriva de litros_bano/peso_neto_requerido (D3): nunca se escribe.
+        read_only_fields = ["peso_producido", "inventario_descontado", "version_formula"]
+        extra_kwargs = {
+            "producto_entrada": {"required": False, "allow_null": True},
+            "producto_salida": {"required": False, "allow_null": True},
+            "bodega_entrada": {"required": False, "allow_null": True},
+            "bodega_salida": {"required": False, "allow_null": True},
+            "maquina_asignada": {"required": False, "allow_null": True},
+            "operario_asignado": {"required": False, "allow_null": True},
+        }
+
+    def get_producto_entrada_detail(self, obj):
+        p = obj.producto_entrada
+        if not p:
+            return None
+        return {"id": p.id, "codigo": p.codigo, "descripcion": p.descripcion, "tipo": p.tipo}
+
+    def get_producto_salida_detail(self, obj):
+        p = obj.producto_salida
+        if not p:
+            return None
+        return {"id": p.id, "codigo": p.codigo, "descripcion": p.descripcion, "tipo": p.tipo}
+
+    def get_relacion_bano(self, obj):
+        relacion = obj.relacion_bano
+        return str(relacion) if relacion is not None else None
+
+    def validate(self, data):
+        # Validación laxa para creación inicial (Jefe de Planta)
+        # Solo requiere: codigo, peso_neto_requerido, area
+        if self.instance is None:  # Creación
+            if not data.get("codigo"):
+                raise serializers.ValidationError({"codigo": "Código es requerido."})
+            if not data.get("peso_neto_requerido"):
+                raise serializers.ValidationError({"peso_neto_requerido": "Peso requerido es obligatorio."})
+            if not data.get("area"):
+                raise serializers.ValidationError({"area": "Área es obligatoria."})
+        else:  # Actualización (Jefe de Área completando detalles)
+            componentes = data.get("componentes_mezcla", [])
+            if componentes:
+                total = sum(c.get("porcentaje", 0) for c in componentes)
+                if abs(total - Decimal("100")) > Decimal("0.01"):
+                    raise serializers.ValidationError(
+                        {"componentes_mezcla": f"La suma de porcentajes debe ser 100%. Actual: {total}%"}
+                    )
+        return data
+
+
+class TransformacionProductoSerializer(serializers.ModelSerializer):
+    """Lectura/escritura de una transformación máquina a máquina.
+
+    ``producto_entrada`` y ``merma`` son de solo lectura: los deriva/calcula el
+    servicio (continuidad de cadena) y el modelo (merma), no el cliente.
+    """
+
+    producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
+    producto_salida_detail = serializers.SerializerMethodField(read_only=True)
+    maquina_nombre = serializers.CharField(source="maquina.nombre", read_only=True)
+    operario_nombre = serializers.CharField(source="operario.username", read_only=True)
+
+    class Meta:
+        model = TransformacionProducto
+        fields = [
+            "id",
+            "orden_produccion",
+            "etapa",
+            "numero_secuencia",
+            "producto_entrada",
+            "producto_entrada_detail",
+            "producto_salida",
+            "producto_salida_detail",
+            "maquina",
+            "maquina_nombre",
+            "operario",
+            "operario_nombre",
+            "peso_entrada",
+            "peso_salida",
+            "merma",
+            "cantidad_entrada",
+            "cantidad_salida",
+            "fecha_inicio",
+            "fecha_fin",
+            "estado",
+            "observaciones",
+            "fecha_creacion",
+        ]
+        read_only_fields = [
+            "numero_secuencia",
+            "producto_entrada",
+            "merma",
+            "orden_produccion",
+            "fecha_creacion",
+        ]
+
+    def get_producto_entrada_detail(self, obj):
+        p = obj.producto_entrada
+        return {"id": p.id, "codigo": p.codigo, "descripcion": p.descripcion} if p else None
+
+    def get_producto_salida_detail(self, obj):
+        p = obj.producto_salida
+        return {"id": p.id, "codigo": p.codigo, "descripcion": p.descripcion} if p else None
+
+
+class LoteProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
+    maquina_nombre = serializers.CharField(source="maquina.nombre", read_only=True)
+    operario_nombre = serializers.CharField(source="operario.username", read_only=True)
+
+    class Meta:
+        model = LoteProduccion
+        fields = "__all__"
+
+    def validate(self, data):
+        # 1. Validación de Peso Neto (Empaquetado)
+        peso_bruto = data.get("peso_bruto")
+        tara = data.get("tara")
+
+        # Si se ingresan datos de empaquetado, validar consistencia
+        if peso_bruto is not None and tara is not None:
+            # Nota: Los campos Decimal vienen como Decimal o float dependiendo del parser.
+            # Convertir a Decimal por seguridad.
+            p_bruto = Decimal(str(peso_bruto))
+            p_tara = Decimal(str(tara))
+
+            if p_tara >= p_bruto:
+                raise serializers.ValidationError({"tara": "La tara no puede ser mayor o igual al peso bruto."})
+
+            peso_neto_calculado = p_bruto - p_tara
+
+            # Verificar desviación si tenemos contexto de OrdenProduccion
+            # Si se está creando (self.instance es None) o actualizando.
+            # Si LoteProduccion tiene 'orden_produccion', podemos validar contra eso.
+            orden = data.get("orden_produccion")
+            if not orden and self.instance:
+                orden = self.instance.orden_produccion
+
+            if orden:
+                peso_requerido = orden.peso_neto_requerido
+                # No bloquea el guardado: solo deja alerta en logs para que el
+                # jefe de área revise lotes cuyo peso neto se aleja mucho de lo
+                # planificado en la OP (posible error de pesaje o de OP mal
+                # dimensionada), sin frenar el flujo de producción.
+                diff = abs(peso_neto_calculado - peso_requerido)
+                if diff > (peso_requerido * Decimal("0.05")):
+                    logger.warning(
+                        "ALERTA EMPAQUETADO: Lote %s peso neto %s difiere >5%% de orden %s",
+                        data.get("codigo_lote", "N/A"),
+                        peso_neto_calculado,
+                        peso_requerido,
+                    )
+
+        return data
+
+
+class RegistrarLoteProduccionSerializer(serializers.Serializer):
+    codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
+    maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
+    operario = serializers.IntegerField(required=False, allow_null=True)
+    turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    # NOT NULL en el modelo (LoteProduccion.hora_inicio/hora_final): antes eran
+    # opcionales aquí y el INSERT fallaba con IntegrityError, que el view
+    # reportaba (incorrectamente) como "código de lote duplicado".
+    hora_inicio = serializers.DateTimeField()
+    hora_final = serializers.DateTimeField()
+    peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    peso_merma = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0"))
+    tipo_merma = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+    unidades_empaque = serializers.IntegerField(required=False, default=1)
+    presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    cantidad_metros = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
+    completar_orden = serializers.BooleanField(required=False, default=False)
+
+    def validate_peso_neto_producido(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
+        return value
+
+    def validate_codigo_lote(self, value):
+        # En blanco → RegistroLoteService autogenera el código (ver
+        # OrdenProduccion.generate_next_lote_codigo()). Si el operario escribe uno a
+        # mano, debe seguir el mismo patrón que exige internal_api/urls.py para poder
+        # validarlo por código de barras — evita registrar un lote imposible de escanear.
+        if value and not CODIGO_LOTE_REGEX.match(value):
+            raise serializers.ValidationError(
+                "Solo se permiten letras, números, guiones y guiones bajos (máximo 50 caracteres)."
+            )
+        return value
+
+    def validate(self, data):
+        if data.get("peso_merma", Decimal("0")) > 0 and not data.get("tipo_merma"):
+            raise serializers.ValidationError({"tipo_merma": "tipo_merma es obligatorio cuando peso_merma > 0."})
+        return data
+
+
+class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
+    """
+    Serializer read-only para registrar detalles de descarga de químicos por OP.
+    Patrón: Entidad de Dominio auditada con trazabilidad.
+    """
+
+    producto_codigo = serializers.CharField(source="producto.codigo", read_only=True)
+    producto_descripcion = serializers.CharField(source="producto.descripcion", read_only=True)
+    bodega_nombre = serializers.CharField(source="bodega.nombre", read_only=True)
+    descargado_por_nombre = serializers.CharField(source="descargado_por.username", read_only=True)
+
+    class Meta:
+        model = DescargaQuimicoOP
+        fields = [
+            "id",
+            "orden_produccion",
+            "producto",
+            "producto_codigo",
+            "producto_descripcion",
+            "fase",
+            "bodega",
+            "bodega_nombre",
+            "tipo_calculo",
+            "cantidad_calculada_kg",
+            "cantidad_real_kg",
+            "estado",
+            "fecha_descarga",
+            "descargado_por",
+            "descargado_por_nombre",
+            "justificacion",
+        ]
+        read_only_fields = [
+            "id",
+            "fecha_descarga",
+            "descargado_por",
+            "descargado_por_nombre",
+            "producto_codigo",
+            "producto_descripcion",
+            "bodega_nombre",
+        ]
+
+
+class ConsumoLoteDetalleSerializer(serializers.ModelSerializer):
+    lote_origen_codigo = serializers.CharField(source="lote_origen.codigo_lote", read_only=True)
+
+    class Meta:
+        model = ConsumoLoteDetalle
+        fields = [
+            "id",
+            "lote_produccion",
+            "lote_origen",
+            "lote_origen_codigo",
+            "cantidad_consumida",
+            "genera_nuevo_lote",
+        ]
+        read_only_fields = ["id", "lote_produccion", "lote_origen", "lote_origen_codigo"]
+
+
+class CostoLoteProduccionSerializer(serializers.ModelSerializer):
+    lote_codigo = serializers.ReadOnlyField(source="lote_produccion.codigo_lote")
+
+    class Meta:
+        model = CostoLoteProduccion
+        fields = [
+            "id",
+            "lote_produccion",
+            "lote_codigo",
+            "costo_materia_prima",
+            "costo_quimicos",
+            "costo_operario",
+            "costo_maquina",
+            "otros_costos",
+            "total_costo",
+            "precio_venta_esperado",
+            "margen_bruto",
+            "margen_bruto_pct",
+            "calculado_en",
+            "recalculado_en",
+        ]
+        read_only_fields = fields
+
+
+class EtapaProduccionSerializer(serializers.ModelSerializer):
+    area_nombre = serializers.CharField(source="area.nombre", read_only=True)
+    maquina_nombre = serializers.CharField(source="maquina.nombre", read_only=True)
+    bodega_entrada_nombre = serializers.CharField(source="bodega_entrada.nombre", read_only=True)
+    bodega_salida_nombre = serializers.CharField(source="bodega_salida.nombre", read_only=True)
+
+    class Meta:
+        model = EtapaProduccion
+        fields = [
+            "id",
+            "area",
+            "area_nombre",
+            "nombre",
+            "orden",
+            "maquina",
+            "maquina_nombre",
+            "bodega_entrada",
+            "bodega_entrada_nombre",
+            "bodega_salida",
+            "bodega_salida_nombre",
+            "tiempo_procesamiento_minutos",
+            "fecha_creacion",
+            "fecha_modificacion",
+        ]
+        read_only_fields = ["fecha_creacion", "fecha_modificacion"]
+
+
+class TransferenciaInterareaSerializer(serializers.ModelSerializer):
+    orden_area_origen_codigo = serializers.CharField(source="orden_area_origen.codigo", read_only=True)
+    orden_area_destino_codigo = serializers.CharField(source="orden_area_destino.codigo", read_only=True)
+    bodega_origen_nombre = serializers.CharField(source="bodega_origen.nombre", read_only=True)
+    bodega_destino_nombre = serializers.CharField(source="bodega_destino.nombre", read_only=True)
+    usuario_responsable_nombre = serializers.CharField(source="usuario_responsable.get_full_name", read_only=True)
+    # orden_area_origen/orden_area_destino quedan como PrimaryKeyRelatedField
+    # (auto-generados por ModelSerializer, escribibles) para que el create()
+    # del ViewSet pueda persistirlos — son NOT NULL en el modelo. El detalle
+    # anidado se expone aparte para no perder la representación completa en
+    # las respuestas de lectura.
+    orden_area_origen_detail = OrdenProduccionSerializer(source="orden_area_origen", read_only=True)
+    orden_area_destino_detail = OrdenProduccionSerializer(source="orden_area_destino", read_only=True)
+
+    class Meta:
+        model = TransferenciaInterarea
+        fields = [
+            "id",
+            "orden_area_origen",
+            "orden_area_origen_detail",
+            "orden_area_origen_codigo",
+            "orden_area_destino",
+            "orden_area_destino_detail",
+            "orden_area_destino_codigo",
+            "bodega_origen",
+            "bodega_origen_nombre",
+            "bodega_destino",
+            "bodega_destino_nombre",
+            "cantidad_transferida",
+            "fecha_transferencia",
+            "usuario_responsable",
+            "usuario_responsable_nombre",
+            "observaciones",
+        ]
+        read_only_fields = ["usuario_responsable", "fecha_transferencia"]

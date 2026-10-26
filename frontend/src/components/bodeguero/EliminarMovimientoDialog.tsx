@@ -11,10 +11,12 @@ import {
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
+import { Movimiento } from '../../lib/types';
 
 interface EliminarMovimientoDialogProps {
-    movimiento: any | null; // igual que EditarMovimientoDialog: tipo flexible del row del Kardex
+    movimiento: Movimiento | null;
     open: boolean;
     onClose: () => void;
     onSuccess: () => void;
@@ -45,11 +47,9 @@ export function EliminarMovimientoDialog({ movimiento, open, onClose, onSuccess 
             setJustificacion('');
             onSuccess();
             onClose();
-        } catch (error: any) {
-            const errorMsg =
-                error.response?.data?.error ||
-                error.response?.data?.justificacion ||
-                'Error al eliminar el movimiento.';
+        } catch (error) {
+            const justificacion = (datosDeError(error) as { justificacion?: string } | undefined)?.justificacion;
+            const errorMsg = justificacion || mensajeDeLaApi(error, 'Error al eliminar el movimiento.');
             toast.error(errorMsg);
         } finally {
             setIsSubmitting(false);

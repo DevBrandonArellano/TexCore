@@ -1,25 +1,44 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el cliente creado / una respuesta exitosa / una respuesta exitosa sin
+ *   method ni url en config / DEV en false / un 401 en un endpoint distinto de token/profile.
+ * - Transición de estados (STT): un 401 ya reintentado ( retry=true).
+ * - Caja blanca (CB): ramas de error — que el refresh tambien falla / un error 500 / un error de red (sin
+ *   response).
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import type { AxiosResponse } from 'axios';
+import { parcial } from '../testing/parcial';
+
+/** Config de la petición original como la reenvía el interceptor (con su marca de reintento). */
+type SolicitudReintentable = { url: string; method: string; _retry?: boolean };
 
 const mockPost = vi.fn();
 const mockApiClientCall = vi.fn();
 
-let responseSuccessHandler: (response: any) => any;
-let responseErrorHandler: (error: any) => any;
+let responseSuccessHandler: (response: AxiosResponse) => AxiosResponse;
+let createConfig: Record<string, unknown> | undefined;
+let responseErrorHandler: (error: unknown) => Promise<unknown>;
 
 vi.mock('axios', () => {
-  const instance: any = vi.fn((config: any) => mockApiClientCall(config));
-  instance.post = (...args: any[]) => mockPost(...args);
-  instance.interceptors = {
-    response: {
-      use: (onSuccess: any, onError: any) => {
-        responseSuccessHandler = onSuccess;
-        responseErrorHandler = onError;
+  const instance = Object.assign(vi.fn((config: unknown) => mockApiClientCall(config)), {
+    post: (...args: unknown[]) => mockPost(...args),
+    interceptors: {
+      response: {
+        use: (onSuccess: typeof responseSuccessHandler, onError: typeof responseErrorHandler) => {
+          responseSuccessHandler = onSuccess;
+          responseErrorHandler = onError;
+        },
       },
     },
-  };
+  });
   return {
     default: {
-      create: () => instance,
+      create: (config: Record<string, unknown>) => {
+        createConfig = config;
+        return instance;
+      },
     },
   };
 });
@@ -42,16 +61,37 @@ describe('apiClient (axios interceptor)', () => {
     await import('./axios');
   });
 
+  it('dado el cliente creado cuando se configura entonces envía la cookie csrftoken de Django en X-CSRFToken', () => {
+    // CookieJWTAuthentication exige el token CSRF en cada escritura con la cookie JWT.
+    expect(createConfig).toMatchObject({
+      withCredentials: true,
+      xsrfCookieName: 'csrftoken',
+      xsrfHeaderName: 'X-CSRFToken',
+    });
+  });
+
   it('dado una respuesta exitosa cuando pasa por el interceptor entonces la retorna sin cambios', () => {
-    const response = { config: { method: 'get', url: '/productos/' }, status: 200 };
+    const response = parcial<AxiosResponse>({ config: parcial({ method: 'get', url: '/productos/' }), status: 200 });
     expect(responseSuccessHandler(response)).toBe(response);
+  });
+
+  it('dado una respuesta exitosa sin method ni url en config cuando pasa por el interceptor entonces usa los fallbacks por defecto', () => {
+    const response = parcial<AxiosResponse>({ config: parcial({}), status: 200 });
+    expect(responseSuccessHandler(response)).toBe(response);
+  });
+
+  it('dado DEV en false cuando pasa una respuesta exitosa entonces no registra el log de debug', () => {
+    vi.stubEnv('DEV', false);
+    const response = parcial<AxiosResponse>({ config: parcial({ method: 'get', url: '/productos/' }), status: 200 });
+    expect(responseSuccessHandler(response)).toBe(response);
+    vi.stubEnv('DEV', true);
   });
 
   it('dado un 401 en un endpoint distinto de token/profile cuando falla entonces reintenta tras refrescar', async () => {
     mockPost.mockResolvedValueOnce({});
     mockApiClientCall.mockResolvedValueOnce({ status: 200, data: 'ok' });
 
-    const originalRequest: any = { url: '/productos/', method: 'get' };
+    const originalRequest: SolicitudReintentable = { url: '/productos/', method: 'get' };
     const error = { config: originalRequest, response: { status: 401 } };
 
     const result = await responseErrorHandler(error);
@@ -66,7 +106,7 @@ describe('apiClient (axios interceptor)', () => {
     mockPost.mockRejectedValueOnce(refreshError);
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
-    const originalRequest: any = { url: '/productos/', method: 'get' };
+    const originalRequest: SolicitudReintentable = { url: '/productos/', method: 'get' };
     const error = { config: originalRequest, response: { status: 401 } };
 
     await expect(responseErrorHandler(error)).rejects.toBe(refreshError);
@@ -74,7 +114,7 @@ describe('apiClient (axios interceptor)', () => {
   });
 
   it('dado un 401 en /token/ cuando falla entonces no intenta refrescar (evita bucle de login)', async () => {
-    const originalRequest: any = { url: '/token/', method: 'post' };
+    const originalRequest: SolicitudReintentable = { url: '/token/', method: 'post' };
     const error = { config: originalRequest, response: { status: 401 } };
 
     await expect(responseErrorHandler(error)).rejects.toBe(error);
@@ -82,7 +122,7 @@ describe('apiClient (axios interceptor)', () => {
   });
 
   it('dado un 401 en /profile/ cuando falla entonces no intenta refrescar', async () => {
-    const originalRequest: any = { url: '/profile/', method: 'get' };
+    const originalRequest: SolicitudReintentable = { url: '/profile/', method: 'get' };
     const error = { config: originalRequest, response: { status: 401 } };
 
     await expect(responseErrorHandler(error)).rejects.toBe(error);
@@ -90,7 +130,7 @@ describe('apiClient (axios interceptor)', () => {
   });
 
   it('dado un 401 ya reintentado (_retry=true) cuando falla de nuevo entonces no reintenta otra vez', async () => {
-    const originalRequest: any = { url: '/productos/', method: 'get', _retry: true };
+    const originalRequest: SolicitudReintentable = { url: '/productos/', method: 'get', _retry: true };
     const error = { config: originalRequest, response: { status: 401 } };
 
     await expect(responseErrorHandler(error)).rejects.toBe(error);
@@ -104,6 +144,31 @@ describe('apiClient (axios interceptor)', () => {
 
   it('dado un error de red (sin response) cuando falla entonces rechaza con el error original', async () => {
     const error = { config: { url: '/reportes/', method: 'get' } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 400 (no 401) cuando falla entonces rechaza con el error original', async () => {
+    const error = { config: { url: '/pedidos-venta/', method: 'post' }, response: { status: 400 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 500 sin config cuando falla entonces usa los fallbacks unknown y - en el log', async () => {
+    const error = { response: { status: 500 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 400 sin method en config cuando falla entonces usa el fallback - para el metodo', async () => {
+    const error = { config: { url: '/pedidos-venta/' }, response: { status: 400 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error de red sin config cuando falla entonces usa los fallbacks unknown y - en el log', async () => {
+    const error = {};
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un status distinto de 401/4xx/5xx/0 cuando falla entonces rechaza sin registrar ningun log de severidad', async () => {
+    const error = { config: { url: '/reportes/', method: 'get' }, response: { status: 302 } };
     await expect(responseErrorHandler(error)).rejects.toBe(error);
   });
 });

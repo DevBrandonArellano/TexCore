@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): varias órdenes / órdenes de varios estados / órdenes de varias máquinas /
+ *   el formulario cerrado / áreas cargadas.
+ * - Análisis de valores límite (BVA): /areas/ sin resultados ni results / "Ir a página" vacio.
+ * - Transición de estados (STT): órdenes de varios estados.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
@@ -24,6 +31,13 @@ vi.mock('axios', () => {
   };
 });
 import apiClient from '../../lib/axios';
+
+import { parcial } from '../../testing/parcial';
+
+const toastErrorMock = vi.fn();
+vi.mock('sonner', () => ({
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args), success: vi.fn() },
+}));
 
 // Polyfills para Radix UI en jsdom
 global.ResizeObserver = class {
@@ -107,7 +121,7 @@ const defaultProps = {
   onOrdenCreate: vi.fn(),
   onOrdenUpdate: vi.fn(),
   onOrderStatusChange: vi.fn(),
-  onOrdenDelete: vi.fn(),
+  onOrdenDelete: vi.fn(() => Promise.resolve(true)),
   loading: false,
   onDataRefresh: vi.fn(),
 };
@@ -124,13 +138,13 @@ const renderComponent = () =>
 describe('ManageOrdenesProduccion — tabla', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('renderiza los códigos y máquinas de todas las órdenes', () => {
+  it('dado varias órdenes cuando renderiza entonces muestra los códigos y máquinas de todas', () => {
     renderComponent();
     expect(screen.getByText('OP-001')).toBeInTheDocument();
     expect(screen.getByText('OP-002')).toBeInTheDocument();
@@ -138,7 +152,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.getByText('Jigger 1')).toBeInTheDocument();
   });
 
-  it('filtra por estado: al seleccionar Pendiente solo muestra OP-002', async () => {
+  it('dado órdenes de varios estados cuando filtra por Pendiente entonces solo muestra OP-002', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -152,7 +166,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.queryByText('OP-001')).not.toBeInTheDocument();
   });
 
-  it('filtra por máquina: al seleccionar Jet 1 solo muestra OP-001', async () => {
+  it('dado órdenes de varias máquinas cuando filtra por Jet 1 entonces solo muestra OP-001', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -172,13 +186,13 @@ describe('ManageOrdenesProduccion — tabla', () => {
 describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('al abrir el diálogo hace GET /areas/ para obtener áreas frescas', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces hace GET /areas/ para tener áreas frescas', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -189,7 +203,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('tras abrir el diálogo el placeholder del área cambia a "Selecciona el área de destino"', async () => {
+  it('dado áreas cargadas cuando abre el diálogo entonces el placeholder del área es "Selecciona el área de destino"', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -202,7 +216,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('el diálogo muestra el input de Código', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces muestra el input de Código', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -233,14 +247,14 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       return Promise.resolve({ data: [] });
     });
   });
 
-  it('al hacer clic en una fila el Sheet se abre mostrando el código de la orden', async () => {
+  it('dado una orden en la tabla cuando hace clic en su fila entonces el Sheet muestra su código', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -253,7 +267,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre del área desde el catálogo (no del campo _nombre)', async () => {
+  it('dado el Sheet abierto cuando muestra el área entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -265,7 +279,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre de la sede desde el catálogo', async () => {
+  it('dado el Sheet abierto cuando muestra la sede entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -277,7 +291,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet NO muestra los labels "Máquina" ni "Operario" dentro del panel', async () => {
+  it('dado el Sheet abierto cuando se renderiza entonces no muestra los labels "Máquina" ni "Operario"', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -296,7 +310,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     expect(inSheet.queryByText('Operario')).not.toBeInTheDocument();
   });
 
-  it('el botón Editar del Sheet abre el formulario de edición', async () => {
+  it('dado el Sheet abierto cuando hace clic en Editar entonces abre el formulario de edición', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -316,5 +330,252 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
     });
+  });
+
+  it('dado el Sheet abierto cuando presiona Escape entonces limpia la orden seleccionada', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBeGreaterThanOrEqual(2);
+    });
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBe(1);
+    });
+  });
+});
+
+// ── Tests: ramas adicionales de cobertura ──────────────────────────────────────
+
+describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as Mock).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('dado /areas/ paginado con results cuando abre el diálogo entonces usa .results', async () => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: { results: mockAreas } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Selecciona el área de destino')).toBeInTheDocument();
+    });
+  });
+
+  it('dado /areas/ sin resultados ni results cuando abre el diálogo entonces usa un arreglo vacio', async () => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: {} });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByText('No hay áreas registradas')).toBeInTheDocument();
+    });
+  });
+
+  it('dado ?page=0 en la URL cuando renderiza entonces normaliza a la pagina 1', () => {
+    render(
+      <MemoryRouter initialEntries={['/?page=0']}>
+        <ManageOrdenesProduccion {...defaultProps} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/Página 1 de/)).toBeInTheDocument();
+  });
+
+  it('dado el dialogo de nueva orden abierto cuando presiona Escape entonces se cierra y resetea el formulario', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/Código/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('dado el dialogo de nueva orden abierto cuando areasProp cambia entonces no sincroniza hasta cerrar', async () => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return new Promise(() => {});
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} areas={[]} />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} areas={mockAreas} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('No hay áreas registradas')).toBeInTheDocument();
+  });
+
+  it('dado sin onOrderStatusChange cuando intenta iniciar el proceso entonces muestra un toast de error', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} onOrderStatusChange={undefined} />
+      </MemoryRouter>
+    );
+    const row = screen.getByText('OP-002').closest('tr') as HTMLElement; // OP-002 está 'pendiente'
+    const menuButton = within(row).getByRole('button', { name: 'Abrir menu' });
+    await user.click(menuButton);
+    const iniciarItem = await screen.findByRole('menuitem', { name: /Iniciar Proceso/i });
+    await user.click(iniciarItem);
+    expect(toastErrorMock).toHaveBeenCalledWith('La función de cambio de estado no está implementada.');
+  });
+
+  it('dado una orden con campos ausentes cuando edita entonces usa los valores por defecto y muestra "Sin asignar" y "-"', async () => {
+    const mockOrdenSparse = parcial<OrdenProduccion>({
+      id: 3,
+      codigo: 'OP-003',
+      producto_nombre: 'Producto X',
+      formula_color_nombre: '',
+      peso_neto_requerido: 30,
+      peso_producido: 0,
+      estado: 'pendiente',
+      fecha_creacion: '2026-05-03',
+      fecha_modificacion: '2026-05-03',
+      inventario_descontado: true,
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, mockOrdenSparse]} />
+      </MemoryRouter>
+    );
+
+    // Rama de tabla: sin maquina_asignada_nombre -> "Sin asignar"; sin fecha_fin_planificada -> "-"
+    const row = screen.getByText('OP-003').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Sin asignar')).toBeInTheDocument();
+    expect(within(row).getByText('-')).toBeInTheDocument();
+
+    // Rama de handleEdit: producto/formula_color/sede/area/fechas/prioridad ausentes
+    const menuButton = within(row).getByRole('button', { name: 'Abrir menu' });
+    await user.click(menuButton);
+    const editarItem = await screen.findByRole('menuitem', { name: /Editar/i });
+    await user.click(editarItem);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toHaveValue('OP-003');
+    });
+  });
+
+  it('dado una orden vencida cuando renderiza entonces resalta la fecha en rojo', () => {
+    const ordenVencida = parcial<OrdenProduccion>({
+      ...mockOrdenes[0],
+      id: 4,
+      codigo: 'OP-004',
+      fecha_fin_planificada: '2020-01-01',
+    });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenVencida]} />
+      </MemoryRouter>
+    );
+    const fecha = screen.getByText('2020-01-01');
+    expect(fecha.className).toContain('text-red-600');
+  });
+
+  it('dado una orden que vence hoy cuando renderiza entonces resalta la fecha en ambar', () => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const ordenHoy = parcial<OrdenProduccion>({
+      ...mockOrdenes[0],
+      id: 5,
+      codigo: 'OP-005',
+      fecha_fin_planificada: hoy,
+    });
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenHoy]} />
+      </MemoryRouter>
+    );
+    const fecha = screen.getByText(hoy);
+    expect(fecha.className).toContain('text-amber-600');
+  });
+});
+
+// ── Tests: paginación con muchas órdenes ────────────────────────────────────────
+
+describe('ManageOrdenesProduccion — paginación con muchas órdenes', () => {
+  const manyOrdenes: OrdenProduccion[] = Array.from({ length: 25 }, (_, i) => ({
+    ...mockOrdenes[0],
+    id: i + 10,
+    codigo: `OP-${100 + i}`,
+  }));
+
+  const renderManyOrdenes = () =>
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={manyOrdenes} />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as Mock).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('dado "Ir a página" con un valor valido cuando pierde el foco entonces navega', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '2');
+    await user.tab();
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado "Ir a página" con un valor fuera de rango cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '99');
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado "Ir a página" con 0 cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '0');
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado "Ir a página" vacio cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
 });

@@ -15,40 +15,43 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Max, OuterRef, Subquery, Sum
 
-from inventory.models import OrdenCompraSugerida, StockBodega
 from gestion.models import Cliente, PedidoVenta
+from inventory.models import MRPEjecucion, OrdenCompraSugerida, StockBodega
 
 # RFC 5424: logger bajo el namespace 'inventory' — capturado por el handler de settings.py
 logger = logging.getLogger("inventory.services.executive_kpi")
 
 
 # ---------------------------------------------------------------------------
-# Value Objects
+# Objetos de valor
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class MRPKPIs:
-    """KPIs del motor MRP para vista ejecutiva."""
-    ocs_pendientes: int
-    ocs_aprobadas: int
-    ocs_rechazadas: int
-    productos_en_deficit: int
+    """KPIs del MRP para la vista ejecutiva (ADR-012)."""
+
+    sugerencias_compra: int  # sugerencias vigentes (informativas)
+    productos_a_producir: int  # de la última ejecución completada de cada sede
+    ultima_ejecucion: datetime | None  # la más reciente de esas ejecuciones
 
 
 @dataclass(frozen=True)
 class StockKPIs:
     """KPIs de alertas de inventario."""
+
     productos_bajo_minimo: int
 
 
 @dataclass(frozen=True)
 class CarteraKPIs:
     """KPIs financieros de cartera y cobranza."""
+
     cuentas_por_cobrar: Decimal
     cartera_vencida: Decimal
     pedidos_pendientes: int
@@ -61,6 +64,7 @@ class ExecutiveKPIs:
     Contrato consolidado para el endpoint /kpi-ejecutivo/.
     Inmutable — garantiza consistencia entre el servicio y las vistas.
     """
+
     mrp: MRPKPIs
     stock: StockKPIs
     cartera: CarteraKPIs
@@ -69,6 +73,7 @@ class ExecutiveKPIs:
 # ---------------------------------------------------------------------------
 # Servicio
 # ---------------------------------------------------------------------------
+
 
 class ExecutiveKPIService:
     """
@@ -82,7 +87,7 @@ class ExecutiveKPIService:
     No conoce la capa HTTP (sin Request/Response).
     """
 
-    def __init__(self, sede_id: Optional[int] = None) -> None:
+    def __init__(self, sede_id: int | None = None) -> None:
         self._sede_id = sede_id
 
     # ------------------------------------------------------------------
@@ -93,7 +98,7 @@ class ExecutiveKPIService:
         """Punto de entrada único — Fachada."""
         logger.info(
             "Calculando KPIs ejecutivos consolidados",
-            extra={'sd': {'sede_id': str(self._sede_id or 'all')}},
+            extra={"sd": {"sede_id": str(self._sede_id or "all")}},
         )
         try:
             result = ExecutiveKPIs(
@@ -102,24 +107,24 @@ class ExecutiveKPIService:
                 cartera=self._cartera_kpis(),
             )
         except Exception as exc:
-            logger.error(
-                "Error calculando KPIs ejecutivos: %s", exc,
-                extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
-                exc_info=True,
+            logger.exception(
+                "Error calculando KPIs ejecutivos: %s",
+                exc,
+                extra={"sd": {"sede_id": str(self._sede_id or "all"), "error": type(exc).__name__}},
             )
             raise
         logger.info(
-            "KPIs ejecutivos calculados — ocs_pendientes=%s bajo_minimo=%s cxc=%s",
-            result.mrp.ocs_pendientes,
+            "KPIs ejecutivos calculados — sugerencias_compra=%s bajo_minimo=%s cxc=%s",
+            result.mrp.sugerencias_compra,
             result.stock.productos_bajo_minimo,
             result.cartera.cuentas_por_cobrar,
             extra={
-                'sd': {
-                    'sede_id': str(self._sede_id or 'all'),
-                    'ocs_pendientes': str(result.mrp.ocs_pendientes),
-                    'bajo_minimo': str(result.stock.productos_bajo_minimo),
-                    'cxc': str(result.cartera.cuentas_por_cobrar),
-                    'cartera_vencida': str(result.cartera.cartera_vencida),
+                "sd": {
+                    "sede_id": str(self._sede_id or "all"),
+                    "sugerencias_compra": str(result.mrp.sugerencias_compra),
+                    "bajo_minimo": str(result.stock.productos_bajo_minimo),
+                    "cxc": str(result.cartera.cuentas_por_cobrar),
+                    "cartera_vencida": str(result.cartera.cartera_vencida),
                 }
             },
         )
@@ -135,25 +140,20 @@ class ExecutiveKPIService:
         return qs
 
     def _mrp_kpis(self) -> MRPKPIs:
-        qs = self._filtrar_sede(OrdenCompraSugerida.objects.all())
-        counts = qs.values("estado").annotate(total=Count("id"))
-        mapping = {row["estado"]: row["total"] for row in counts}
-
-        # Productos únicos con déficit (al menos una OCS PENDIENTE)
-        productos_deficit = (
-            self._filtrar_sede(
-                OrdenCompraSugerida.objects.filter(estado="PENDIENTE")
+        completadas = MRPEjecucion.objects.filter(estado=MRPEjecucion.ESTADO_COMPLETADA)
+        ultima_de_su_sede = completadas.filter(sede_id=OuterRef("sede_id")).order_by("-inicio", "-id").values("pk")[:1]
+        ultimas = (
+            self._filtrar_sede(completadas)
+            .filter(pk=Subquery(ultima_de_su_sede))
+            .aggregate(
+                productos=Sum("productos_a_producir"),
+                fecha=Max("inicio"),
             )
-            .values("producto_id")
-            .distinct()
-            .count()
         )
-
         return MRPKPIs(
-            ocs_pendientes=mapping.get("PENDIENTE", 0),
-            ocs_aprobadas=mapping.get("APROBADA", 0),
-            ocs_rechazadas=mapping.get("RECHAZADA", 0),
-            productos_en_deficit=productos_deficit,
+            sugerencias_compra=self._filtrar_sede(OrdenCompraSugerida.objects.all()).count(),
+            productos_a_producir=ultimas["productos"] or 0,
+            ultima_ejecucion=ultimas["fecha"],
         )
 
     def _stock_kpis(self) -> StockKPIs:
@@ -162,6 +162,7 @@ class ExecutiveKPIService:
         Filtra por sede a través de bodega__sede si aplica.
         """
         from django.db.models import F as Fdb
+
         qs = StockBodega.objects.filter(cantidad__lt=Fdb("producto__stock_minimo"))
         if self._sede_id:
             qs = qs.filter(bodega__sede_id=self._sede_id)
@@ -178,10 +179,7 @@ class ExecutiveKPIService:
         )
 
         pedidos_qs = self._filtrar_sede(PedidoVenta.objects.all())
-        pedidos_counts = (
-            pedidos_qs.values("estado")
-            .annotate(total=Count("id"))
-        )
+        pedidos_counts = pedidos_qs.values("estado").annotate(total=Count("id"))
         estados_pedidos = {row["estado"]: row["total"] for row in pedidos_counts}
 
         return CarteraKPIs(

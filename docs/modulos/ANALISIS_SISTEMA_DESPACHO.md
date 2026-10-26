@@ -7,7 +7,7 @@
 
 ## Resumen Ejecutivo
 
-El sistema de despacho de TexCore es una solución de microservicios donde los componentes periféricos (scanning_service, reporting_excel) **no tienen acceso directo a la base de datos**. Toda la persistencia ocurre en Django, que actúa como único guardián de los datos. Los microservicios consumen una API interna autenticada con JWT RS256 (par de claves asimétricas). El módulo de despacho incorpora validación de completitud con confirmación de despachos parciales y trazabilidad completa de items no despachados.
+El sistema de despacho de TexCore es una solución de monolito Django con servicios satélite donde los componentes periféricos (scanning_service, reporting_excel) **no tienen acceso directo a la base de datos**. Toda la persistencia ocurre en Django, que actúa como único guardián de los datos. Los servicios satélite consumen una API interna autenticada con JWT RS256 (par de claves asimétricas). El módulo de despacho incorpora validación de completitud con confirmación de despachos parciales y trazabilidad completa de items no despachados.
 
 ---
 
@@ -62,7 +62,7 @@ ARQUITECTURA ACTUAL:
   reporting_excel  ──HTTP+JWT──▶ Django Internal API ──ORM──▶ SQL Server
 ```
 
-Solo Django (backend) tiene credenciales de base de datos. Los microservicios autentican su identidad con un `SERVICE_NAME` + `SERVICE_SECRET` y reciben un JWT RS256 de corta duración.
+Solo Django (backend) tiene credenciales de base de datos. Los servicios satélite autentican su identidad con un `SERVICE_NAME` + `SERVICE_SECRET` y reciben un JWT RS256 de corta duración.
 
 ---
 
@@ -71,7 +71,7 @@ Solo Django (backend) tiene credenciales de base de datos. Los microservicios au
 ### Flujo de Autenticacion Inicial
 
 ```
-Microservicio                    Django Backend
+Servicio Satélite                Django Backend
      │                                 │
      │  POST /api/internal/v1/auth/token/
      │  Body: { service_name, service_secret }
@@ -97,7 +97,7 @@ Microservicio                    Django Backend
 ### Flujo de Llamada Autenticada
 
 ```
-Microservicio                    Django Backend
+Servicio Satélite                Django Backend
      │                                 │
      │  GET /api/internal/v1/lotes/{codigo}/validate/
      │  Header: Authorization: Bearer <JWT>
@@ -148,11 +148,11 @@ El token se almacena solo en memoria del proceso (nunca en disco ni logs), cumpl
 }
 ```
 
-Firmado con clave RSA 2048 bits. La clave privada reside exclusivamente en Django (`INTERNAL_JWT_PRIVATE_KEY`). Los microservicios solo tienen la clave publica (`INTERNAL_JWT_PUBLIC_KEY`) para verificar.
+Firmado con clave RSA 2048 bits. La clave privada reside exclusivamente en Django (`INTERNAL_JWT_PRIVATE_KEY`). Los servicios satélite solo tienen la clave publica (`INTERNAL_JWT_PUBLIC_KEY`) para verificar.
 
 ---
 
-## Microservicio: scanning_service
+## Servicio Satélite: scanning_service
 
 ### Estructura Interna
 
@@ -285,7 +285,7 @@ Response (sin orden/producto):
 ```
 get_lote_by_codigo(codigo)
   │
-  │── GET /api/internal/v1/lotes/{codigo}/validate/
+  │── GET /api/internal/v1/lotes/{quote(codigo, safe='')}/validate/
   │   Authorization: Bearer <JWT>
   │
   ├── 404 → return None
@@ -300,9 +300,19 @@ get_stock_activo_por_lote(lote_id)
   │   (pop: limpia cache tras uso, una sola llamada HTTP por validacion)
 ```
 
+> **Fix 2026-08-25 — inyección de path sin codificar:** `codigo` viene tal cual del escáner físico.
+> Si el operario apunta por error al QR de trazabilidad de la etiqueta (una URL completa, con `/`)
+> en vez del código de barras, ese valor interpolado sin codificar en el f-string de la URL
+> corrompía el path de la request — Django no lograba enrutarla al endpoint de validación y caía
+> en el catch-all SPA (`TemplateDoesNotExist: index.html` → 500 en vez de un 404 limpio). Corregido
+> envolviendo `codigo` con `urllib.parse.quote(codigo, safe='')` antes de interpolarlo: cualquier
+> valor con caracteres especiales llega como un único segmento de path y simplemente no encuentra
+> el lote (`404` → `None` → `{"valid": false}`), sin importar qué símbolo se haya escaneado. Ver
+> `scanning_service/tests/test_django_client.py::test_get_lote_by_codigo_dado_codigo_con_barras_...`.
+
 ---
 
-## Microservicio: reporting_excel
+## Servicio Satélite: reporting_excel
 
 ### Patron DjangoReportRepository
 
@@ -844,7 +854,7 @@ nginx:
     - "443:443"  # Unico punto de entrada externo
 ```
 
-### Credenciales de Microservicios
+### Credenciales de Servicios Satélite
 
 Las credenciales (`ServiceCredential`) se almacenan con hash PBKDF2 (via `make_password` de Django). El secreto plano nunca se almacena en BD ni en logs.
 
@@ -940,15 +950,15 @@ Genera clave RSA 2048 bits. Salida: dos lineas para agregar al `.env`:
 
 Las newlines del PEM se codifican como `\n` para ser compatibles con variables de entorno.
 
-### Registrar Credenciales de Microservicios
+### Registrar Credenciales de Servicios Satélite
 
 ```bash
 # Primer despliegue (crea las credenciales en BD)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py register_services
 
 # Rotar secrets (actualiza los hashes en BD)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py register_services --force
 ```
 
@@ -957,7 +967,7 @@ Lee `SCANNING_SERVICE_SECRET` y `REPORTING_SERVICE_SECRET` del entorno y crea/ac
 ### Migraciones
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py migrate
 ```
 
@@ -967,18 +977,18 @@ La migracion `inventory/migrations/0028_...` agrego el campo `items_no_despachad
 
 ```bash
 # Logs del scanning service
-docker compose -f infrastructure/docker/docker-compose.prod.yml logs -f scanning
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod logs -f scanning
 
 # Verificar health del scanning service
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec scanning \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec scanning \
   curl http://localhost:8000/health
 
 # Verificar conectividad interna Django ↔ scanning
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec scanning \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec scanning \
   curl http://backend:8000/api/health/
 
 # Ver credenciales registradas (sin mostrar hashes)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py shell -c \
   "from internal_api.models import ServiceCredential; [print(c) for c in ServiceCredential.objects.all()]"
 ```
@@ -1090,9 +1100,8 @@ HistorialDespacho.id = 42
 | `internal_api/audit.py` | AuditLogger RFC 5424 |
 | `internal_api/urls.py` | URLconf de la API interna |
 | `inventory/models.py` | HistorialDespacho, DetalleHistorialDespachoPedido, DetalleHistorialDespacho |
-| `inventory/views.py` | ProcessDespachoAPIView, HistorialDespachoViewSet |
-| `reporting_excel/src/infrastructure/django_client.py` | DjangoReportRepository |
+| `inventory/views/despacho_views.py` | ProcessDespachoAPIView, HistorialDespachoViewSet |
 | `nginx/nginx.conf` | Rate limiting, security headers, routing |
 | `infrastructure/docker/docker-compose.prod.yml` | Configuracion de produccion con aislamiento de red |
 | `scripts/generate_rsa_keys.py` | Generador de par de claves RSA 2048 |
-| `gestion/management/commands/register_services.py` | Registro de credenciales de microservicios |
+| `gestion/management/commands/register_services.py` | Registro de credenciales de servicios satélite |

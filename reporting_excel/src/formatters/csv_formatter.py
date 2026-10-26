@@ -1,4 +1,5 @@
 """Formateador de salida CSV."""
+
 import pandas as pd
 from fastapi import Response
 

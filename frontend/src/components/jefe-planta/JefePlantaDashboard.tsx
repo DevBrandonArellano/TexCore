@@ -1,22 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } from '../../lib/types';
 import apiClient from '../../lib/axios';
+import { createLogger } from '../../lib/logger';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
+import { PlanProduccionMTS } from './PlanProduccionMTS';
+import { useAuth } from '../../lib/auth';
+import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search } from 'lucide-react';
 
-interface UsuarioBasico {
-  id: number;
-  username: string;
-  first_name: string;
-  last_name: string;
-  sede: number | null;
-}
+import { toArray } from '../../lib/collections';
+import { OrdenPayload } from './ordenUtils';
 
 // UX-1: semáforo de severidad para la eficiencia global (producido/requerido) —
 // 90%+ en línea con el plan, 70-89% requiere atención, <70% crítico.
@@ -26,7 +30,11 @@ function claseSeveridadEficiencia(pct: number): string {
   return 'text-red-700';
 }
 
+// RFC 5424 — logger del módulo (relay a /api/logs/ para WARNING+).
+const logger = createLogger('JefePlantaDashboard');
+
 export function JefePlantaDashboard() {
+  const { profile } = useAuth();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
@@ -34,102 +42,184 @@ export function JefePlantaDashboard() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
-  const [operarios, setOperarios] = useState<UsuarioBasico[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isExportingAvance, setIsExportingAvance] = useState(false);
+  const [isExportingBalance, setIsExportingBalance] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [pulsoDiario, setPulsoDiario] = useState({
+    kg_planificados_hoy: 0,
+    kg_producidos_hoy: 0,
+    kg_merma_hoy: 0,
+    wip_estancado: 0,
+  });
+  
 
-  const fetchData = async () => {
+  // `loading` se deriva de si la última carga terminada es la de la URL y la
+  // recarga vigentes: el efecto solo toca el estado cuando llega la respuesta.
+  const queryStr = new URLSearchParams(Object.fromEntries(searchParams.entries())).toString();
+  const [recarga, setRecarga] = useState(0);
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const loading = cargadoPara !== `${queryStr}|${recarga}`;
+
+  useEffect(() => {
+    let vigente = true;
+    const clave = `${queryStr}|${recarga}`;
+    const cargar = async () => {
+      try {
+        const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, pulsoRes] = await Promise.all([
+          apiClient.get(`/ordenes-produccion/?${queryStr}`),
+          apiClient.get('/productos/'),
+          apiClient.get('/formula-colors/'),
+          apiClient.get('/sedes/'),
+          apiClient.get('/maquinas/'),
+          apiClient.get('/areas/'),
+          apiClient.get('/bodegas/'),
+          apiClient.get('/produccion/pulso-diario/'),
+        ]);
+        if (!vigente) return;
+        setOrdenes(toArray(ordenesRes.data));
+        setProductos(toArray(productosRes.data));
+        setFormulas(toArray(formulasRes.data));
+        setSedes(toArray(sedesRes.data));
+        setMaquinas(toArray(maquinasRes.data));
+        setAreas(toArray(areasRes.data));
+        setBodegas(toArray(bodegasRes.data));
+        setPulsoDiario(pulsoRes.data);
+      } catch (error) {
+        if (!vigente) return;
+        logger.error('Fallo al cargar el panel de Jefe de Planta', {
+          operacion: 'fetchData',
+        });
+        toast.error(getApiErrorMessage(error, 'Error al cargar los datos del panel.'));
+      } finally {
+        if (vigente) setCargadoPara(clave);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [queryStr, recarga]);
+
+  const fetchData = useCallback(() => setRecarga((n) => n + 1), []);
+
+  // ── Exportación PDF — Reporte de Avance Operativo ────────────────────────
+  /**
+   * Llama al endpoint Django que proxia al printing_service.
+   * Patrón: POST → blob → createObjectURL → click() → revokeObjectURL.
+   * responseType:'blob' es obligatorio para que axios no intente parsear el PDF
+   * como JSON y corrompa los bytes.
+   */
+  const exportarAvancePdf = async () => {
+    setIsExportingAvance(true);
     try {
-      setLoading(true);
-      const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, usuariosRes] = await Promise.all([
-        apiClient.get('/ordenes-produccion/'),
-        apiClient.get('/productos/'),
-        apiClient.get('/formula-colors/'),
-        apiClient.get('/sedes/'),
-        apiClient.get('/maquinas/'),
-        apiClient.get('/areas/'),
-        apiClient.get('/bodegas/'),
-        apiClient.get('/users/'),
-      ]);
-      setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
-      setSedes(Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || []);
-      setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-      setAreas(Array.isArray(areasRes.data) ? areasRes.data : (areasRes.data as any).results || []);
-      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
-      setOperarios(Array.isArray(usuariosRes.data) ? usuariosRes.data : (usuariosRes.data as any).results || []);
+      const response = await apiClient.post(
+        '/internal/v1/reports/produccion/reporte-avance/',
+        { empresa_nombre: 'TexCore Industrial' },
+        { responseType: 'blob' },
+      );
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: 'application/pdf' }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href     = blobUrl;
+      anchor.download = `reporte_avance_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success('Reporte de Avance exportado correctamente');
     } catch (error) {
-      console.error('Error fetching data for dashboard:', error);
-      toast.error('Error al cargar los datos del panel.');
+      logger.error('Fallo al exportar PDF de Avance Operativo', { operacion: 'exportarAvancePdf' });
+      toast.error(getApiErrorMessage(error, 'Error al generar el PDF de Avance Operativo'));
     } finally {
-      setLoading(false);
+      setIsExportingAvance(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // ── Exportación PDF — Balance de Masas Mensual ───────────────────────────
+  // La sede NO se envía desde el cliente: el backend la deriva del usuario
+  // autenticado e impone el aislamiento (evita generar reportes de otra sede
+  // manipulando el orden de las órdenes visibles).
+  const exportarBalancePdf = async () => {
+    setIsExportingBalance(true);
+    try {
+      const mesLabel = new Date().toLocaleString('es-EC', { month: 'long', year: 'numeric' });
+      const response = await apiClient.post(
+        '/internal/v1/reports/produccion/reporte-balance/',
+        {
+          mes_label:      mesLabel,
+          empresa_nombre: 'TexCore Industrial',
+        },
+        { responseType: 'blob' },
+      );
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: 'application/pdf' }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href     = blobUrl;
+      anchor.download = `balance_masas_${new Date().toISOString().slice(0, 7)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success('Balance de Masas exportado correctamente');
+    } catch (error) {
+      logger.error('Fallo al exportar PDF de Balance de Masas', { operacion: 'exportarBalancePdf' });
+      toast.error(getApiErrorMessage(error, 'Error al generar el PDF de Balance de Masas'));
+    } finally {
+      setIsExportingBalance(false);
+    }
+  };
 
-  // KPIs derivados del estado de las órdenes
-  const kpis = useMemo(() => {
-    const pendientes = ordenes.filter(o => o.estado === 'pendiente').length;
-    const enProceso = ordenes.filter(o => o.estado === 'en_proceso').length;
-    const finalizadas = ordenes.filter(o => o.estado === 'finalizada').length;
-    const today = new Date().toISOString().split('T')[0];
-    const vencidas = ordenes.filter(o =>
-      o.estado !== 'finalizada' && o.fecha_fin_planificada && o.fecha_fin_planificada < today
-    ).length;
-    const totalRequerido = ordenes.reduce((s, o) => s + Number(o.peso_neto_requerido || 0), 0);
-    const totalProducido = ordenes.reduce((s, o) => s + Number(o.peso_producido || 0), 0);
-    const eficiencia = totalRequerido > 0 ? Math.round((totalProducido / totalRequerido) * 100) : 0;
-    return { pendientes, enProceso, finalizadas, vencidas, eficiencia };
-  }, [ordenes]);
+  // KPIs Torre de Control Industrial
+  const cumplimientoDiario = pulsoDiario.kg_planificados_hoy > 0 
+    ? Math.round((pulsoDiario.kg_producidos_hoy / pulsoDiario.kg_planificados_hoy) * 100) 
+    : 0;
+  const indiceDesperdicio = pulsoDiario.kg_producidos_hoy > 0
+    ? ((pulsoDiario.kg_merma_hoy / pulsoDiario.kg_producidos_hoy) * 100).toFixed(2)
+    : "0.00";
 
-  const handleOrdenCreate = async (data: any): Promise<boolean> => {
+  const handleOrdenCreate = async (data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.post<OrdenProduccion>('/ordenes-produccion/', data);
       setOrdenes(prev => [response.data, ...prev]);
       toast.success('Orden de producción creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response?.status === 400) {
-        const msgs = Object.entries(axiosError.response.data).map(([k, v]) => `${k}: ${v}`).join(' | ');
-        toast.error('Error de validación', { description: msgs });
-      } else {
-        toast.error('Error al crear la orden de producción');
-      }
+      logger.warning('Fallo al crear orden de producción', { operacion: 'handleOrdenCreate' });
+      toast.error(getApiErrorMessage(error, 'Error al crear la orden de producción'));
       return false;
     }
   };
 
-  const handleOrdenUpdate = async (id: number, data: any): Promise<boolean> => {
+  const handleOrdenUpdate = async (id: number, data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.patch<OrdenProduccion>(`/ordenes-produccion/${id}/`, data);
       setOrdenes(prev => prev.map(o => (o.id === id ? response.data : o)));
       toast.success('Orden actualizada');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response?.status === 400) {
-        const msgs = Object.entries(axiosError.response.data).map(([k, v]) => `${k}: ${v}`).join(' | ');
-        toast.error('Error de validación', { description: msgs });
-      } else {
-        toast.error('Error al actualizar la orden');
-      }
+      logger.warning('Fallo al actualizar orden de producción', {
+        operacion: 'handleOrdenUpdate', orden_id: id,
+      });
+      toast.error(getApiErrorMessage(error, 'Error al actualizar la orden'));
       return false;
     }
   };
 
-  const handleOrdenDelete = async (id: number) => {
-    if (window.confirm('¿Eliminar esta orden de producción? Esta acción no se puede deshacer.')) {
-      try {
-        await apiClient.delete(`/ordenes-produccion/${id}/`);
-        setOrdenes(prev => prev.filter(o => o.id !== id));
-        toast.success('Orden eliminada');
-      } catch {
-        toast.error('Error al eliminar la orden');
-      }
+  // El backend exige la justificación (ISO 9001) y la guarda en el AuditLog.
+  const handleOrdenDelete = async (id: number, justificacion: string): Promise<boolean> => {
+    try {
+      await apiClient.delete(`/ordenes-produccion/${id}/`, { data: { justificacion } });
+      setOrdenes(prev => prev.filter(o => o.id !== id));
+      toast.success('Orden eliminada');
+      return true;
+    } catch (error) {
+      logger.warning('Fallo al eliminar orden de producción', {
+        operacion: 'handleOrdenDelete', orden_id: id,
+      });
+      toast.error(getApiErrorMessage(error, 'Error al eliminar la orden'));
+      return false;
     }
   };
 
@@ -149,66 +239,76 @@ export function JefePlantaDashboard() {
       toast.success(labels[newStatus] || 'Estado actualizado');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
+      logger.warning('Fallo al cambiar estado de orden', {
+        operacion: 'handleOrderStatusChange', orden_id: id, estado_destino: newStatus,
+      });
+      const axiosError = error as AxiosError<{ estado?: string[] }>;
       if (axiosError.response?.status === 400) {
-        const msg = axiosError.response.data?.estado?.[0] || JSON.stringify(axiosError.response.data);
+        const msg = axiosError.response.data?.estado?.[0] || getApiErrorMessage(error);
         toast.error('No se puede cambiar el estado', { description: msg });
       } else {
-        toast.error('Error al cambiar el estado de la orden');
+        toast.error(getApiErrorMessage(error, 'Error al cambiar el estado de la orden'));
       }
       return false;
     }
   };
 
-  const kpiCards = [
+  const controlTowerCards = [
     {
-      label: 'Pendientes',
-      value: kpis.pendientes,
-      icon: <Factory className="w-5 h-5 text-slate-500" />,
-      color: 'bg-slate-50 border-slate-200',
-      textColor: 'text-slate-700',
-    },
-    {
-      label: 'En Proceso',
-      value: kpis.enProceso,
-      icon: <Play className="w-5 h-5 text-blue-500" />,
-      color: 'bg-blue-50 border-blue-200',
-      textColor: 'text-blue-700',
-    },
-    {
-      label: 'Finalizadas',
-      value: kpis.finalizadas,
-      icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />,
+      label: 'Cumplimiento Diario',
+      value: `${cumplimientoDiario}%`,
+      icon: <TrendingUp className="w-6 h-6 text-emerald-500" />,
       color: 'bg-emerald-50 border-emerald-200',
-      textColor: 'text-emerald-700',
+      textColor: claseSeveridadEficiencia(cumplimientoDiario),
     },
     {
-      label: 'Eficiencia Global',
-      value: `${kpis.eficiencia}%`,
-      icon: <TrendingUp className="w-5 h-5 text-purple-500" />,
-      color: 'bg-purple-50 border-purple-200',
-      // UX-1: color de severidad — 90%+ en línea (schedule attainment), 70-89%
-      // requiere atención, <70% crítico (mismo criterio que Jefe de Área/OEE).
-      textColor: claseSeveridadEficiencia(kpis.eficiencia),
+      label: 'Índice de Desperdicio',
+      value: `${indiceDesperdicio}%`,
+      icon: <Factory className="w-6 h-6 text-amber-500" />,
+      color: 'bg-amber-50 border-amber-200',
+      textColor: 'text-amber-700',
     },
-    // UX-6: siempre visible (aunque sea 0) — ocultarla quitaba la señal
-    // tranquilizadora de "0 vencidas" y hacía saltar el grid de 4 a 5 columnas.
     {
-      label: 'Vencidas',
-      value: kpis.vencidas,
-      icon: <AlertTriangle className="w-5 h-5 text-red-500" />,
-      color: 'bg-red-50 border-red-200',
-      textColor: 'text-red-700',
+      label: 'Alerta WIP Estancado',
+      value: `${pulsoDiario.wip_estancado} Kg`,
+      icon: <AlertTriangle className={`w-6 h-6 ${pulsoDiario.wip_estancado > 0 ? 'text-red-500 animate-pulse' : 'text-slate-400'}`} />,
+      color: pulsoDiario.wip_estancado > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200',
+      textColor: pulsoDiario.wip_estancado > 0 ? 'text-red-700 font-black' : 'text-slate-600',
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Panel de Jefe de Planta</h1>
-        <p className="text-muted-foreground">
-          Gestión de órdenes de producción, lotes y control de avance.
-        </p>
+      {/* Título + botones de exportación */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Panel de Jefe de Planta</h1>
+          <p className="text-muted-foreground">
+            Gestión de órdenes de producción, lotes y control de avance.
+          </p>
+        </div>
+
+        {/* ── Botones de exportación PDF ───────────────────────── */}
+        <div className="flex gap-2 shrink-0 items-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                <FileDown className="w-4 h-4" />
+                Acciones Gerenciales
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={exportarAvancePdf} disabled={isExportingAvance} className="gap-2 cursor-pointer">
+                {isExportingAvance ? <Loader2 className="w-4 h-4 animate-spin" /> : <TrendingUp className="w-4 h-4 text-teal-600" />}
+                <span>Reporte Avance Operativo</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportarBalancePdf} disabled={isExportingBalance} className="gap-2 cursor-pointer">
+                {isExportingBalance ? <Loader2 className="w-4 h-4 animate-spin" /> : <Factory className="w-4 h-4 text-violet-600" />}
+                <span>Balance de Masas Mensual</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -217,40 +317,83 @@ export function JefePlantaDashboard() {
           <Loader2 className="w-4 h-4 animate-spin" /> Cargando datos...
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {kpiCards.map(card => (
-            <Card key={card.label} className={`border ${card.color}`}>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground font-medium">{card.label}</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {controlTowerCards.map(card => (
+            <Card key={card.label} className={`border ${card.color} shadow-xs transition-all hover:shadow-md`}>
+              <CardContent className="pt-6 pb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-slate-600 uppercase tracking-wider">{card.label}</span>
                   {card.icon}
                 </div>
-                <div className={`text-3xl font-bold ${card.textColor}`}>{card.value}</div>
+                <div className={`text-4xl font-extrabold tracking-tight ${card.textColor}`}>{card.value}</div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      <ManageOrdenesProduccion
-        ordenes={ordenes}
-        productos={productos}
-        formulas={formulas}
-        sedes={sedes}
-        maquinas={maquinas}
-        areas={areas}
-        bodegas={bodegas}
-        onOrdenCreate={handleOrdenCreate}
-        onOrdenUpdate={handleOrdenUpdate}
-        onOrderStatusChange={handleOrderStatusChange}
-        onOrdenDelete={handleOrdenDelete}
-        loading={loading}
-        onDataRefresh={fetchData}
-      />
+      <Tabs defaultValue="ordenes" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto p-1 bg-muted/60">
+          <TabsTrigger value="ordenes" className="gap-2 py-2">
+            <Factory className="w-4 h-4" />
+            <span>Órdenes de Trabajo (OP)</span>
+          </TabsTrigger>
+          <TabsTrigger value="plan_mts" className="gap-2 py-2">
+            <TrendingUp className="w-4 h-4" />
+            <span>Plan Maestro (MTS)</span>
+          </TabsTrigger>
+          <TabsTrigger value="corridas_mes" className="gap-2 py-2">
+            <Play className="w-4 h-4" />
+            <span>Corridas Continuas (MES)</span>
+          </TabsTrigger>
+          <TabsTrigger value="transferencias" className="gap-2 py-2">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Transferencias Interárea</span>
+          </TabsTrigger>
+          <TabsTrigger value="lotes" className="gap-2 py-2">
+            <Search className="w-4 h-4" />
+            <span>Buscador de Lotes</span>
+          </TabsTrigger>
+        </TabsList>
 
-      <TransferenciasInterarea />
+        <TabsContent value="ordenes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <ManageOrdenesProduccion
+            ordenes={ordenes}
+            productos={productos}
+            formulas={formulas}
+            sedes={sedes}
+            maquinas={maquinas}
+            areas={areas}
+            bodegas={bodegas}
+            onOrdenCreate={handleOrdenCreate}
+            onOrdenUpdate={handleOrdenUpdate}
+            onOrderStatusChange={handleOrderStatusChange}
+            onOrdenDelete={handleOrdenDelete}
+            loading={loading}
+            onDataRefresh={fetchData}
+          />
+        </TabsContent>
 
-      <BuscadorLotes />
+        <TabsContent value="plan_mts" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <PlanProduccionMTS
+            sedeNombre={sedes.find((s) => s.id === profile?.user?.sede)?.nombre}
+            bodegas={bodegas}
+            maquinas={maquinas}
+          />
+        </TabsContent>
+
+        <TabsContent value="corridas_mes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <CorridaContinuaDashboard />
+        </TabsContent>
+
+        <TabsContent value="transferencias" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <TransferenciasInterarea />
+        </TabsContent>
+
+        <TabsContent value="lotes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <BuscadorLotes />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

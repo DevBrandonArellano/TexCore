@@ -17,16 +17,32 @@ venv/
 .env
 .env.example
 
+# Certificados TLS — Dockerfile.prod usa COPY . . con el repo como contexto;
+# sin esto, la llave privada autofirmada de nginx (nginx/certs/*.key) quedaba
+# embebida dentro de la imagen del backend (detectado por Trivy 2026-09-22).
+nginx/certs/
+
+# Socket de control de gunicorn: lo crea el backend de desarrollo (que monta el repo)
+# como root en la raíz; al estar en el contexto, `docker build` falla con «no permission to read».
+gunicorn.ctl
+
 # Node
 node_modules/
 frontend/node_modules/
 npm-debug.log
 .npm
 
-# Build artifacts
+# Build and testing artifacts
 frontend/build/
 dist/
 build/
+coverage/
+frontend/coverage/
+reports/
+.coverage
+.pytest_cache/
+.vitest/
+graphify-out/
 
 # IDEs and OS files
 .idea/
@@ -36,6 +52,7 @@ build/
 
 # Logs
 logs/*.log
+
 
 # Documentation (can be large)
 # documentation/

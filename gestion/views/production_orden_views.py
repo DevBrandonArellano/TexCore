@@ -1,0 +1,688 @@
+import logging
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
+from django.db.models import F, Prefetch, Sum
+from django.shortcuts import get_object_or_404
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from gestion.models import ComponenteMezclaOP, OrdenProduccion
+from gestion.permissions import (
+    IsDosificacionRole,
+    IsJefeAreaOrAdmin,
+    IsJefeAreaOrOperarioOrAdmin,
+    IsJefePlantaOrAdmin,
+    IsTintoreroOrAdmin,
+    es_jefe_area_de_linea,
+    filtrar_por_sede,
+    validar_misma_sede,
+)
+from gestion.serializers import (
+    CompletarDetallesOrdenSerializer,
+    DescargaQuimicoOPSerializer,
+    DosificacionLitrosSerializer,
+    OrdenProduccionEstadoSerializer,
+    OrdenProduccionSerializer,
+    TransformacionProductoSerializer,
+)
+from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.services.services_formula import calcular_dosificacion_desde_snapshot
+from gestion.services.transformacion import TransformacionService
+from gestion.services.trazabilidad import TrazabilidadService
+from gestion.services.versionado_formula import VersionadoFormulaService
+
+from ._common import parse_int_param
+
+logger = logging.getLogger("gestion.views")
+
+
+def _stock_libre_en_bodegas(bodega_ids, producto_ids) -> dict:
+    """Stock libre (cantidad − comprometido) por (bodega, producto)."""
+    from inventory.models import StockBodega
+
+    if not bodega_ids or not producto_ids:
+        return {}
+    filas = (
+        StockBodega.objects.filter(bodega_id__in=bodega_ids, producto_id__in=producto_ids)
+        .values("bodega_id", "producto_id")
+        .annotate(libre=Sum(F("cantidad") - F("stock_comprometido")))
+    )
+    return {(f["bodega_id"], f["producto_id"]): f["libre"] or Decimal("0") for f in filas}
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class OrdenProduccionViewSet(viewsets.ModelViewSet):
+    serializer_class = OrdenProduccionSerializer
+    pagination_class = StandardResultsSetPagination
+    # SearchFilter es nativo de DRF (búsqueda por texto). El filtrado por estado
+    # y máquina se hace manualmente en get_queryset (con validación de tipo) para
+    # NO depender de django-filter, que no está en requirements ni instalado —
+    # importarlo hacía fallar el arranque de la app.
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["codigo", "producto_entrada__descripcion", "producto_salida__descripcion"]
+
+    def get_permissions(self):
+        if self.action in ("stock_quimicos", "descargas_quimico", "descargas_quimico_orden"):
+            return [IsAuthenticated(), IsTintoreroOrAdmin()]
+        if self.action == "calcular_dosificacion":
+            # Vista previa de solo lectura: el Jefe de Planta fija los litros de baño.
+            return [IsAuthenticated(), IsDosificacionRole()]
+        if self.action == "historial":
+            return [IsAuthenticated()]
+        if self.action == "create":
+            # Regla de negocio: la OP la genera el Jefe de Planta (o Admin) para
+            # un área específica. El Jefe de Área NO crea OPs, solo asigna sus
+            # propios recursos (máquina/operario) a las OPs ya creadas.
+            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
+        if self.action == "completar_detalles":
+            # Solo Jefe de Área puede completar detalles
+            return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+        if self.action == "registrar_transformacion":
+            # Jefe de Área u Operario del área (el Bodeguero queda excluido)
+            return [IsAuthenticated(), IsJefeAreaOrOperarioOrAdmin()]
+        if self.action in ("update", "partial_update"):
+            # Peso, fórmula y bodega de químicos disparan descargas de stock: solo el
+            # Jefe de Planta y los admins. El Jefe de Área usa completar_detalles.
+            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
+        if self.action in ["list", "retrieve", "transformaciones", "trazabilidad"]:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Todo lo que OrdenProduccionSerializer lee por fila va en el JOIN o en
+        # un prefetch: 'lotes' alimenta peso_producido y la mezcla anidada trae
+        # su producto/bodega. Sin esto, 7 consultas extra por orden (RNF-03).
+        queryset = (
+            OrdenProduccion.objects.select_related(
+                "producto_entrada",
+                "producto_salida",
+                "formula_color",
+                "sede",
+                "area",
+                "maquina_asignada",
+                "operario_asignado",
+                "bodega_entrada",
+            )
+            .prefetch_related(
+                "lotes",
+                Prefetch(
+                    "componentes_mezcla",
+                    queryset=ComponenteMezclaOP.objects.select_related("producto", "bodega"),
+                ),
+            )
+            .all()
+        )
+
+        # Filtra por área si el usuario es Jefe de Área
+        if (
+            user.groups.filter(name="jefe_area").exists()
+            and not user.is_superuser
+            and hasattr(user, "area")
+            and user.area
+        ):
+            queryset = queryset.filter(area=user.area)
+
+        # Filtro para operarios: solo muestra las órdenes asignadas
+        if user.groups.filter(name="operario").exists() and not user.is_superuser:
+            queryset = queryset.filter(operario_asignado=user)
+
+        # Multi-tenancy (OWASP A01): también en retrieve/update/acciones (get_object → 404).
+        queryset = filtrar_por_sede(queryset, user)
+
+        sede_id = parse_int_param(self.request.query_params.get("sede_id"), "sede_id")
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+
+        # Filtros de la UI (reemplazan a filterset_fields de django-filter):
+        estado = self.request.query_params.get("estado")
+        if estado:
+            queryset = queryset.filter(estado=estado)
+
+        maquina_id = parse_int_param(self.request.query_params.get("maquina_asignada"), "maquina_asignada")
+        if maquina_id:
+            queryset = queryset.filter(maquina_asignada_id=maquina_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        """Jefe de Planta crea orden básica: código, peso, área"""
+        user = self.request.user
+        try:
+            if not serializer.validated_data.get("sede") and hasattr(user, "sede") and user.sede:
+                orden = serializer.save(sede=user.sede)
+            else:
+                orden = serializer.save()
+
+            logger.info(
+                "Orden de produccion creada por Jefe de Planta",
+                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+            )
+
+            # Descarga automática de químicos si la OP ya nace con fórmula y bodega
+            # de químicos (creación en un solo paso). El servicio es idempotente vía
+            # inventario_descontado y atómico internamente.
+            if orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info(
+                    "Descarga automática de químicos al crear OP",
+                    extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+                )
+        except Exception as e:
+            logger.exception(
+                "Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}}
+            )
+            raise
+
+    @action(detail=True, methods=["patch"])
+    def completar_detalles(self, request, pk=None):
+        """
+        Jefe de Área completa los detalles de la orden: productos y bodegas de
+        entrada/salida, máquina, operario, fórmula y bodega de químicos. Con
+        `iniciar: true` la orden pasa a en_proceso en la misma transacción.
+
+        OWASP A01: el Jefe de Área solo opera su área; la máquina es del área de
+        la orden y el resto de referencias de su sede (productos y fórmulas
+        también pueden ser globales). Un id ajeno responde como inexistente.
+        """
+        orden = self.get_object()
+        user = request.user
+
+        if (es_jefe_area_de_linea(user) and not user.area_id) or (user.area_id and user.area_id != orden.area_id):
+            return Response(
+                {"detail": "Solo el jefe del área asignada puede completar detalles."}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        entrada = CompletarDetallesOrdenSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        datos = dict(entrada.validated_data)
+        iniciar = datos.pop("iniciar", False)
+        self._validar_alcance_detalles(orden, datos)
+
+        try:
+            with transaction.atomic():
+                for campo, valor in datos.items():
+                    setattr(orden, campo, valor)
+                orden.save()
+
+                # Descarga automática de químicos si la OP tiene fórmula
+                if orden.formula_color and orden.bodega_quimicos:
+                    DescargaQuimicosService.descargar_para_op(orden, user)
+                    logger.info(
+                        "Descarga de químicos ejecutada para OP-%s",
+                        orden.codigo,
+                        extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}},
+                    )
+
+                if iniciar:
+                    estado = OrdenProduccionEstadoSerializer(orden, data={"estado": "en_proceso"}, partial=True)
+                    estado.is_valid(raise_exception=True)
+                    estado.save()
+        except (ValidationError, DjangoValidationError):
+            raise
+        except Exception:
+            logger.exception(
+                "Error al completar detalles de OP", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}}
+            )
+            return Response(
+                {"detail": "Error inesperado al completar los detalles de la orden."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        logger.info(
+            "Detalles de OP completados por Jefe de Área",
+            extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+        )
+        return Response(OrdenProduccionSerializer(orden).data, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _validar_alcance_detalles(orden, datos):
+        maquina = datos.get("maquina_asignada")
+        if maquina is not None and maquina.area_id != orden.area_id:
+            raise ValidationError({"maquina_asignada": "No encontrado."})
+        validar_misma_sede(
+            orden.sede_id,
+            operario_asignado=datos.get("operario_asignado"),
+            bodega_entrada=datos.get("bodega_entrada"),
+            bodega_salida=datos.get("bodega_salida"),
+            bodega_quimicos=datos.get("bodega_quimicos"),
+        )
+        for campo in ("producto_entrada", "producto_salida", "formula_color"):
+            ref = datos.get(campo)
+            if ref is not None and ref.sede_id not in (None, orden.sede_id):
+                raise ValidationError({campo: "No encontrado."})
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        orden_actual = self.get_object()
+        justificacion = str(self.request.data.get("justificacion") or "").strip()
+
+        # Validar justificación si ya hay descarga de químicos
+        if orden_actual.inventario_descontado and not justificacion:
+            raise ValidationError(
+                {"justificacion": "Justificación requerida para modificar una OP con químicos ya descontados."}
+            )
+
+        try:
+            orden = serializer.save()
+
+            # Ajustar descarga si ya estaba descontada y hay cambios en peso o fórmula
+            peso_changed = orden.peso_neto_requerido != orden_actual.peso_neto_requerido
+            formula_changed = orden.formula_color != orden_actual.formula_color
+            if orden.inventario_descontado and (peso_changed or formula_changed):
+                DescargaQuimicosService.ajustar_descarga_op(orden, user, justificacion)
+                logger.info(
+                    "Descarga de químicos ajustada para OP-%s",
+                    orden.codigo,
+                    extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+                )
+            elif orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
+                # Primera descarga si no se había hecho
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info(
+                    "Descarga de químicos ejecutada para OP-%s",
+                    orden.codigo,
+                    extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+                )
+
+            logger.info(
+                "Orden de produccion actualizada exitosamente",
+                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+            )
+        except Exception as e:
+            logger.exception(
+                "Error al actualizar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}}
+            )
+            raise
+
+    def destroy(self, request, *args, **kwargs):
+        user = request.user
+        orden = self.get_object()
+        justificacion = str(request.data.get("justificacion") or "").strip()
+
+        # Validar justificación obligatoria para eliminar OP (ISO 9001: causa trazable)
+        if not justificacion:
+            return Response(
+                {"justificacion": "Justificación requerida para eliminar una orden de producción."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            with transaction.atomic():
+                # Revertir descarga de químicos si ya estaba descontada
+                if orden.inventario_descontado:
+                    DescargaQuimicosService.revertir_descarga_op(orden, user, justificacion)
+                    logger.info(
+                        "Descarga de químicos revertida para OP-%s",
+                        orden.codigo,
+                        extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}},
+                    )
+
+                # ISO 27001 A.12.4: la causa queda en el AuditLog del DELETE.
+                orden._justificacion_auditoria = justificacion
+                orden.delete()
+                logger.info(
+                    "Orden de produccion eliminada exitosamente",
+                    extra={"sd": {"entity": "OrdenProduccion", "user": user.username}},
+                )
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except (ValidationError, DjangoValidationError):
+            raise
+        except Exception:
+            # OWASP A05: el detalle interno va al log, no a la respuesta.
+            logger.exception(
+                "Error al eliminar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}}
+            )
+            return Response(
+                {"detail": "Error inesperado al eliminar la orden."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=["get"])
+    def requisitos_materiales(self, request, pk=None):
+        """
+        TEX-28: materiales que necesita la orden para completarse, con el mismo cálculo
+        que el MRP (producto de entrada pendiente y químicos con la dosificación de la
+        descarga), el stock libre en la bodega de la orden y lo que falta (CA-2).
+        """
+        from inventory.services.mrp import requerimientos_de_orden
+
+        orden = self.get_object()
+        analisis = requerimientos_de_orden(orden)
+        disponible = _stock_libre_en_bodegas(
+            {orden.bodega_entrada_id, orden.bodega_quimicos_id} - {None},
+            {req.producto.pk for req in analisis.requerimientos},
+        )
+
+        requisitos = []
+        for req in analisis.requerimientos:
+            bodega_id = orden.bodega_entrada_id if req.es_base else orden.bodega_quimicos_id
+            libre = disponible.get((bodega_id, req.producto.pk), Decimal("0")).quantize(Decimal("0.001"))
+            faltante = Decimal("0") if req.ya_descontado else max(req.cantidad_kg - libre, Decimal("0"))
+            requisitos.append(
+                {
+                    "producto_id": req.producto.pk,
+                    "producto_codigo": req.producto.codigo,
+                    "producto_nombre": req.producto.descripcion,
+                    "tipo": req.producto.tipo,
+                    "cantidad_requerida": req.cantidad_kg,
+                    "unidad": req.producto.unidad_medida,
+                    "es_base": req.es_base,
+                    "ya_descontado": req.ya_descontado,
+                    "stock_disponible": libre,
+                    "faltante": faltante,
+                }
+            )
+
+        producido = orden.lotes.aggregate(total=Sum("peso_neto_producido"))["total"] or Decimal("0")
+        peso_pendiente = (
+            max(orden.peso_neto_requerido - producido, Decimal("0")).quantize(Decimal("0.01"))
+            if orden.peso_neto_requerido is not None
+            else None
+        )
+        return Response(
+            {
+                "orden_codigo": orden.codigo,
+                "peso_total_op": orden.peso_neto_requerido,
+                "peso_pendiente": peso_pendiente,
+                "requisitos": requisitos,
+                "advertencias": analisis.advertencias,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="stock-quimicos",
+        permission_classes=[IsAuthenticated, IsTintoreroOrAdmin],
+    )
+    def stock_quimicos(self, request):
+        """
+        ISP: Endpoint específico para tintorero para consultar stock de químicos disponibles.
+        Retorna lista de productos tipo='quimico' con stock actual, mínimo y estado de alerta.
+        """
+        sede_id = parse_int_param(request.query_params.get("sede_id"), "sede_id")
+        if not sede_id and hasattr(request.user, "sede") and request.user.sede:
+            sede_id = request.user.sede.id
+        elif not sede_id:
+            return Response({"error": "sede_id requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from django.db.models import BooleanField, Case, F, When
+
+            from inventory.models import StockBodega
+
+            # Filtrar stock de químicos en bodegas de la sede
+            stock_quimicos = (
+                StockBodega.objects.filter(
+                    bodega__sede_id=sede_id,
+                    producto__tipo="quimico",
+                    lote__isnull=True,  # Solo stock sin lote (químicos de uso general)
+                )
+                .select_related("producto", "bodega")
+                .annotate(
+                    alerta=Case(
+                        When(cantidad__lt=F("producto__stock_minimo"), then=True),
+                        default=False,
+                        output_field=BooleanField(),
+                    )
+                )
+                .annotate(
+                    producto_codigo=F("producto__codigo"),
+                    producto_descripcion=F("producto__descripcion"),
+                    stock_minimo=F("producto__stock_minimo"),
+                    bodega_nombre=F("bodega__nombre"),
+                )
+                .values(
+                    "producto_id",
+                    "producto_codigo",
+                    "producto_descripcion",
+                    "cantidad",
+                    "stock_minimo",
+                    "alerta",
+                    "bodega_nombre",
+                )
+                .order_by("-alerta", "producto_codigo")
+            )
+
+            return Response(stock_quimicos, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception(
+                "Error obteniendo stock de químicos: %s",
+                e,
+            )
+            return Response(
+                {"error": "Error interno al obtener el stock de químicos."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="descargas-quimico",
+        permission_classes=[IsAuthenticated, IsTintoreroOrAdmin],
+    )
+    def descargas_quimico(self, request):
+        """
+        Historial de descargas aplicadas de un químico específico, para el
+        panel de "Stock de Químicos" del tintorero (botón "Ver historial").
+        """
+        from gestion.models import DescargaQuimicoOP
+
+        producto_id = parse_int_param(request.query_params.get("producto_id"), "producto_id")
+        if not producto_id:
+            return Response({"error": "producto_id requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
+        limit = parse_int_param(request.query_params.get("limit"), "limit") or 50
+
+        sede_id = parse_int_param(request.query_params.get("sede_id"), "sede_id")
+        if not sede_id and hasattr(request.user, "sede") and request.user.sede:
+            sede_id = request.user.sede.id
+
+        descargas = DescargaQuimicoOP.objects.filter(
+            producto_id=producto_id,
+            estado="aplicada",
+        ).select_related("producto", "bodega", "descargado_por")
+
+        if sede_id:
+            descargas = descargas.filter(bodega__sede_id=sede_id)
+
+        descargas = descargas.order_by("-fecha_descarga")[:limit]
+
+        serializer = DescargaQuimicoOPSerializer(descargas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["patch", "post"], url_path="cambiar_estado")
+    def cambiar_estado(self, request, pk=None):
+        orden = self.get_object()
+        serializer = OrdenProduccionEstadoSerializer(orden, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "estado actualizado", "estado": serializer.data["estado"]})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # ------------------------------------------------------------------
+    # Trazabilidad de transformaciones máquina a máquina
+    # ------------------------------------------------------------------
+    def _puede_operar_area(self, user, orden):
+        """Aislamiento por área/sede: admins y jefe de planta ven todo; el
+        jefe de área y el operario solo operan en su propia área Y sede.
+        El doble chequeo (área + sede) es defensa en profundidad ante una
+        asignación de área inconsistente con la sede del usuario."""
+        if user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "admin_sede", "jefe_planta"]).exists():
+            return True
+        return bool(getattr(user, "area_id", None)) and user.area_id == orden.area_id and user.sede_id == orden.sede_id
+
+    @action(detail=True, methods=["post"], url_path="registrar-transformacion")
+    def registrar_transformacion(self, request, pk=None):
+        """Registra una transformación (un paso de máquina) en la OP.
+
+        Solo Jefe de Área / Operario del área (o admins). El producto de entrada
+        y la merma se derivan/calculan en el servicio y el modelo.
+        """
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
+        user = request.user
+        if not self._puede_operar_area(user, orden):
+            return Response(
+                {"detail": "No pertenece al área de la orden de producción."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            transformacion = TransformacionService.registrar(orden, request.data, user)
+        except DjangoValidationError as e:
+            detalle = e.message_dict if hasattr(e, "message_dict") else e.messages
+            return Response({"detail": detalle}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            TransformacionProductoSerializer(transformacion).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="transformaciones")
+    def transformaciones(self, request, pk=None):
+        """Lista las transformaciones de la OP en orden de secuencia."""
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
+        if not self._puede_operar_area(request.user, orden):
+            return Response(
+                {"detail": "No pertenece al área de la orden de producción."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = orden.transformaciones.select_related(
+            "producto_entrada", "producto_salida", "maquina", "operario"
+        ).order_by("numero_secuencia")
+        return Response(TransformacionProductoSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=["get"], url_path="trazabilidad")
+    def trazabilidad(self, request, pk=None):
+        """Devuelve el flujo completo de la OP: pasos, mermas y siguiente área."""
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
+        if not self._puede_operar_area(request.user, orden):
+            return Response(
+                {"detail": "No pertenece al área de la orden de producción."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(TrazabilidadService.construir(orden))
+
+    # ------------------------------------------------------------------
+    # Fase 3 del spec 2026-09-24: litros del baño, cálculo unificado en
+    # backend, historial de órdenes y descargas de químicos por orden.
+    # ------------------------------------------------------------------
+    @action(detail=True, methods=["post"], url_path="calcular-dosificacion")
+    def calcular_dosificacion(self, request, pk=None):
+        """POST /ordenes-produccion/{id}/calcular-dosificacion/ — body {litros_bano}.
+        Vista previa de la dosificación con el peso de la orden y los litros propuestos;
+        no persiste nada (D4: sustituye al cálculo duplicado del frontend)."""
+        orden = self.get_object()
+        if not orden.formula_color:
+            return Response(
+                {"detail": "La orden no tiene fórmula de color asignada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not orden.peso_neto_requerido:
+            return Response(
+                {"detail": "La orden no tiene peso neto requerido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = DosificacionLitrosSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        litros_bano = serializer.validated_data["litros_bano"]
+
+        if (
+            orden.maquina_asignada
+            and orden.maquina_asignada.volumen_bano_litros is not None
+            and litros_bano > orden.maquina_asignada.volumen_bano_litros
+        ):
+            return Response(
+                {
+                    "litros_bano": (
+                        f"Los litros de baño ({litros_bano}) superan el volumen de la máquina "
+                        f"asignada ({orden.maquina_asignada.volumen_bano_litros} L)."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        snapshot = (
+            orden.version_formula.snapshot
+            if orden.version_formula_id
+            else VersionadoFormulaService.construir_snapshot(orden.formula_color)
+        )
+        resultado = calcular_dosificacion_desde_snapshot(
+            snapshot,
+            peso=orden.peso_neto_requerido,
+            litros=litros_bano,
+        )
+
+        insumos_data = [
+            {
+                "producto_id": r.producto_id,
+                "producto_descripcion": r.producto_descripcion,
+                "tipo_calculo": r.tipo_calculo,
+                "cantidad_kg": str(r.cantidad_kg),
+                "cantidad_gr": str(r.cantidad_gr),
+                "concentracion_gr_l": str(r.concentracion_gr_l) if r.concentracion_gr_l is not None else None,
+                "porcentaje": str(r.porcentaje) if r.porcentaje is not None else None,
+                "orden_adicion": r.orden_adicion,
+            }
+            for r in resultado.insumos
+        ]
+
+        return Response(
+            {
+                "orden_id": orden.id,
+                "peso": str(resultado.kg_tela),
+                "litros_bano": str(resultado.volumen_bano_litros),
+                "relacion_bano": str(resultado.relacion_bano),
+                "insumos": insumos_data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["get"], url_path="historial")
+    def historial(self, request):
+        """GET /ordenes-produccion/historial/ — filtrable por fecha, máquina, fórmula
+        y estado (el filtro por máquina y estado ya los aplica get_queryset)."""
+        qs = self.get_queryset().select_related("version_formula", "formula_color")
+
+        fecha_desde = request.query_params.get("fecha_desde")
+        if fecha_desde:
+            qs = qs.filter(fecha_creacion__gte=fecha_desde)
+
+        fecha_hasta = request.query_params.get("fecha_hasta")
+        if fecha_hasta:
+            qs = qs.filter(fecha_creacion__lte=fecha_hasta)
+
+        formula_id = parse_int_param(request.query_params.get("formula_color"), "formula_color")
+        if formula_id:
+            qs = qs.filter(formula_color_id=formula_id)
+
+        qs = qs.order_by("-fecha_creacion")
+        page = self.paginate_queryset(qs)
+        serializer = OrdenProduccionSerializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="descargas-quimico", url_name="descargas-quimico-orden")
+    def descargas_quimico_orden(self, request, pk=None):
+        """GET /ordenes-produccion/{id}/descargas-quimico/ — descargas químicas de
+        esta orden específica (distinto de la acción de lista `descargas_quimico`,
+        que filtra por producto para el panel de stock)."""
+        orden = self.get_object()
+        qs = orden.descargas_quimicos.select_related("producto", "bodega", "descargado_por", "fase").order_by(
+            "-fecha_descarga"
+        )
+        return Response(DescargaQuimicoOPSerializer(qs, many=True).data)

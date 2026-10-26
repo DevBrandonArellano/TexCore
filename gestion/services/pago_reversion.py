@@ -9,10 +9,12 @@ Permite deshacer pagos registrados y restaurar la deuda del cliente
 al monto anterior (anterior al abono). Operación atómica con auditoría completa.
 """
 
-from django.db import transaction
-from django.core.exceptions import ValidationError
-from gestion.models import Cliente
 import logging
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from gestion.models import Cliente
 
 logger = logging.getLogger(__name__)
 
@@ -64,18 +66,20 @@ class PagoReversionService:
         if not cliente:
             raise ValidationError("Pago no tiene cliente asociado")
 
-        pago_id = pago.id  # preserve before delete() sets pk to None
+        pago_id = pago.id  # conserva el id antes de que delete() ponga pk en None
         monto = pago.monto
 
-        # Calculamos el saldo del cliente ANTES del pago
-        # Esto es: tomar todos los pagos POSTERIORES a este y calcular deuda
-        # Saldo_antes_pago = Saldo_actual + monto_pago
-        # (porque el pago redujo la deuda)
+        # Calculamos el saldo del cliente ANTES del pago:
+        # Saldo_antes_pago = Saldo_actual + monto_pago (el pago redujo la deuda,
+        # así que sumarlo de vuelta la restaura — no se itera el historial de pagos).
 
         logger.info(
-            f"[REVERSIÓN PAGO] Usuario: {usuario.username}, "
-            f"Pago: {pago.id}, Cliente: {cliente.nombre_razon_social}, "
-            f"Monto: {monto}, Justificación: {justificacion}"
+            "[REVERSIÓN PAGO] Usuario: %s, Pago: %s, Cliente: %s, Monto: %s, Justificación: %s",
+            usuario.username,
+            pago.id,
+            cliente.nombre_razon_social,
+            monto,
+            justificacion,
         )
 
         # Registrar el pago a revertir (valor anterior antes de borrar)
@@ -86,24 +90,25 @@ class PagoReversionService:
             pago.delete()
 
             logger.info(
-                f"[REVERSIÓN PAGO EXITOSA] Pago {pago.id} eliminado. "
-                f"Deuda restaurada a: {saldo_anterior_pago}"
+                "[REVERSIÓN PAGO EXITOSA] Pago %s eliminado. Deuda restaurada a: %s",
+                pago.id,
+                saldo_anterior_pago,
             )
 
-            resultado = {
-                'pago_id': pago_id,
-                'cliente_id': cliente.id,
-                'cliente_nombre': cliente.nombre_razon_social,
-                'monto_revertido': monto,
-                'saldo_anterior_pago': saldo_anterior_pago,
-                'saldo_despues_reversion': saldo_anterior_pago  # Será el nuevo saldo calculado
+            return {
+                "pago_id": pago_id,
+                "cliente_id": cliente.id,
+                "cliente_nombre": cliente.nombre_razon_social,
+                "monto_revertido": monto,
+                "saldo_anterior_pago": saldo_anterior_pago,
+                "saldo_despues_reversion": saldo_anterior_pago,  # Será el nuevo saldo calculado
             }
 
-            return resultado
-
         except Exception as e:
-            logger.error(
-                f"[ERROR REVERSIÓN PAGO] Pago {pago.id}, Cliente {cliente.id}: {str(e)}",
-                exc_info=True
+            logger.exception(
+                "[ERROR REVERSIÓN PAGO] Pago %s, Cliente %s: %s",
+                pago.id,
+                cliente.id,
+                str(e),
             )
             raise

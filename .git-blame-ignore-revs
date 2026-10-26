@@ -1,0 +1,12 @@
+# Commits que solo reformatean: `git blame` los ignora para no atribuirles autoría del código.
+#
+# Para que git lo use (una vez por copia de trabajo):
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub lo aplica solo si el archivo está en la rama por defecto.
+#
+# Formato: un SHA completo por línea, con el asunto del commit en el comentario de arriba.
+
+# style: aplicar el formateador de Ruff a todo el Python del repositorio (14-oct-2026).
+# Etapa 5 de la migración a Ruff: `ruff format` sobre los 353 archivos que lo necesitaban,
+# sin ningún cambio de comportamiento.
+6b22edfbe461df844598f09624fe8ac45cbc2683

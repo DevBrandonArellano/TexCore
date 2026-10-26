@@ -58,19 +58,23 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Validar la carga mediante **escaneo de códigos de barras**.
     *   Verificar en tiempo real el cumplimiento del pedido (Teórico vs. Escaneado).
     *   Finalizar despachos, lo cual rebaja automáticamente el stock y actualiza el pedido a "Despachado".
-    *   **Consultar Historial**: Acceder al registro histórico de despachos realizados con detalles de lotes y pesos.
+    *   **Lote con varios productos** (ADR-009): al escanear un lote sale la fila del producto de su OP y las de otros productos del lote que pidan los pedidos; cada fila se vende con su propio producto (Kardex, detalle y pedido). La merma vendible, reconocida por su movimiento `MERMA-<lote>`, nunca sale. El escáner (`/api/scanning/validate`, vía `scanning_service` → `internal_api`) informa además `peso_total` y `productos`.
+    *   **Consultar Historial**: Acceder al registro histórico de despachos realizados con detalles de lotes y pesos. Acotado a la sede de los pedidos del despacho (OWASP A01).
     *   **Gestionar Devoluciones**: Registrar el reingreso de mercancía previamente despachada.
 
 
 ### 4. Bodeguero
 **Función:** Responsable de la integridad del stock y la organización de los almacenes.
 *   **¿Qué puede hacer?**
-    *   Visualizar stock en tiempo real filtrado por sede y bodega.
+    *   Visualizar stock en tiempo real filtrado por sede y bodega: `GET /api/inventory/stock/` paginado (`PaginacionAcotada`, tope 500), solo filas con existencias, con filtros `bodega_id`, `producto_id`, `lote_id` y `search` (ADR-010).
     *   Ejecutar **Transferencias** de stock entre bodegas.
     *   Monitorear **Alertas de Stock Bajo** (basado en el stock mínimo configurado).
     *   Consultar el **Kardex** detallado por producto.
     *   **Auditoría de Stock**: Realizar ajustes justificados a los movimientos de inventario.
     *   **MRP (Planificación de Requerimientos)**: Consultar insumos faltantes según las Órdenes de Producción activas y generar sugerencias de compra.
+    *   **Recepción de materia prima (F0-001)**: única vía para registrar una compra. Cada recepción crea un lote de MP con proveedor, lote del proveedor, costo y certificado, suma el stock y registra el movimiento COMPRA. Corregir la cantidad de esa COMPRA ajusta el lote (nunca por debajo de lo ya consumido); eliminarla solo es posible si el lote no se consumió.
+    *   **Lotes de materia prima**: consultar lo recibido, lo disponible para producción, el costo y el certificado.
+    *   **Stock a fecha de corte**: saldo de un producto en cada bodega al cierre de una fecha pasada.
 
 
 ### 5. Vendedor (Ejecutivo de Ventas)
@@ -91,6 +95,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Crear y gestionar el ciclo de vida de las **Órdenes de Producción**.
     *   Asignar órdenes a sedes específicas.
     *   Definir parámetros de producción y requerimientos de peso.
+    *   **Alcance por sede (OWASP A01):** ve y abre solo las órdenes de **su sede**; una orden de otra sede responde 404. Es la misma regla que catálogo, usuarios, máquinas y fórmulas, y aplica a todo rol de sede (admin de sede, bodeguero, tintorero, jefe de área, operario…). Solo Administrador de Sistemas y Ejecutivo ven todas las sedes.
     *   **Consultar trazabilidad (solo lectura)**: desde el panel de detalle de cualquier OP, visualiza el árbol completo de transformaciones con merma acumulada %. No puede registrar transformaciones (esa responsabilidad corresponde a Jefes de Área y Operarios).
 
 ### 7. Jefe de Área
@@ -111,7 +116,10 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 ### 8. Tintorero
 **Función:** Especialista en color y formulación química para los procesos de tintura y acabado.
 *   **¿Qué puede hacer?**
-    *   **Gestionar Fórmulas Químicas**: Crear, editar y versionar recetas de color por tipo de sustrato.
+    *   **Gestionar Fórmulas Químicas**: Crear y editar recetas de color por tipo de sustrato, con fases tomadas del catálogo de procesos de la sede.
+    *   **Aprobar y versionar**: Aprobar fórmulas (crea la versión oficial) y editar fórmulas aprobadas con motivo (crea una versión nueva inmutable). Solo Tintorero y Administrador de Sistemas pueden hacerlo (`IsTintoreroOrAdmin`).
+    *   **Historial y comparación**: Consultar las versiones de una fórmula y comparar dos de ellas.
+    *   **Crear variantes**: Duplicar una fórmula como fórmula nueva en pruebas.
     *   **Calcular Pesajes (Laboratorio)**: Usar la calculadora integrada para determinar gramajes exactos de químicos según el volumen de tela y la relación de baño.
     *   **Sincronización Infotint**: Exportar las fórmulas en formato JSON listo para ser cargado en máquinas dosificadoras automáticas.
     *   **Monitorear Fórmulas en Pruebas**: Diferenciar fórmulas aprobadas de aquellas aún en fase de laboratorio.
@@ -129,7 +137,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 | CU-EJ-01 | Consultar KPIs ejecutivos consolidados | Resumen | `GET /api/kpi-ejecutivo/` |
 | CU-EJ-02 | Ver resumen de producción | Producción | `GET /api/produccion/resumen/` |
 | CU-EJ-03 | Ver tendencia de producción | Producción | `GET /api/produccion/tendencia/` |
-| CU-EJ-04 | Consultar stock e inventario | Inventario | `GET /api/inventory/stock/`, `/alertas-stock/` |
+| CU-EJ-04 | Consultar stock e inventario | Stock | `GET /api/inventory/stock/resumen/` (totales por bodega), `/stock/?bodega_id=` (detalle paginado), `/alertas-stock/` |
 | CU-EJ-05 | Consultar ventas y cartera | Ventas | `GET /api/pedidos-venta/`, `/clientes/` |
 | CU-EJ-06 | Consultar estado MRP | MRP | incluido en `/kpi-ejecutivo/` |
 | CU-EJ-07 | Descargar reportes gerenciales (Excel) | Reportes | 6 endpoints `/reporting/…` |
@@ -162,7 +170,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 *   Durante una descarga de reporte: todos los botones de exportación quedan deshabilitados hasta que complete (prevención de descargas simultáneas).
 
 ### 10. Administrador de Sede
-**Función:** Máxima autoridad operativa en una ubicación física.
+**Función:** Rol gerencial de una ubicación física, orientado al monitoreo y la toma de decisiones (decisión del 1-oct-2026). Conserva sus permisos de escritura en órdenes, lotes, ventas, catálogo, inventario, despacho y MRP; las transferencias interárea de su sede las consulta pero no las crea.
 *   **¿Qué puede hacer?**
     - **Aprobar Movimientos**: de inventario pendientes o críticos (e.g. ajustes manuales que superen un umbral).
     - **Supervisar Áreas**: Supervisar todas las áreas de su sede (Producción, Ventas, Bodega).
@@ -174,13 +182,32 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Gestionar el catálogo global de **Sedes, Áreas y Bodegas**.
     *   Configurar el maestro de **Productos y Químicos**.
     *   Administrar el catálogo de **Fórmulas de Color**.
-    *   Gestión total de usuarios y grupos de permisos.
+    *   Gestión total de usuarios; consulta de los grupos de permisos (los crean los comandos de semilla).
 
 ---
 
 ## 🔒 Reglas de Seguridad Transversales
 
-1.  **Aislamiento de Sede:** Los usuarios solo interactúan con datos de su sede asignada.
+1.  **Aislamiento de Sede:** Los usuarios solo interactúan con datos de su sede asignada. Solo Administrador de Sistemas y Ejecutivo ven todas las sedes; el **Administrador de Sede queda acotado a la suya** (también en stock, bodegas, movimientos, pedidos, pagos y reportes Excel). Un registro de otra sede responde igual que uno inexistente (404), y un usuario sin sede asignada no ve datos de sede. La regla vive en un solo lugar (`gestion/permissions.py`: `ve_todas_las_sedes`, `filtrar_por_sede`, `filtrar_catalogo_por_sede`, `filtrar_lotes_por_sede`, `validar_visible`, `validar_misma_sede`, `areas_gestionables`; `inventory/permissions.py`: `bodegas_visibles`).
+    *   **Bodegas:** Admin de Sede, las de su sede; el resto de roles de sede, solo sus bodegas asignadas. Toda escritura de stock (movimientos, transferencias, transformaciones, recepción de MP) opera solo sobre esas bodegas; el destino de una transferencia o transformación debe ser de la sede del origen.
+    *   **Registro de lotes:** Operario (su área o la orden que tiene asignada), Jefe de Área (su área), Jefe de Planta, Empaquetado y administradores. La máquina y el operario acreditado deben ser de la sede de la orden.
+    *   **Producción MES:** corridas y operaciones, Operario / Jefe de Área / Jefe de Planta / administradores; planes MTS, Jefe de Planta y administradores. Área, línea, máquina, orden, plan y pedido vinculados deben ser de la misma sede.
+    *   **Configuración de planta** (máquinas, líneas, etapas, paros y transferencias interárea): el Jefe de Área ve y escribe solo su área; Jefe de Planta y administradores, las áreas de su sede. Área, máquina, órdenes, bodegas y operarios referenciados deben ser de la misma sede. Paros y transferencias son registros históricos: no se editan ni se borran. Las transferencias interárea las crean el Jefe de Planta y el Admin de Sistemas; el Jefe de Área ve las de su área y el Admin de Sede las de su sede.
+    *   **Órdenes de producción:** editarlas (peso, fórmula, bodega de químicos, que disparan descargas de químicos) es del Jefe de Planta y los administradores. El Jefe de Área asigna máquina y operario de su área con `completar_detalles` y puede iniciar la orden en la misma operación; las referencias deben ser de la sede de la orden y la máquina, de su área. La vista previa de dosificación de una orden la consultan el tintorero, el Jefe de Planta y los administradores. Eliminar una orden exige una justificación de al menos un carácter útil (no solo espacios), que queda en el AuditLog del borrado; con químicos descontados, editarla exige también justificación. Los **componentes de mezcla** de una orden los definen el Jefe de Área, el Jefe de Planta y los administradores, solo con la orden **pendiente** y sin que la suma pase del 100 %; quitarlos exige justificación.
+    *   **Lotes de producción:** editar el peso (ajusta stock) y rechazar un lote (lo borra revirtiendo su stock) lo hacen el operario sobre los lotes que registró, el Jefe de Área, el Jefe de Planta y los administradores; el empaquetado etiqueta y reimprime, pero no edita ni rechaza. Un lote no se borra por otra vía. El costo del lote (F0-002) lo ven bodeguero, Jefe de Planta, ejecutivo y administradores.
+    *   **Indicadores de producción:** el reporte de eficiencia del día de un área lo ven su Jefe de Área, el Jefe de Planta y los administradores. El desempeño de un operario (producción de hoy y últimos lotes) lo ven el propio operario (solo el suyo), su Jefe de Área (los de su área) y el Jefe de Planta y los administradores (los de su sede). Las áreas se listan solo de la sede del usuario.
+    *   **Procesos de tintorería** (`/procesos-tintoreria/`, por sede): los crean y editan el tintorero y el Admin de Sistemas (nombre, tipo, descripción y activo; el código y la sede no cambian; no se eliminan, se desactivan). Lo leen además el Jefe de Área, el Jefe de Planta y el Admin de Sede. Los **procesos de una máquina** (`/maquinas/{id}/procesos/`) los consultan esos mismos roles y los reemplaza (PUT) el Jefe de Área de esa área, el Jefe de Planta o el Admin de Sistemas, solo con procesos activos de la sede de la máquina.
+    *   **Catálogo de procesos de producción:** lo ve cualquier rol (se elige al registrar una operación MES); lo mantiene el Administrador de Sistemas. Un proceso ya usado en operaciones no se puede eliminar.
+    *   **Catálogo** (productos, químicos, proveedores): cada rol lee los ítems globales (sin sede) más los de su sede; un ítem global solo lo modifica quien ve todas las sedes.
+    *   **MRP** (requerimientos y sugerencias de compra, `ejecutar-mrp`): Bodeguero, Ejecutivo y administradores. Las sugerencias las genera el motor y no se editan a mano.
+    *   **Grupos de permisos:** solo lectura por API (Administrador de Sistemas). El RBAC lo crean `seed_production_masters` y `setup_permissions`.
+    *   **Trazabilidad con costos de materia prima** (`/trazabilidad/lote-produccion/`): Bodeguero, Jefe de Planta, Ejecutivo y administradores.
+    *   **Venta de contado:** un pedido marcado como pagado al crearlo omite el límite de crédito y el bloqueo por cartera vencida, aunque el pago aún no esté registrado. Hay un día para pagar; el personal adelanta la facturación pero no entrega el producto hasta el pago, y eso es gestión interna (decisión del 1-oct-2026).
+    *   **Ventas:** el Vendedor opera solo con sus clientes y pedidos; un pedido o pago toma la sede de su cliente. Un pedido se edita con `modificar` y se da de baja con `anular` (estado pendiente, motivo y auditoría); un pago se revierte con `revertir`. No hay edición ni borrado genérico. Cada detalle del pedido se valida al crearlo: precio no menor al costo base, peso positivo y producto global o de la sede del cliente.
+    *   **Historial de despachos:** cada rol de sede ve, revierte y borra solo los despachos de pedidos de su sede; Ejecutivo y Admin de Sistemas, todos.
+    *   **Auditoría** (`/api/inventory/audit-logs/`): Admin de Sistemas (todas las sedes o la `sede_id` pedida) y Admin de Sede (solo la suya). Un registro es de una sede por la sede del usuario **al momento del cambio** (`usuario_sede_id`) o por la del objeto (`object_sede_id`). Filtros (TEX-52): `search` (usuario, tabla o id), `fecha_desde`/`fecha_hasta` (sin `fecha_desde`, últimos 30 días) y `accion`. Los registros son **inmutables en el modelo** (TEX-09 CA-2): `save()` sobre uno existente, `delete()` y las operaciones masivas lanzan `RegistroAuditoriaInmutable`.
+    *   **Equivalencias de empaque** (`/api/configuracion-empaque/`, TEX-43): el Admin de Sede lee y configura las de su sede; el Admin de Sistemas, las de cualquier sede con `sede_id`. Cambiarlas exige justificación (≥ 10 caracteres) y queda auditado. Sin configuración no se aplica una constante: el registro de un lote por baño o funda sin unidades se rechaza y el MRP omite la sede, avisándolo en `ejecutar-mrp`.
+    *   **Errores internos:** un 500 nunca devuelve el texto de la excepción (CWE-209); el detalle queda en el log.
 2.  **Validación de Saldo:** No se permiten ventas si el cliente excede su límite de crédito configurado.
 3.  **Transaccionalidad:** Los procesos críticos (Despacho, Transferencia, Rechazo) son **atómicos**; si un paso falla, se revierte todo el proceso para evitar descuadres.
 4.  **Trazabilidad Máxima:** Cada movimiento de inventario registra el usuario, la hora y el documento de referencia.

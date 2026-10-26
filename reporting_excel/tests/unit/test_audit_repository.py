@@ -6,17 +6,25 @@ Convención: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 ISO 27001 A.12.4: verificación de que el repositorio persiste eventos de auditoría de reportes.
 COBIT MEA01: trazabilidad de acceso a información gerencial y ejecutiva.
 """
+
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from sqlalchemy.exc import OperationalError
 
 from src.database.models import ReportAuditLog
 from src.database.repository import AuditRepository, IAuditRepository, build_report_record
 
+# ---------------------------------------------------------------------------
+# Auxiliares
+# ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
+def _error_bd(mensaje):
+    """Error real de la capa de datos (lo que lanza SQLAlchemy ante un fallo de la BD)."""
+    return OperationalError("INSERT", {}, Exception(mensaje))
+
 
 def _make_session_factory(commit_side_effect=None):
     """Crea una session_factory mock con comportamiento configurable."""
@@ -57,8 +65,8 @@ def _make_report_record(
 # EP Clase Válida: record con requested_by y report_type → persiste sin error
 # ---------------------------------------------------------------------------
 
-class TestAuditRepository_RegistroValido:
 
+class TestAuditRepository_RegistroValido:
     @pytest.mark.asyncio
     async def test_auditrepository_dado_record_valido_cuando_save_entonces_no_lanza_excepcion(self):
         factory, _ = _make_session_factory()
@@ -103,18 +111,19 @@ class TestAuditRepository_RegistroValido:
 # EP Clase Inválida: DB falla → save() absorbe la excepción (ISO 27001 A.12.4)
 # ---------------------------------------------------------------------------
 
-class TestAuditRepository_FalloBaseDeDatos:
 
+class TestAuditRepository_FalloBaseDeDatos:
     @pytest.mark.asyncio
     async def test_auditrepository_dado_commit_falla_cuando_save_entonces_no_propaga_excepcion(self):
-        factory, _ = _make_session_factory(commit_side_effect=Exception("disk full"))
+        factory, _ = _make_session_factory(commit_side_effect=_error_bd("disk full"))
         repo = AuditRepository(session_factory=factory)
         await repo.save(_make_report_record())
 
     @pytest.mark.asyncio
     async def test_auditrepository_dado_db_no_disponible_cuando_save_entonces_loguea_warning_rfc5424(self, caplog):
         import logging
-        factory, _ = _make_session_factory(commit_side_effect=Exception("connection refused"))
+
+        factory, _ = _make_session_factory(commit_side_effect=_error_bd("connection refused"))
         repo = AuditRepository(session_factory=factory)
         with caplog.at_level(logging.WARNING, logger="src.database.repository"):
             await repo.save(_make_report_record())
@@ -125,8 +134,8 @@ class TestAuditRepository_FalloBaseDeDatos:
 # LSP: mock intercambiable con AuditRepository (Protocol check)
 # ---------------------------------------------------------------------------
 
-class TestIAuditRepository_Protocolo:
 
+class TestIAuditRepository_Protocolo:
     def test_auditrepository_dado_instancia_concreta_cuando_verificar_protocolo_entonces_cumple_interface(self):
         factory, _ = _make_session_factory()
         repo = AuditRepository(session_factory=factory)
@@ -137,8 +146,8 @@ class TestIAuditRepository_Protocolo:
 # BVA: build_report_record — valores límite de campos opcionales
 # ---------------------------------------------------------------------------
 
-class TestBuildReportRecord_ValoresLimite:
 
+class TestBuildReportRecord_ValoresLimite:
     def test_buildreportrecord_dado_params_json_none_cuando_construir_entonces_acepta(self):
         """BVA: params_json es opcional — None es válido."""
         record = build_report_record(

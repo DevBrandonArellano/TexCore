@@ -1,6 +1,11 @@
-"""Tests para endpoints de reporting. EP por endpoint representativo."""
+"""Tests para endpoints de reporting. EP por endpoint representativo.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token valido / bodega valida / sin bodega / scope incorrecto.
+"""
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -11,7 +16,7 @@ from gestion.models import Bodega, Producto, Sede
 
 
 def _make_service_token(scopes=None):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": "reporting_excel",
@@ -46,9 +51,7 @@ class TestReportingEndpoints(TestCase):
 
     # EP: stock-actual requiere bodega_id
     def test_stock_actual_dado_bodega_valida_cuando_solicita_entonces_retorna_200(self):
-        resp = self.client.get(
-            f"/api/internal/v1/reports/stock-actual/?bodega_id={self.bodega.id}"
-        )
+        resp = self.client.get(f"/api/internal/v1/reports/stock-actual/?bodega_id={self.bodega.id}")
         self.assertEqual(resp.status_code, 200)
 
     # EP: stock-actual sin bodega_id → 400
@@ -58,9 +61,7 @@ class TestReportingEndpoints(TestCase):
 
     # EP: scope incorrecto → 403
     def test_productos_dado_scope_incorrecto_cuando_solicita_entonces_retorna_403(self):
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {_make_service_token(scopes=['lotes:read'])}"
-        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_service_token(scopes=['lotes:read'])}")
         resp = self.client.get("/api/internal/v1/reports/productos/")
         self.assertEqual(resp.status_code, 403)
 

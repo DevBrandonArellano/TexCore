@@ -1,5 +1,5 @@
 /**
- * RFC 5424 — Frontend Structured Logger
+ * RFC 5424 — Logger estructurado del frontend
  * ======================================
  * Implementa los niveles de severidad y el formato de datos estructurados
  * de RFC 5424 (IETF Syslog Protocol) adaptados al entorno browser/Node.

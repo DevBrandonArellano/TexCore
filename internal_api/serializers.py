@@ -1,4 +1,5 @@
 """Serializers para la API interna. ISP: un serializer por caso de uso."""
+
 from rest_framework import serializers
 
 

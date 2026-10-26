@@ -3,11 +3,11 @@ JWTServiceAuthentication: valida JWT RS256 de microservicios.
 ISO 27001 A.9.4 — Control de acceso a sistemas y aplicaciones.
 DIP: depende de settings (abstracción), no de archivos físicos.
 """
+
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 
 import jwt
 from django.conf import settings
@@ -20,11 +20,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ServicePrincipal:
-    """Identidad de un microservicio autenticado. Inmutable post-creación."""
+    """Identidad de un microservicio autenticado. Inmutable post-creación.
+
+    `sede_id`/`is_admin` son claims OPCIONALES firmados: cuando el llamador
+    autorizado (p. ej. el proxy Django que conoce al usuario humano) los
+    incluye, permiten a las vistas imponer aislamiento por sede como defensa
+    en profundidad. Ausentes en tokens servicio-a-servicio clásicos.
+    """
 
     service_name: str
-    scopes: List[str] = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
     is_authenticated: bool = True
+    sede_id: int | None = None
+    is_admin: bool = False
 
     def __str__(self) -> str:
         return f"Service:{self.service_name}"
@@ -37,7 +45,7 @@ class JWTServiceAuthentication(BaseAuthentication):
     Lanza AuthenticationFailed si el token es inválido o expirado.
     """
 
-    def authenticate(self, request: Request) -> Optional[Tuple[ServicePrincipal, str]]:
+    def authenticate(self, request: Request) -> tuple[ServicePrincipal, str] | None:
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if not auth_header.startswith("Bearer "):
             return None
@@ -45,7 +53,7 @@ class JWTServiceAuthentication(BaseAuthentication):
         token = auth_header.split(" ", 1)[1].strip()
         return self._validate_token(token)
 
-    def _validate_token(self, token: str) -> Tuple[ServicePrincipal, str]:
+    def _validate_token(self, token: str) -> tuple[ServicePrincipal, str]:
         try:
             payload = jwt.decode(
                 token,
@@ -61,13 +69,14 @@ class JWTServiceAuthentication(BaseAuthentication):
                 "JWT de servicio expirado",
                 extra={"sd": {"severity": 4, "action": "jwt_expired"}},
             )
-            raise AuthenticationFailed("Token de servicio expirado.")
+            raise AuthenticationFailed("Token de servicio expirado.") from None
         except jwt.InvalidTokenError as exc:
             logger.warning(
-                "JWT de servicio inválido: %s", exc,
+                "JWT de servicio inválido: %s",
+                exc,
                 extra={"sd": {"severity": 4, "action": "jwt_invalid"}},
             )
-            raise AuthenticationFailed(f"Token de servicio inválido: {exc}")
+            raise AuthenticationFailed(f"Token de servicio inválido: {exc}") from exc
 
         if payload.get("type") != "service_access":
             raise AuthenticationFailed("Tipo de token incorrecto. Se requiere service_access.")
@@ -75,9 +84,12 @@ class JWTServiceAuthentication(BaseAuthentication):
         principal = ServicePrincipal(
             service_name=payload["sub"],
             scopes=payload.get("scope", []),
+            sede_id=payload.get("sede_id"),
+            is_admin=bool(payload.get("is_admin", False)),
         )
         logger.info(
-            "Servicio autenticado: %s", principal.service_name,
+            "Servicio autenticado: %s",
+            principal.service_name,
             extra={"sd": {"severity": 6, "service": principal.service_name}},
         )
         return principal, token
@@ -86,10 +98,22 @@ class JWTServiceAuthentication(BaseAuthentication):
         return 'Bearer realm="texcore-internal"'
 
     @staticmethod
-    def generate_token(service_name: str, scopes: List[str], expires_in: int = 300) -> str:
+    def generate_token(
+        service_name: str,
+        scopes: list[str],
+        expires_in: int = 300,
+        sede_id: int | None = None,
+        is_admin: bool = False,
+    ) -> str:
         """
         Genera un JWT RS256 firmado para autenticación entre servicios.
         ISO 27001 A.9.4: tokens de corta duración (default 5 min).
+
+        `sede_id`/`is_admin` son claims opcionales: cuando el llamador conoce al
+        usuario humano final, los firma para que las vistas internas puedan
+        imponer aislamiento por sede (defensa en profundidad). Se omiten del
+        payload si no se proveen, preservando la compatibilidad con tokens
+        servicio-a-servicio existentes.
         """
         now = int(time.time())
         payload = {
@@ -101,8 +125,8 @@ class JWTServiceAuthentication(BaseAuthentication):
             "exp": now + expires_in,
             "jti": str(uuid.uuid4()),
         }
-        return jwt.encode(
-            payload,
-            settings.INTERNAL_JWT_PRIVATE_KEY,
-            algorithm="RS256"
-        )
+        if sede_id is not None:
+            payload["sede_id"] = sede_id
+        if is_admin:
+            payload["is_admin"] = True
+        return jwt.encode(payload, settings.INTERNAL_JWT_PRIVATE_KEY, algorithm="RS256")

@@ -1,14 +1,21 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): usuario no autenticado / autenticado sin profile aun / rol %s / rol
+ *   despacho / rol no reconocido.
+ */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
-let mockAuthState: any = { isAuthenticated: false, profile: null };
+let mockAuthState: { isAuthenticated: boolean; profile: unknown } = { isAuthenticated: false, profile: null };
 
 vi.mock('./lib/auth', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAuth: () => mockAuthState,
+}));
+vi.mock('./lib/AuthProvider', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('./components/Login', () => ({ Login: () => <div>login-screen</div> }));

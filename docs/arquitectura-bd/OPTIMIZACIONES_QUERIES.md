@@ -45,7 +45,7 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
 
 -   **Antes (Código Problemático):**
     ```python
-    # en inventory/views.py
+    # en inventory/views/movimiento_views.py
     class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         # ...
         def get_queryset(self):
@@ -61,7 +61,7 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
 
 -   **Después (Código Optimizado):**
     ```python
-    # en inventory/views.py
+    # en inventory/views/movimiento_views.py
     class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         # ...
         def get_queryset(self):
@@ -71,6 +71,42 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
             ).all()
     ```
     *Costo para N=100 (o N=1000):* **1 consulta**.
+
+#### Ejemplo Práctico en TexCore: `StockBodegaViewSet` (N+1 encontrado en auditoría 2026-08-31)
+
+Un caso particularmente sutil de este problema: un `select_related` **incompleto** —que cubre las relaciones directas pero no una relación anidada usada en un `__str__`— sigue produciendo N+1 aunque el código "parezca" optimizado a primera vista.
+
+-   **Antes (Código Problemático):**
+    ```python
+    # en inventory/views/stock_views.py
+    class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+        def get_queryset(self):
+            queryset = StockBodega.objects.select_related(
+                'bodega', 'producto', 'lote'
+            ).all()  # falta 'bodega__sede'
+    ```
+    ```python
+    # en gestion/models/catalogo.py
+    class Bodega(models.Model):
+        def __str__(self):
+            return f"{self.nombre} ({self.sede.nombre})"  # accede a self.sede -> +1 consulta
+    ```
+    El serializer (`StockBodegaSerializer`) expone `bodega` con `StringRelatedField`, lo que invoca `Bodega.__str__()` por cada fila. Como `sede` no estaba precargado por el `select_related`, cada fila disparaba una consulta extra para traer la sede de su bodega.
+
+    *Verificado con `CaptureQueriesContext`:* **3466 queries para 3465 filas de stock** (1 + N).
+
+-   **Después (Código Optimizado):**
+    ```python
+    # en inventory/views/stock_views.py
+    class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+        def get_queryset(self):
+            queryset = StockBodega.objects.select_related(
+                'bodega__sede', 'producto', 'lote'
+            ).all()
+    ```
+    *Verificado con `CaptureQueriesContext`:* **1 sola consulta**, independiente de N.
+
+    **Lección:** al auditar un `select_related`/`prefetch_related`, no basta con revisar las relaciones que el serializer expone directamente — hay que rastrear también los accesos que ocurren dentro de `__str__` u otros métodos de modelo invocados indirectamente (p. ej. por `StringRelatedField`). El sistema fue validado con pruebas de carga real sosteniendo 100 usuarios concurrentes con 0% de errores (ver [REQUISITOS_INFRAESTRUCTURA.md](../arquitectura/REQUISITOS_INFRAESTRUCTURA.md)); este N+1 solo se manifestó como un problema serio bajo esa carga concurrente, no en mediciones de un solo usuario.
 
 ---
 
@@ -92,7 +128,7 @@ Se identificaron los campos que se usan con frecuencia en filtros a través de l
 
 -   **Antes:**
     ```python
-    # en gestion/models.py
+    # en gestion/models/produccion.py
     class OrdenProduccion(models.Model):
         # ...
         estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
@@ -101,7 +137,7 @@ Se identificaron los campos que se usan con frecuencia en filtros a través de l
 
 -   **Después:**
     ```python
-    # en gestion/models.py
+    # en gestion/models/produccion.py
     class OrdenProduccion(models.Model):
         # ...
         estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
@@ -127,7 +163,7 @@ TexCore implementa un modelo de **Navegación Híbrida** para el frontend, donde
 -   **Mitigación de Re-Renders**: Se evitan actualizaciones de estado locales secuenciales que pudiesen causar inconsistencia y múltiples `render()` en cadena.
 -   **Integración Natural de Caching**: Navegadores y proxys inversos pueden cachear de forma precisa peticiones a la API que se corresponden con rutas parametrizadas exactas (ej. `/api/pedidos/?page=2&estado=activo`).
 
-Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR\_NAVEGACION\_HIBRIDA.md](../docs/ADR_NAVEGACION_HIBRIDA.md) y [IMPLEMENTACION\_NAVEGACION\_HIBRIDA.md](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md).
+Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR-001 Navegación Híbrida](../arquitectura/ADR/ADR_001_NAVEGACION_HIBRIDA.md).
 
 ---
 
@@ -169,4 +205,4 @@ class ProduccionKPIService:
 | **Testabilidad** | Requiere cliente HTTP completo | Mock del servicio con `MagicMock()` |
 | **Extensibilidad** | Nuevos KPIs → modifica la vista | Nuevos KPIs → nuevo Value Object, vista intacta |
 
-Los servicios en producción son `ProduccionKPIService` y `ExecutiveKPIService`. Ver [Arquitectura y Desarrollo](arquitectura_y_desarrollo.md) para el diagrama de dependencias completo.
+Los servicios en producción son `ProduccionKPIService` (`gestion/services/produccion_kpi_service.py`) y `ExecutiveKPIService` (`inventory/services/executive_kpi_service.py`). Ver [Arquitectura del Sistema](../arquitectura/ARQUITECTURA_SISTEMA.md) para el diagrama de componentes.

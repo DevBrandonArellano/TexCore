@@ -1,18 +1,25 @@
-from django.test import TestCase
+"""
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP), clase válida: cambio de limite justificado.
+"""
+
 from decimal import Decimal
-from gestion.models import Bodega, Producto, Sede, Cliente, AuditLog
-from gestion.middleware import _local
-from django.core.exceptions import ValidationError
+
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+
+from gestion.middleware import _local
+from gestion.models import AuditLog, Bodega, Cliente, Producto, Sede
 
 User = get_user_model()
 
 
 class AuditAndMRPTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='testadmin', password='password')
+        self.user = User.objects.create_user(username="testadmin", password="password")
         _local.user = self.user
-        _local.ip_address = '127.0.0.1'
+        _local.ip_address = "127.0.0.1"
 
         self.sede = Sede.objects.create(nombre="Interfibra")
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
@@ -25,36 +32,36 @@ class AuditAndMRPTest(TestCase):
         )
 
         self.cliente = Cliente(
-            ruc_cedula="123456789", nombre_razon_social="Cliente A", limite_credito=Decimal('1000.00'),
-            direccion_envio="Dir Test", nivel_precio="normal"
+            ruc_cedula="123456789",
+            nombre_razon_social="Cliente A",
+            limite_credito=Decimal("1000.00"),
+            direccion_envio="Dir Test",
+            nivel_precio="normal",
         )
         self.cliente._justificacion_auditoria = "Alta inicial"
         self.cliente.save()
 
-    def test_audit_log_creation(self):
-        # Update limit without justification shouldn't throw error if we don't handle it in view,
-        # wait, the logic says if not is_new and requiere_just_aud and not hasattr(): raise error
+    def test_audit_log_dado_cambio_de_limite_justificado_cuando_guarda_entonces_registra_usuario_ip_y_valores(self):
 
-        # We try to update
-        self.cliente.limite_credito = Decimal('2000.00')
+        self.cliente.limite_credito = Decimal("2000.00")
         with self.assertRaises(ValidationError):
             self.cliente.save()
 
-        # Give justification
+        # Aporta la justificación
         self.cliente._justificacion_auditoria = "Aumento de linea"
         self.cliente.save()
 
-        # Check audit log
-        log = AuditLog.objects.filter(accion='UPDATE').first()
+        # Verifica el registro de auditoría
+        log = AuditLog.objects.filter(accion="UPDATE").first()
         self.assertIsNotNone(log)
         self.assertEqual(log.justificacion, "Aumento de linea")
-        self.assertEqual(log.ip_address, '127.0.0.1')
+        self.assertEqual(log.ip_address, "127.0.0.1")
         self.assertEqual(log.usuario, self.user)
-        self.assertIn('limite_credito', log.valor_nuevo)
-        self.assertEqual(log.valor_nuevo['limite_credito'], '2000.00')
+        self.assertIn("limite_credito", log.valor_nuevo)
+        self.assertEqual(log.valor_nuevo["limite_credito"], "2000.00")
 
     def tearDown(self):
-        if hasattr(_local, 'user'):
+        if hasattr(_local, "user"):
             del _local.user
-        if hasattr(_local, 'ip_address'):
+        if hasattr(_local, "ip_address"):
             del _local.ip_address

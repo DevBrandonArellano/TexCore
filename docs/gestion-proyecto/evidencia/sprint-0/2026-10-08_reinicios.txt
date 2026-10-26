@@ -1,0 +1,10 @@
+# Reinicios por contenedor
+texcore-prod-nginx-1 RestartCount=0 Health=healthy
+texcore-prod-scanning-1 RestartCount=0 Health=healthy
+texcore-prod-reporting_excel-1 RestartCount=0 Health=healthy
+texcore-prod-backend-1 RestartCount=0 Health=healthy
+texcore-prod-printing-1 RestartCount=0 Health=healthy
+texcore-prod-db-1 RestartCount=0 Health=healthy
+
+# Coincidencias de "error|traceback|exception" en el log de arranque (todas son el nombre del archivo errorlog de SQL Server, no errores)
+4

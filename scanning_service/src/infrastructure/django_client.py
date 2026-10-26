@@ -4,13 +4,14 @@ Patrón Adapter: traduce HTTP response a domain models.
 Circuit Breaker: 3 errores consecutivos → RuntimeError con mensaje claro.
 ISO 27001 A.12.4: logs estructurados por cada llamada HTTP.
 """
+
 import logging
 from decimal import Decimal
-from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
-from ..domain.models import Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
+from ..domain.models import AlcanceSede, Bodega, LineaStock, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from .jwt_token_manager import JWTTokenManager
 
 logger = logging.getLogger(__name__)
@@ -28,29 +29,39 @@ class DjangoApiClient:
     def __init__(self, token_manager: JWTTokenManager, base_url: str) -> None:
         self._token_manager = token_manager
         self._base_url = base_url.rstrip("/")
-        self._stock_cache: dict[int, Optional[StockBodega]] = {}
+        self._stock_cache: dict[int, StockBodega | None] = {}
         self._error_count: int = 0
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token_manager.get_valid_token()}"}
 
-    def get_lote_by_codigo(self, codigo: str) -> Optional[LoteProduccion]:
-        url = f"{self._base_url}/api/internal/v1/lotes/{codigo}/validate/"
+    def get_lote_by_codigo(self, codigo: str, alcance: AlcanceSede) -> LoteProduccion | None:
+        # codigo viene tal cual del escáner: si alguien apunta por error al QR
+        # de trazabilidad de la etiqueta en vez del código de barras, el valor
+        # escaneado es una URL completa (con '/'). Sin codificar, esos '/'
+        # se interpretaban como separadores de path y corrompían la request
+        # (Django ni siquiera la enrutaba al endpoint de validación). quote()
+        # lo deja como un único segmento de path — el lookup simplemente no
+        # encuentra ese "código" y responde 404 (lote no válido), como
+        # cualquier otro código inexistente.
+        url = f"{self._base_url}/api/internal/v1/lotes/{quote(codigo, safe='')}/validate/"
+        # OWASP API1: la internal_api acota el lote y su stock a la sede del usuario.
+        if not alcance.ve_todas and alcance.sede_id is None:
+            return None
+        params = {} if alcance.ve_todas else {"sede_id": alcance.sede_id}
         try:
-            response = httpx.get(url, headers=self._headers(), timeout=5.0)
+            response = httpx.get(url, params=params, headers=self._headers(), timeout=5.0)
             self._error_count = 0  # reset en éxito
         except httpx.TimeoutException:
             self._error_count += 1
-            logger.error(
+            logger.exception(
                 "Timeout en Django API [%d/%d]",
                 self._error_count,
                 _CIRCUIT_THRESHOLD,
                 extra={"sd": {"severity": 3, "url": url, "errors": self._error_count}},
             )
             if self._error_count >= _CIRCUIT_THRESHOLD:
-                raise RuntimeError(
-                    "Django Internal API no responde (circuit breaker activo)."
-                )
+                raise RuntimeError("Django Internal API no responde (circuit breaker activo).") from None
             raise
 
         if response.status_code == 404:
@@ -90,13 +101,21 @@ class DjangoApiClient:
             orden_produccion=OrdenProduccion(
                 id=data["orden_produccion_id"],
                 estado=data["estado"],
-                producto=Producto(
+                producto_salida=Producto(
                     id=data["producto"]["id"],
                     descripcion=data["producto"]["descripcion"],
                 ),
             ),
+            productos=[
+                LineaStock(
+                    producto=Producto(id=fila["producto_id"], descripcion=fila["descripcion"]),
+                    cantidad=Decimal(str(fila["peso_kg"])),
+                    bodega=Bodega(id=fila["bodega"]["id"], nombre=fila["bodega"]["nombre"]),
+                )
+                for fila in data.get("productos", [])
+            ],
         )
 
-    def get_stock_activo_por_lote(self, lote_id: int) -> Optional[StockBodega]:
-        """Retorna StockBodega desde caché poblado por get_lote_by_codigo."""
+    def get_stock_activo_por_lote(self, lote_id: int) -> StockBodega | None:
+        """Devuelve StockBodega desde la caché poblada por get_lote_by_codigo."""
         return self._stock_cache.pop(lote_id, None)

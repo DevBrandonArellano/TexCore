@@ -65,7 +65,7 @@ Se ha implementado un sistema completo de **reversión de despachos** que permit
 
 ---
 
-### 2. Backend - Views (`inventory/views.py`)
+### 2. Backend - Views (`inventory/views/despacho_views.py`)
 
 #### `HistorialDespachoViewSet` (actualizado)
 
@@ -206,14 +206,14 @@ cantidad_calculada_kg = sigue inmutable (auditoría histórica)
 
 ```python
 # Caso 1: Revertir despacho restaura stock correctamente
-def test_revertir_despacho_restaura_stock()
+def test_revertir_despacho_dado_despacho_realizado_cuando_revierte_entonces_restaura_stock()
     # Crear despacho → verificar stock = 0
     # Revertir con justificación
     # Verificar stock = valores originales
     # Verificar MovimientoInventario DEVOLUCION creado
 
 # Caso 2: Reversión sin justificación falla
-def test_revertir_despacho_requiere_justificacion()
+def test_revertir_despacho_dado_sin_justificacion_cuando_revierte_entonces_falla()
     # Intentar revertir sin justificación → HTTP 400
     # Con justificación → HTTP 200
 
@@ -279,7 +279,9 @@ npm run test -- HistorialDespachos
 
 ## Extensiones Futuras
 
-1. **Reversión Parcial:** Revertir solo algunos lotes del despacho
+1. ~~**Reversión Parcial:** Revertir solo algunos lotes del despacho~~ — el *despacho* parcial (no
+   la reversión) se implementó 2026-08-25, ver actualización abajo. Revertir sigue siendo todo-o-nada
+   por historial (no se puede revertir solo algunos lotes de un mismo evento de despacho).
 2. **Notificaciones:** Alertar al cliente si su despacho fue revertido
 3. **Reportes de Reversión:** Dashboard con tendencias de reversiones
 4. **Auto-reversión:** Revertir automáticamente si se detectan errores (ej: peso inconsistente)
@@ -294,6 +296,47 @@ npm run test -- HistorialDespachos
 - **Service Layer existente:** `inventory/services/`
 - **Modelo HistorialDespacho:** `inventory/models.py`
 - **Thread-safe utility:** `inventory/utils.py::safe_get_or_create_stock`
+
+---
+
+## Actualización 2026-08-25 — 2 bugs reales corregidos + despacho parcial + estado recalculado
+
+### Bugs reales encontrados probando el flujo end-to-end (no simulados — con logs reales)
+
+1. **Precisión decimal en `_revertir_descargas_quimicas`**: sumaba `DescargaQuimicoOP.cantidad_calculada_kg`
+   (DECIMAL 12,6) directo a `StockBodega.cantidad` (DECIMAL 12,3) sin redondear —
+   `full_clean()` rechazaba el guardado ("no more than 3 decimal places"), 500 en el endpoint de
+   revertir. Corregido con `.quantize(Decimal('0.001'))`, mismo patrón ya usado en
+   `descarga_quimicos.py`. Ningún test existente lo detectaba (ninguno ejercitaba revertir un
+   despacho cuya OP tuviera químicos descargados) — nuevo test
+   `test_revertir_despacho_dado_op_con_quimicos_descargados_cuando_revierte_entonces_no_falla_por_precision`.
+2. **`historial.delete()` fallaba con `ProtectedError`**: `DetalleHistorialDespachoPedido.historial`
+   es `on_delete=PROTECT`, y ni `destroy()` ni `revertir()` borraban esas filas antes de intentar
+   eliminar el `HistorialDespacho` — **toda** reversión de un despacho real (con al menos un pedido
+   vinculado) fallaba con 500. Estaba oculto detrás del bug #1; al arreglar ese, apareció este.
+   Corregido con `historial.detallehistorialdespachopedido_set.all().delete()` antes de
+   `historial.delete()` en ambas acciones. Nuevo test end-to-end (despacha y revierte por HTTP real,
+   no solo llamando al servicio) en `inventory/tests/test_process_despacho.py`.
+
+### Despacho parcial — el pedido ya no vuelve a "pendiente" a ciegas
+
+Ver también `docs/modulos/DESPACHO_IMPLEMENTACION.md` para el detalle del lado de "procesar" un
+despacho parcial. Del lado de la **reversión**: antes, `revertir_despacho()` forzaba
+`pedido.estado = 'pendiente'` para todo pedido en estado `'despachado'` vinculado al historial. Si un
+pedido tenía **otro** despacho previo (no revertido) cubriéndolo parcialmente, esto perdía ese avance.
+
+Nuevo `inventory/services/despacho_estado.py::DespachoEstadoService.recalcular_estado(pedido)` —
+compara lo realmente despachado (no revertido, vía la nueva FK `DetalleHistorialDespacho.pedido`)
+contra lo requerido en los detalles del pedido, y decide `pendiente` / `despachado_parcial` /
+`despachado`. Se usa tanto al procesar un despacho como al revertirlo — mismo cálculo, una sola fuente
+de verdad, en vez de reglas divergentes en cada flujo.
+
+### Testing (actualizado)
+
+Los 4 casos sugeridos en la sección "Testing" de arriba ya están implementados en
+`inventory/tests/test_despacho_reversion.py` (8 tests) — se agregaron además:
+`inventory/tests/test_process_despacho.py` (5 tests, cubre despacho completo/parcial/multi-pedido y
+la reversión end-to-end vía HTTP real).
 
 ---
 

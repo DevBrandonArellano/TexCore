@@ -2,9 +2,11 @@
  * ISTQB — Nivel: Componente / Integración
  * Técnica : Black-box (equivalencia de partición + valor límite + transición de estados)
  * Cubre   : InventoryDashboard — todo lo que NO cubre InventoryDashboard.reportes.test.tsx
- *            - Navegación entre las 6 pestañas
- *            - StockView: carga, vacío, poblado, búsqueda, paginación, error de fetch
- *            - RegistrarEntradaView: validación, envío exitoso, error de servidor, estado de envío
+ *            - Navegación entre las 7 pestañas
+ *            - StockView: carga, vacío, poblado, búsqueda y paginación en servidor, error de fetch
+ *            - Recepción F0-001 (RegistrarEntradaView.test.tsx cubre el formulario): payload a
+ *              registrar-entrada con los componentes reales y estado de envío
+ *            - Materia prima y stock a fecha de corte: integración en sus pestañas
  *            - TransferView: validación de campos, validación de stock, envío exitoso
  *            - KardexView: consulta con filtros, limpiar filtros, exportación CSV, diálogos de edición/auditoría
  */
@@ -17,15 +19,15 @@ import { BrowserRouter } from 'react-router-dom';
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockPut = vi.fn();
-const mockDelete = vi.fn(() => Promise.resolve({ data: [] }));
+const mockDelete = vi.fn<(...args: unknown[]) => Promise<{ data: never[] }>>(() => Promise.resolve({ data: [] }));
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    put: (...args: any[]) => mockPut(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     patch: vi.fn(() => Promise.resolve({ data: [] })),
-    delete: (...args: any[]) => mockDelete(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -33,8 +35,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -43,6 +45,7 @@ global.URL.revokeObjectURL = vi.fn();
 
 import { InventoryDashboard } from './InventoryDashboard';
 import type { Producto, Bodega, Proveedor } from '../../lib/types';
+import type { StockItem } from './inventoryUtils';
 
 const mockProductos: Producto[] = [
   {
@@ -74,18 +77,42 @@ const mockProveedores: Proveedor[] = [
   { id: 1, nombre: 'Proveedor Textil SA' },
 ];
 
+/**
+ * Emula `/inventory/stock/` (stock_con_existencias + PaginacionAcotada): filtra por
+ * producto, bodega y búsqueda, y responde la página pedida.
+ */
+function stockDelServidor(stock: StockItem[], params: Record<string, unknown> = {}) {
+  const texto = String(params.search ?? '').toLowerCase();
+  const filas = stock.filter(fila =>
+    (params.producto_id === undefined || String(fila.producto_id) === String(params.producto_id)) &&
+    (params.bodega_id === undefined || String(fila.bodega_id) === String(params.bodega_id)) &&
+    (!texto || [fila.producto, fila.bodega, fila.lote].some(v => String(v ?? '').toLowerCase().includes(texto)))
+  );
+  const tamano = Number(params.page_size ?? 50);
+  const inicio = (Number(params.page ?? 1) - 1) * tamano;
+  return { count: filas.length, next: null, previous: null, results: filas.slice(inicio, inicio + tamano) };
+}
+
 function mockApi({
-  stock = [] as any[],
-  movimientos = [] as any[],
+  stock = [] as StockItem[],
+  movimientos = [] as unknown[],
+  kardex = [] as unknown[],
   stockError = false,
-}: { stock?: any[]; movimientos?: any[]; stockError?: boolean } = {}) {
-  mockGet.mockImplementation((url: string) => {
+}: { stock?: StockItem[]; movimientos?: unknown[]; kardex?: unknown[]; stockError?: boolean } = {}) {
+  mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
     if (url === '/inventory/stock/') {
       if (stockError) return Promise.reject(new Error('network error'));
-      return Promise.resolve({ data: stock });
+      return Promise.resolve({ data: stockDelServidor(stock, config?.params) });
     }
+    // Kárdex paginado en servidor (RNF-03 · TEX-22)
     if (url === '/inventory/movimientos/') {
-      return Promise.resolve({ data: movimientos });
+      return Promise.resolve({ data: { count: movimientos.length, results: movimientos } });
+    }
+    if (/^\/inventory\/bodegas\/\d+\/kardex\/$/.test(url)) {
+      return Promise.resolve({ data: { count: kardex.length, results: kardex, saldo_inicial: '0.000' } });
+    }
+    if (url === '/reporting/export/kardex') {
+      return Promise.resolve({ data: new Blob(['xlsx']), headers: {} });
     }
     if (url.includes('/auditoria/')) {
       return Promise.resolve({ data: [] });
@@ -94,7 +121,8 @@ function mockApi({
   });
 }
 
-const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+// delay: null — sin un setTimeout por tecla: el dashboard completo se re-renderiza en cada una.
+const setupUser = () => userEvent.setup({ pointerEventsCheck: 0, delay: null });
 
 const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDashboard>> = {}) =>
   render(
@@ -102,7 +130,6 @@ const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDas
       <InventoryDashboard
         productos={mockProductos}
         bodegas={mockBodegas}
-        lotesProduccion={[]}
         proveedores={mockProveedores}
         onDataRefresh={vi.fn()}
         {...props}
@@ -110,16 +137,20 @@ const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDas
     </BrowserRouter>
   );
 
+/**
+ * Elige una opción de un Select de Radix. El trigger se ubica por su placeholder y la
+ * opción dentro del listbox abierto: `*ByRole` con `name` sobre todo el dashboard calcula
+ * el nombre accesible de cada nodo y cada selección tardaba ~0,8 s.
+ */
 const selectComboboxOption = async (
   user: ReturnType<typeof userEvent.setup>,
   placeholderText: string,
   optionName: string | RegExp
 ) => {
-  const triggers = screen.getAllByRole('combobox');
-  const trigger = triggers.find((el) => el.textContent?.includes(placeholderText));
+  const trigger = screen.getByText(placeholderText).closest<HTMLElement>('[role="combobox"]');
   if (!trigger) throw new Error(`No combobox found with placeholder "${placeholderText}"`);
   await user.click(trigger);
-  const option = await screen.findByRole('option', { name: optionName });
+  const option = within(await screen.findByRole('listbox')).getByRole('option', { name: optionName });
   await user.click(option);
 };
 
@@ -139,11 +170,12 @@ describe('InventoryDashboard', () => {
   // ── Navegación entre pestañas ──────────────────────────────────────────────
 
   describe('Navegación de pestañas', () => {
-    it('dado el dashboard cuando se monta entonces muestra las 6 pestañas y el tab Stock activo por defecto', async () => {
+    it('dado el dashboard cuando se monta entonces muestra las 7 pestañas y el tab Stock activo por defecto', async () => {
       renderDashboard();
 
       expect(screen.getByRole('tab', { name: /Stock/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Entrada/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Recepción/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Materia prima/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Transfer/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Transform/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Kardex/i })).toBeInTheDocument();
@@ -154,12 +186,31 @@ describe('InventoryDashboard', () => {
       });
     });
 
-    it('dado clic en la pestaña Entrada cuando se navega entonces muestra el formulario de registro de entrada', async () => {
+    it('dado clic en la pestaña Recepción cuando se navega entonces muestra la recepción F0-001', async () => {
       const user = setupUser();
       renderDashboard();
 
-      await user.click(screen.getByRole('tab', { name: /Entrada/i }));
-      expect(await screen.findByText('Registrar Entrada de Materia Prima')).toBeInTheDocument();
+      await user.click(screen.getByRole('tab', { name: /Recepción/i }));
+      expect(await screen.findByText('Recepción de Materia Prima (F0-001)')).toBeInTheDocument();
+    });
+
+    it('dado clic en la pestaña Materia prima cuando se navega entonces lista los lotes recibidos', async () => {
+      const user = setupUser();
+      renderDashboard();
+
+      await user.click(screen.getByRole('tab', { name: /Materia prima/i }));
+      expect(await screen.findByText('Lotes de Materia Prima')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith('/materia-prima/', { params: { page: 1, page_size: 120 } });
+      });
+    });
+
+    it('dado clic en la pestaña Kardex cuando se navega entonces incluye la consulta de stock a fecha de corte', async () => {
+      const user = setupUser();
+      renderDashboard();
+
+      await user.click(screen.getByRole('tab', { name: /Kardex/i }));
+      expect(await screen.findByText('Stock a fecha de corte')).toBeInTheDocument();
     });
 
     it('dado clic en la pestaña Transfer cuando se navega entonces muestra el formulario de transferencia', async () => {
@@ -231,14 +282,12 @@ describe('InventoryDashboard', () => {
       expect(within(row).getByText('-')).toBeInTheDocument();
     });
 
-    it('dado error en el fetch de stock cuando falla entonces muestra toast de error y tabla vacia', async () => {
+    it('dado error en el fetch de stock cuando falla entonces muestra el error en la tabla', async () => {
       mockApi({ stockError: true });
       renderDashboard();
 
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Error stock');
-      });
-      expect(await screen.findByText('No hay stock para mostrar.')).toBeInTheDocument();
+      expect(await screen.findByText('No se pudieron cargar los datos.')).toBeInTheDocument();
+      expect(screen.queryByText('No hay stock para mostrar.')).not.toBeInTheDocument();
     });
 
     it('dado un termino de busqueda cuando se escribe entonces filtra el stock por producto, bodega o lote', async () => {
@@ -259,6 +308,13 @@ describe('InventoryDashboard', () => {
         expect(screen.queryByText('Tela Algodón Premium')).not.toBeInTheDocument();
       });
       expect(screen.getByText('Hilo Poliéster')).toBeInTheDocument();
+      // La búsqueda la resuelve el servidor, una vez terminada de escribir.
+      expect(mockGet).toHaveBeenCalledWith('/inventory/stock/', expect.objectContaining({
+        params: expect.objectContaining({ search: 'Hilo', page: 1 }),
+      }));
+      expect(mockGet).not.toHaveBeenCalledWith('/inventory/stock/', expect.objectContaining({
+        params: expect.objectContaining({ search: 'Hil' }),
+      }));
     });
 
     it('dado mas de 20 items cuando carga entonces pagina los resultados y habilita Siguiente', async () => {
@@ -299,7 +355,7 @@ describe('InventoryDashboard', () => {
       await waitFor(() => {
         expect(mockGet).toHaveBeenCalledWith(
           '/inventory/stock/',
-          expect.objectContaining({ params: { sede_id: '7' } })
+          expect.objectContaining({ params: expect.objectContaining({ sede_id: '7', page: 1, page_size: 80 }) })
         );
       });
     });
@@ -307,105 +363,71 @@ describe('InventoryDashboard', () => {
 
   // ── RegistrarEntradaView ─────────────────────────────────────────────────────
 
-  describe('RegistrarEntradaView (tab Entrada)', () => {
-    const goToEntrada = async (user: ReturnType<typeof userEvent.setup>) => {
+  describe('Recepción F0-001 (tab Recepción)', () => {
+    const goToRecepcion = async (user: ReturnType<typeof userEvent.setup>) => {
       renderDashboard();
-      await user.click(screen.getByRole('tab', { name: /Entrada/i }));
-      await screen.findByText('Registrar Entrada de Materia Prima');
+      await user.click(screen.getByRole('tab', { name: /Recepción/i }));
+      await screen.findByText('Recepción de Materia Prima (F0-001)');
     };
 
-    it('dado el formulario de entrada cuando se renderiza entonces muestra los campos principales', async () => {
-      const user = setupUser();
-      await goToEntrada(user);
-
-      expect(screen.getByText('Producto')).toBeInTheDocument();
-      expect(screen.getByLabelText('Bodega de Destino')).toBeInTheDocument();
-      expect(screen.getByLabelText('Cantidad')).toBeInTheDocument();
-      expect(screen.getByText(/Justificación de la Entrada/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Registrar Entrada' })).toBeInTheDocument();
-    });
-
-    it('dado campos requeridos vacios cuando se envia entonces muestra error y no llama al API', async () => {
-      const user = setupUser();
-      await goToEntrada(user);
-
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
-
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Producto, Bodega, Cantidad y Justificación son requeridos.');
-      });
-      expect(mockPost).not.toHaveBeenCalled();
-    });
-
-    it('dado datos validos cuando se envia entonces registra la entrada con el payload correcto y refresca el stock', async () => {
-      const user = setupUser();
-      mockPost.mockResolvedValue({ data: {} });
-      await goToEntrada(user);
-
+    const llenar = async (user: ReturnType<typeof userEvent.setup>) => {
+      await selectComboboxOption(user, 'Selecciona un proveedor', 'Proveedor Textil SA');
       await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
       await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '15.5');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Reposición mensual de stock');
+      await user.type(screen.getByLabelText('Lote del proveedor'), 'PT-0915');
+      await user.type(screen.getByLabelText('Cantidad (kg)'), '15.5');
+      await user.type(screen.getByLabelText('Costo unitario'), '3.2');
+    };
 
-      const initialGetCalls = mockGet.mock.calls.length;
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
+    it('dado datos validos cuando se envia entonces registra la recepción F0-001', async () => {
+      const user = setupUser();
+      mockPost.mockResolvedValue({ data: { id: 1, lote_proveedor: 'PT-0915' } });
+      await goToRecepcion(user);
+      await llenar(user);
+
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
 
       await waitFor(() => {
-        expect(mockPost).toHaveBeenCalledWith('/inventory/movimientos/', expect.objectContaining({
-          tipo_movimiento: 'COMPRA',
-          producto: 1,
-          bodega_destino: 1,
-          cantidad: 15.5,
-          _justificacion_auditoria: 'Reposición mensual de stock',
+        expect(mockPost).toHaveBeenCalledWith('/materia-prima/registrar-entrada/', expect.objectContaining({
+          proveedor: 1, producto: 1, bodega_recepcion: 1, lote_proveedor: 'PT-0915',
+          cantidad_kg: '15.5', costo_unitario: '3.2',
         }));
       });
-
-      await waitFor(() => {
-        expect(toastSuccessMock).toHaveBeenCalledWith('Entrada de materia prima registrada con éxito.');
-      });
-
-      await waitFor(() => {
-        expect(mockGet.mock.calls.length).toBeGreaterThan(initialGetCalls);
-      });
+      expect(mockPost).not.toHaveBeenCalledWith('/inventory/movimientos/', expect.anything());
     });
 
-    it('dado error del servidor cuando se envia entonces muestra el mensaje de error retornado', async () => {
+    it('dado una recepcion registrada cuando se vuelve a la pestaña Stock entonces pide el stock de nuevo', async () => {
       const user = setupUser();
-      mockPost.mockRejectedValue({ response: { data: { error: 'La bodega no pertenece a la sede.' } } });
-      await goToEntrada(user);
+      mockApi();
+      mockPost.mockResolvedValue({ data: { id: 1, lote_proveedor: 'PT-0915' } });
+      await goToRecepcion(user);
+      await llenar(user);
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
+      await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
 
-      await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
-      await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '10');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Justificación de prueba');
+      const pedidosDeStock = () => mockGet.mock.calls.filter(([url]) => url === '/inventory/stock/').length;
+      const antes = pedidosDeStock();
+      await user.click(screen.getByRole('tab', { name: /^Stock$/i }));
 
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
-
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Error', { description: 'La bodega no pertenece a la sede.' });
-      });
+      await waitFor(() => expect(pedidosDeStock()).toBeGreaterThan(antes));
     });
 
     it('dado un envio en curso cuando se hace clic entonces el boton muestra "Registrando..." y se deshabilita', async () => {
       const user = setupUser();
-      let resolvePost: (v: any) => void;
+      let resolvePost: (v: unknown) => void;
       mockPost.mockImplementation(() => new Promise((resolve) => { resolvePost = resolve; }));
-      await goToEntrada(user);
+      await goToRecepcion(user);
+      await llenar(user);
 
-      await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
-      await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '10');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Justificación de prueba');
-
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: 'Registrando...' })).toBeDisabled();
       });
 
-      resolvePost!({ data: {} });
+      resolvePost!({ data: { id: 1, lote_proveedor: 'PT-0915' } });
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Registrar Entrada' })).not.toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Registrar recepción' })).not.toBeDisabled();
       });
     });
   });
@@ -413,7 +435,7 @@ describe('InventoryDashboard', () => {
   // ── TransferView ─────────────────────────────────────────────────────────────
 
   describe('TransferView (tab Transfer)', () => {
-    const goToTransfer = async (user: ReturnType<typeof userEvent.setup>, stock: any[] = []) => {
+    const goToTransfer = async (user: ReturnType<typeof userEvent.setup>, stock: StockItem[] = []) => {
       mockApi({ stock });
       renderDashboard();
       await user.click(screen.getByRole('tab', { name: /Transfer/i }));
@@ -487,8 +509,10 @@ describe('InventoryDashboard', () => {
   // ── KardexView ───────────────────────────────────────────────────────────────
 
   describe('KardexView (tab Kardex)', () => {
-    const goToKardex = async (user: ReturnType<typeof userEvent.setup>, movimientos: any[] = []) => {
-      mockApi({ movimientos });
+    const goToKardex = async (
+      user: ReturnType<typeof userEvent.setup>, movimientos: unknown[] = [], kardex: unknown[] = [],
+    ) => {
+      mockApi({ movimientos, kardex });
       renderDashboard();
       await user.click(screen.getByRole('tab', { name: /Kardex/i }));
       await screen.findByText('Kardex de Inventario Profesional');
@@ -521,25 +545,26 @@ describe('InventoryDashboard', () => {
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
 
       await waitFor(() => {
-        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', { params: {} });
+        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', { params: { page: 1, page_size: 20 } });
       });
       expect(await screen.findByText('Tela Algodón Premium')).toBeInTheDocument();
       expect(screen.getByText('FAC-001')).toBeInTheDocument();
     });
 
-    it('dado bodega y producto seleccionados cuando se consulta entonces envia esos filtros y muestra columna Saldo', async () => {
+    it('dado bodega y producto seleccionados cuando se consulta entonces pide el kardex paginado y muestra el saldo del servidor', async () => {
       const user = setupUser();
-      await goToKardex(user, [
+      await goToKardex(user, [], [
         {
           id: 502,
           fecha: '2026-07-01T10:00:00',
           tipo_movimiento: 'COMPRA',
-          producto: 'Tela Algodón Premium',
-          producto_nombre: 'Tela Algodón Premium',
-          bodega_origen: null,
+          descripcion_producto: 'Tela Algodón Premium',
+          bodega_origen_nombre: null,
           bodega_destino_nombre: 'Bodega Principal',
-          bodega_destino: 'Bodega Principal',
-          cantidad: '25.00',
+          cantidad: '25.000',
+          entrada: '25.000',
+          salida: '0.000',
+          saldo: '25.000',
           documento_ref: 'FAC-002',
           usuario: 'admin',
         },
@@ -550,8 +575,8 @@ describe('InventoryDashboard', () => {
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
 
       await waitFor(() => {
-        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', {
-          params: { bodega_id: '1', producto_id: '1' },
+        expect(mockGet).toHaveBeenCalledWith('/inventory/bodegas/1/kardex/', {
+          params: { producto_id: '1', page: 1, page_size: 20 },
         });
       });
 
@@ -586,17 +611,17 @@ describe('InventoryDashboard', () => {
       });
     });
 
-    it('dado kardex vacio cuando se exporta a CSV entonces muestra un error y no descarga nada', async () => {
+    it('dado kardex sin consultar cuando se exporta entonces pide consultar primero y no descarga nada', async () => {
       const user = setupUser();
       await goToKardex(user, []);
 
-      await user.click(screen.getByRole('button', { name: /Exportar CSV/i }));
+      await user.click(screen.getByRole('button', { name: /Exportar Excel/i }));
 
-      expect(toastErrorMock).toHaveBeenCalledWith('No hay datos para exportar');
+      expect(toastErrorMock).toHaveBeenCalledWith('Consulte el kárdex antes de exportar.');
       expect(URL.createObjectURL).not.toHaveBeenCalled();
     });
 
-    it('dado datos de kardex cargados cuando se exporta a CSV entonces genera y descarga el archivo', async () => {
+    it('dado kardex de una bodega consultado cuando se exporta entonces descarga el excel generado en el servidor', async () => {
       const user = setupUser();
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       await goToKardex(user, [
@@ -604,23 +629,29 @@ describe('InventoryDashboard', () => {
           id: 504,
           fecha: '2026-07-01T10:00:00',
           tipo_movimiento: 'COMPRA',
-          producto: 'Tela Algodón Premium',
+          producto: 1,
           producto_nombre: 'Tela Algodón Premium',
           bodega_origen: null,
-          bodega_destino: 'Bodega Principal',
+          bodega_destino: 1,
+          bodega_destino_nombre: 'Bodega Principal',
           cantidad: '25.00',
           documento_ref: 'FAC-004',
           usuario: 'admin',
         },
       ]);
 
+      await selectComboboxOption(user, 'Todas las Bodegas', 'Bodega Principal');
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
       await screen.findByText('Tela Algodón Premium');
 
-      await user.click(screen.getByRole('button', { name: /Exportar CSV/i }));
+      await user.click(screen.getByRole('button', { name: /Exportar Excel/i }));
 
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith('/reporting/export/kardex', {
+          params: { bodega_id: '1' }, responseType: 'blob',
+        });
+      });
       expect(URL.createObjectURL).toHaveBeenCalled();
-      expect(clickSpy).toHaveBeenCalled();
       clickSpy.mockRestore();
     });
 

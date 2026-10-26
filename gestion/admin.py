@@ -1,42 +1,54 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import (
-    Sede, Area, CustomUser, Producto, Batch, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega,
-    TransformacionProducto, LineaProduccion
-)
 
-# Custom admin for CustomUser to properly show groups and permissions
+from .models import (
+    Area,
+    Bodega,
+    Cliente,
+    ConfiguracionEmpaqueSede,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FormulaColor,
+    LineaProduccion,
+    LoteProduccion,
+    MaquinaProceso,
+    OrdenProduccion,
+    PedidoVenta,
+    ProcesoTintoreria,
+    ProcessStep,
+    Producto,
+    Sede,
+    TransformacionProducto,
+)
 
 
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
 
-    # Fields to display in the list view
-    list_display = ['username', 'email', 'first_name', 'last_name', 'sede', 'area', 'is_staff', 'is_active']
-    list_filter = ['is_staff', 'is_active', 'sede', 'area', 'groups']
+    list_display = ["username", "email", "first_name", "last_name", "sede", "area", "is_staff", "is_active"]
+    list_filter = ["is_staff", "is_active", "sede", "area", "groups"]
 
-    # Fieldsets for the detail/edit view
-    fieldsets = UserAdmin.fieldsets + (
-        ('Información Adicional', {
-            'fields': ('sede', 'area', 'date_of_birth', 'superior', 'bodegas_asignadas')
-        }),
+    fieldsets = (
+        *(UserAdmin.fieldsets or ()),
+        ("Información Adicional", {"fields": ("sede", "area", "date_of_birth", "superior", "bodegas_asignadas")}),
     )
 
-    # Fieldsets for adding a new user
+    # Fieldsets para crear un usuario nuevo
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Información Adicional', {
-            'fields': ('sede', 'area', 'date_of_birth', 'email', 'first_name', 'last_name', 'bodegas_asignadas')
-        }),
+        (
+            "Información Adicional",
+            {"fields": ("sede", "area", "date_of_birth", "email", "first_name", "last_name", "bodegas_asignadas")},
+        ),
     )
 
-    # Enable search
-    search_fields = ['username', 'email', 'first_name', 'last_name']
-    ordering = ['username']
+    # Habilita la búsqueda
+    search_fields = ["username", "email", "first_name", "last_name"]
+    ordering = ["username"]
 
-    # Configure many-to-many fields
-    filter_horizontal = ['groups', 'user_permissions', 'superior', 'bodegas_asignadas']
+    # Configura los campos muchos a muchos
+    filter_horizontal = ["groups", "user_permissions", "superior", "bodegas_asignadas"]
+
 
 # Inline para asignar usuarios desde la vista de Bodega
 
@@ -49,21 +61,23 @@ class BodegueroInline(admin.TabularInline):
 
 
 class BodegaAdmin(admin.ModelAdmin):
-    list_display = ['nombre', 'sede']
-    search_fields = ['nombre', 'sede__nombre']
-    list_filter = ['sede']
+    list_display = ["nombre", "sede"]
+    search_fields = ["nombre", "sede__nombre"]
+    list_filter = ["sede"]
     inlines = [BodegueroInline]
 
 
-# Register models
+# Registra los modelos
 admin.site.register(Sede)
 admin.site.register(Area)
+admin.site.register(ConfiguracionEmpaqueSede)
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(Bodega, BodegaAdmin)
 admin.site.register(Producto)
-admin.site.register(Batch)
 admin.site.register(ProcessStep)
 admin.site.register(FormulaColor)
+admin.site.register(ProcesoTintoreria)
+admin.site.register(MaquinaProceso)
 admin.site.register(DetalleFormula)
 admin.site.register(Cliente)
 admin.site.register(OrdenProduccion)
@@ -76,21 +90,30 @@ admin.site.register(DetallePedido)
 class LineaProduccionAdmin(admin.ModelAdmin):
     # Nota: la validación máquina∈área vive en el serializer del API;
     # el admin (superuser-only) no la aplica.
-    list_display = ['nombre', 'area', 'estado']
-    list_filter = ['area', 'estado']
-    search_fields = ['nombre', 'area__nombre']
-    filter_horizontal = ['maquinas']
+    list_display = ["nombre", "area", "estado"]
+    list_filter = ["area", "estado"]
+    search_fields = ["nombre", "area__nombre"]
+    filter_horizontal = ["maquinas"]
 
 
 @admin.register(TransformacionProducto)
 class TransformacionProductoAdmin(admin.ModelAdmin):
     list_display = [
-        'orden_produccion', 'numero_secuencia', 'producto_entrada',
-        'producto_salida', 'maquina', 'peso_entrada', 'peso_salida', 'merma', 'estado',
+        "orden_produccion",
+        "numero_secuencia",
+        "producto_entrada",
+        "producto_salida",
+        "maquina",
+        "peso_entrada",
+        "peso_salida",
+        "merma",
+        "estado",
     ]
-    list_filter = ['estado', 'maquina', 'fecha_creacion']
+    list_filter = ["estado", "maquina", "fecha_creacion"]
     search_fields = [
-        'orden_produccion__codigo', 'producto_entrada__codigo', 'producto_salida__codigo',
+        "orden_produccion__codigo",
+        "producto_entrada__codigo",
+        "producto_salida__codigo",
     ]
-    readonly_fields = ['merma', 'fecha_creacion', 'fecha_modificacion']
-    ordering = ['orden_produccion', 'numero_secuencia']
+    readonly_fields = ["merma", "fecha_creacion", "fecha_modificacion"]
+    ordering = ["orden_produccion", "numero_secuencia"]

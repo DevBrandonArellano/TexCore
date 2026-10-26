@@ -3,90 +3,103 @@ from .catalog_views import (
     ProductoViewSet,
     ProveedorViewSet,
 )
-
+from .configuracion_empaque_views import ConfiguracionEmpaqueView
 from .core_views import (
-    GroupViewSet,
-    SedeViewSet,
     AreaViewSet,
     CustomUserViewSet,
+    GroupViewSet,
+    SedeViewSet,
 )
-
 from .formula_views import (
-    BatchViewSet,
-    ProcessStepViewSet,
     FormulaColorViewSet,
-    DetalleFormulaViewSet,
+    ProcesoTintoreriaViewSet,
+    ProcessStepViewSet,
 )
-
 from .inventory_views import (
     BodegaViewSet,
 )
-
 from .kpi_views import (
     KPIAreaView,
     KpiEjecutivoView,
+    PlantaPulsoDiarioView,
+    ProduccionHistorialProductoView,
+    ProduccionPorProductoImprimirView,
+    ProduccionPorProductoView,
     ProduccionResumenView,
     ProduccionTendenciaView,
 )
-
-from .production_views import (
+from .mes_views import (
+    CorridaProduccionViewSet,
+    OperacionProduccionViewSet,
+    PlanProduccionViewSet,
+)
+from .production_componente_views import (
+    ComponenteMezclaOPViewSet,
+    ConsumoLoteDetalleViewSet,
+)
+from .production_lote_views import (
+    LoteProduccionViewSet,
+    RegistrarLoteProduccionView,
+    TrazabilidadPorCodigoLoteView,
+)
+from .production_maquina_views import (
     LineaProduccionViewSet,
     MaquinaViewSet,
     ParoMaquinaViewSet,
+)
+from .production_orden_views import (
     OrdenProduccionViewSet,
-    LoteProduccionViewSet,
-    RegistrarLoteProduccionView,
-    ComponenteMezclaOPViewSet,
-    ConsumoLoteDetalleViewSet,
-    AreaProcessStepViewSet,
-    OrdenProduccionSubprocesoViewSet,
+)
+from .production_subproceso_views import (
     EtapaProduccionViewSet,
     TransferenciaInterareaViewSet,
 )
-
 from .sales_views import (
     ClienteViewSet,
     PagoClienteViewSet,
     PedidoVentaViewSet,
-    DetallePedidoViewSet,
 )
-
 from .system_views import (
     FrontendLogView,
 )
 
 __all__ = [
-    'AreaProcessStepViewSet',
-    'AreaViewSet',
-    'BatchViewSet',
-    'BodegaViewSet',
-    'ChemicalViewSet',
-    'ClienteViewSet',
-    'ComponenteMezclaOPViewSet',
-    'ConsumoLoteDetalleViewSet',
-    'CustomUserViewSet',
-    'DetalleFormulaViewSet',
-    'DetallePedidoViewSet',
-    'EtapaProduccionViewSet',
-    'FormulaColorViewSet',
-    'FrontendLogView',
-    'GroupViewSet',
-    'KPIAreaView',
-    'KpiEjecutivoView',
-    'LineaProduccionViewSet',
-    'LoteProduccionViewSet',
-    'MaquinaViewSet',
-    'ParoMaquinaViewSet',
-    'OrdenProduccionSubprocesoViewSet',
-    'OrdenProduccionViewSet',
-    'PagoClienteViewSet',
-    'PedidoVentaViewSet',
-    'ProcessStepViewSet',
-    'ProduccionResumenView',
-    'ProduccionTendenciaView',
-    'ProductoViewSet',
-    'ProveedorViewSet',
-    'RegistrarLoteProduccionView',
-    'SedeViewSet',
-    'TransferenciaInterareaViewSet',
+    "AreaViewSet",
+    "BodegaViewSet",
+    "ChemicalViewSet",
+    "ClienteViewSet",
+    "ComponenteMezclaOPViewSet",
+    "ConfiguracionEmpaqueView",
+    "ConsumoLoteDetalleViewSet",
+    "CorridaProduccionViewSet",
+    "CustomUserViewSet",
+    "EtapaProduccionViewSet",
+    "FormulaColorViewSet",
+    "FrontendLogView",
+    "GroupViewSet",
+    "KPIAreaView",
+    "KpiEjecutivoView",
+    "LineaProduccionViewSet",
+    "LoteProduccionViewSet",
+    "MaquinaViewSet",
+    "OperacionProduccionViewSet",
+    "OrdenProduccionViewSet",
+    "PagoClienteViewSet",
+    "ParoMaquinaViewSet",
+    "PedidoVentaViewSet",
+    "PlanProduccionViewSet",
+    "PlantaPulsoDiarioView",
+    "ProcesoTintoreriaViewSet",
+    "ProcessStepViewSet",
+    "ProduccionHistorialProductoView",
+    "ProduccionPorProductoImprimirView",
+    "ProduccionPorProductoView",
+    "ProduccionResumenView",
+    "ProduccionTendenciaView",
+    "ProductoViewSet",
+    "ProveedorViewSet",
+    "RegistrarLoteProduccionView",
+    "SedeViewSet",
+    "TransferenciaInterareaViewSet",
+    "TrazabilidadPorCodigoLoteView",
 ]

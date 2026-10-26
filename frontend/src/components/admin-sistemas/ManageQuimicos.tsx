@@ -1,21 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Quimico } from '../../lib/types';
-import { Beaker, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PayloadQuimico, Quimico } from '../../lib/types';
+import { Beaker, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageQuimicosProps {
   quimicos: Quimico[];
-  onChemicalCreate: (chemicalData: any) => Promise<boolean>;
-  onChemicalUpdate: (chemicalId: number, chemicalData: any) => Promise<boolean>;
+  onChemicalCreate: (chemicalData: PayloadQuimico) => Promise<boolean>;
+  onChemicalUpdate: (chemicalId: number, chemicalData: PayloadQuimico) => Promise<boolean>;
   onChemicalDelete: (chemicalId: number) => void;
   loading: boolean;
 }
@@ -31,6 +33,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     unidad_medida: 'kg',
     presentacion: '',
     precio_base: '0',
+    stock_minimo: '0',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -39,28 +42,20 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
   const filteredQuimicos = useMemo(() => {
     return quimicos.filter(quimico =>
-      (quimico as any).codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (quimico as any).descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+      quimico.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quimico.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [quimicos, searchTerm]);
 
-  const totalPages = Math.ceil(filteredQuimicos.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedQuimicos = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredQuimicos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredQuimicos, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedQuimicos,
+  } = usePagination(filteredQuimicos, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -69,6 +64,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       unidad_medida: 'kg',
       presentacion: '',
       precio_base: '0',
+      stock_minimo: '0',
     });
     setErrors({});
     setEditingQuimico(null);
@@ -91,16 +87,14 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
     const dataToSend = {
       ...formData,
-      tipo: 'quimico',
-      precio_base: parseFloat(formData.precio_base) || 0
+      tipo: 'quimico' as const,
+      precio_base: parseFloat(formData.precio_base) || 0,
+      stock_minimo: parseFloat(formData.stock_minimo) || 0,
     };
 
-    let success = false;
-    if (editingQuimico) {
-      success = await onChemicalUpdate(editingQuimico.id, dataToSend);
-    } else {
-      success = await onChemicalCreate(dataToSend);
-    }
+    const success = editingQuimico
+      ? await onChemicalUpdate(editingQuimico.id, dataToSend)
+      : await onChemicalCreate(dataToSend);
 
     if (success) {
       setIsOpen(false);
@@ -108,7 +102,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     }
   };
 
-  const handleEdit = (quimico: any) => {
+  const handleEdit = (quimico: Quimico) => {
     setEditingQuimico(quimico);
     setFormData({
       codigo: quimico.codigo || '',
@@ -116,13 +110,14 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       unidad_medida: quimico.unidad_medida || 'kg',
       presentacion: quimico.presentacion || '',
       precio_base: quimico.precio_base?.toString() || '0',
+      stock_minimo: quimico.stock_minimo?.toString() || '0',
     });
     setIsOpen(true);
   };
 
   return (
     <Card className="flex flex-col h-full min-h-0">
-      <CardHeader className="flex-shrink-0">
+      <CardHeader className="shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Químicos</CardTitle>
@@ -184,6 +179,10 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                   <Label htmlFor="precio_base">Precio Base (Opcional)</Label>
                   <Input id="precio_base" type="number" value={formData.precio_base} onChange={(e) => setFormData({ ...formData, precio_base: e.target.value })} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stock_minimo">Stock Mínimo</Label>
+                  <Input id="stock_minimo" type="number" min="0" placeholder="Ej: 50" value={formData.stock_minimo} onChange={(e) => setFormData({ ...formData, stock_minimo: e.target.value })} />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
@@ -212,12 +211,13 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
         <div className="flex-1 overflow-auto rounded-md border relative">
           <Table className="min-w-max">
-            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-xs border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead>Presentación</TableHead>
                 <TableHead>Unidad</TableHead>
+                <TableHead>Stock Mín.</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -229,6 +229,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -238,12 +239,13 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                   </TableRow>
                 ))
               ) : (
-                paginatedQuimicos.map((quimico: any) => (
+                paginatedQuimicos.map((quimico) => (
                   <TableRow key={quimico.id}>
                     <TableCell className="font-mono text-xs">{quimico.codigo}</TableCell>
                     <TableCell>{quimico.descripcion}</TableCell>
                     <TableCell>{quimico.presentacion || '-'}</TableCell>
                     <TableCell>{quimico.unidad_medida}</TableCell>
+                    <TableCell>{quimico.stock_minimo ?? '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button
@@ -268,56 +270,12 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4 shrink-0"
+        />
       </CardContent>
     </Card>
   );

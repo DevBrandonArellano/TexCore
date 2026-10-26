@@ -9,7 +9,7 @@ import apiClient from './axios';
 
 export type PrintOutcome = 'zebra' | 'pdf' | 'clipboard';
 
-interface BrowserPrintDevice {
+export interface BrowserPrintDevice {
     name: string;
     uid: string;
     connection: string;
@@ -30,7 +30,7 @@ declare global {
     }
 }
 
-function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
+export function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
     return new Promise((resolve) => {
         if (!window.BrowserPrint) {
             resolve(null);
@@ -44,15 +44,21 @@ function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
     });
 }
 
-function sendZpl(device: BrowserPrintDevice, zpl: string): Promise<void> {
+export function sendZpl(device: BrowserPrintDevice, zpl: string): Promise<void> {
     return new Promise((resolve, reject) => {
         device.send(zpl, () => resolve(), (err) => reject(new Error(err)));
     });
 }
 
-async function abrirPdfParaImprimir(loteId: number): Promise<void> {
+export interface LabelGovernanceContext {
+    tipo_evento: 'REIMPRESION' | 'REETIQUETADO';
+    version: number;
+}
+
+export async function abrirPdfParaImprimir(loteId: number, contexto?: LabelGovernanceContext): Promise<void> {
     const res = await apiClient.get(`/lotes-produccion/${loteId}/generate-pdf-label/`, {
         responseType: 'blob',
+        params: contexto,
     });
     const blobUrl = URL.createObjectURL(res.data as Blob);
     const ventana = window.open(blobUrl, '_blank');
@@ -64,6 +70,18 @@ async function abrirPdfParaImprimir(loteId: number): Promise<void> {
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
+/** Lee la preferencia de impresora guardada en localStorage ('auto' | 'zebra' | 'pdf'). */
+export function resolvePreferredMode(): string {
+    if (typeof window !== 'undefined' && window.localStorage?.getItem) {
+        try {
+            return window.localStorage.getItem('texcore_preferred_printer') || 'auto';
+        } catch {
+            return 'auto';
+        }
+    }
+    return 'auto';
+}
+
 /**
  * Imprime una etiqueta: respeta la preferencia de impresora guardada en localStorage
  * ('auto' | 'zebra' | 'pdf'). Intenta Zebra Browser Print (ZPL directo);
@@ -71,20 +89,17 @@ async function abrirPdfParaImprimir(loteId: number): Promise<void> {
  * y abre el diálogo de impresión del navegador; si todo falla, copia el
  * ZPL al portapapeles como último recurso.
  */
-export async function printLabel(loteId: number, zpl: string): Promise<PrintOutcome> {
-    let preferredMode = 'auto';
-    if (typeof window !== 'undefined' && window.localStorage?.getItem) {
-        try {
-            preferredMode = window.localStorage.getItem('texcore_preferred_printer') || 'auto';
-        } catch {
-            preferredMode = 'auto';
-        }
-    }
+export async function printLabel(
+    loteId: number,
+    zpl: string,
+    contexto?: LabelGovernanceContext,
+): Promise<PrintOutcome> {
+    const preferredMode = resolvePreferredMode();
 
     if (preferredMode === 'pdf') {
 
         try {
-            await abrirPdfParaImprimir(loteId);
+            await abrirPdfParaImprimir(loteId, contexto);
             return 'pdf';
         } catch {
             await navigator.clipboard.writeText(zpl);
@@ -103,7 +118,7 @@ export async function printLabel(loteId: number, zpl: string): Promise<PrintOutc
     }
 
     try {
-        await abrirPdfParaImprimir(loteId);
+        await abrirPdfParaImprimir(loteId, contexto);
         return 'pdf';
     } catch {
         await navigator.clipboard.writeText(zpl);

@@ -1,6 +1,12 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una peticion en curso / sin registros / registros existentes / un registro
+ *   de creacion / un registro de edicion.
+ * - Caja blanca (CB): ramas de error — un error en la peticion.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -11,7 +17,7 @@ const mockGet = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
@@ -54,7 +60,7 @@ const LOG_DELETE = {
   justificacion: 'Cliente inactivo',
 };
 
-function mockFetch(results: any[], count = results.length) {
+function mockFetch(results: unknown[], count = results.length) {
   mockGet.mockResolvedValue({ data: { results, count } });
 }
 
@@ -63,8 +69,8 @@ describe('AuditLogViewer', () => {
     mockGet.mockReset();
   });
 
-  it('dado que la peticion esta en curso entonces muestra el estado de carga', async () => {
-    let resolveRequest: (value: any) => void = () => {};
+  it('dado una peticion en curso cuando monta entonces muestra el estado de carga', async () => {
+    let resolveRequest: (value: unknown) => void = () => {};
     mockGet.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -106,7 +112,7 @@ describe('AuditLogViewer', () => {
     expect(screen.getByText(expectedFecha)).toBeInTheDocument();
   });
 
-  it('dado un registro de creacion entonces muestra solo el valor nuevo como registro inicial', async () => {
+  it('dado un registro de creacion cuando lo muestra entonces presenta solo el valor nuevo como registro inicial', async () => {
     mockFetch([LOG_CREATE]);
     render(<AuditLogViewer />);
 
@@ -116,7 +122,7 @@ describe('AuditLogViewer', () => {
     expect(screen.queryByText(/Anterior:/)).not.toBeInTheDocument();
   });
 
-  it('dado un registro de edicion entonces muestra el valor anterior y el nuevo', async () => {
+  it('dado un registro de edicion cuando lo muestra entonces presenta el valor anterior y el nuevo', async () => {
     mockFetch([LOG_UPDATE]);
     render(<AuditLogViewer />);
 
@@ -126,7 +132,7 @@ describe('AuditLogViewer', () => {
     expect(screen.getByText(/"cantidad": 25/)).toBeInTheDocument();
   });
 
-  it('dado un registro de eliminacion entonces muestra los valores eliminados', async () => {
+  it('dado un registro de eliminacion cuando lo muestra entonces presenta los valores eliminados', async () => {
     mockFetch([LOG_DELETE]);
     render(<AuditLogViewer />);
 
@@ -151,6 +157,60 @@ describe('AuditLogViewer', () => {
       expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('search=Ana')),
     );
     expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('page=1'));
+  });
+
+  // TEX-52 CA-1: filtrar por fecha y tipo de operación (antes solo texto y 30 días fijos).
+  it('dado rango de fechas y tipo de operacion cuando busca entonces los envia y reinicia la pagina', async () => {
+    mockFetch([], 0);
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText('No se encontraron registros de auditoría.')).toBeInTheDocument());
+    mockGet.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-06-01' } });
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-06-30' } });
+    fireEvent.change(screen.getByLabelText('Operación'), { target: { value: 'DELETE' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(expect.stringContaining(
+      '&fecha_desde=2026-06-01&fecha_hasta=2026-06-30&accion=DELETE')));
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('page=1'));
+  });
+
+  it('dado sin filtros de fecha ni operacion cuando consulta entonces no los envia', async () => {
+    mockFetch([], 0);
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(mockGet).toHaveBeenCalled());
+    const url = mockGet.mock.calls[0][0] as string;
+    expect(url).not.toContain('fecha_desde');
+    expect(url).not.toContain('accion');
+  });
+
+  it('dado rango invertido cuando busca entonces avisa sin consultar', async () => {
+    mockFetch([], 0);
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText('No se encontraron registros de auditoría.')).toBeInTheDocument());
+    mockGet.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-06-30' } });
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-06-01' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    expect(screen.getByText('La fecha «Desde» no puede ser posterior a «Hasta».')).toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('dado una busqueda con caracteres reservados de URL cuando busca entonces los envia codificados', async () => {
+    mockFetch([], 0);
+    render(<AuditLogViewer />);
+    await waitFor(() =>
+      expect(screen.getByText('No se encontraron registros de auditoría.')).toBeInTheDocument(),
+    );
+    mockGet.mockClear();
+
+    await userEvent.type(screen.getByPlaceholderText('Buscar por usuario, tabla o ID...'), 'a&page=9');
+    await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('search=a%26page%3D9&page=1')));
   });
 
   it('dado varias paginas de registros cuando hace clic en Siguiente entonces consulta la pagina siguiente', async () => {
@@ -182,7 +242,7 @@ describe('AuditLogViewer', () => {
     });
   });
 
-  it('dado permitirVerTodasSedes en false entonces no muestra la opcion de ver todas las sedes', async () => {
+  it('dado permitirVerTodasSedes en false cuando monta entonces no muestra la opcion de ver todas las sedes', async () => {
     mockFetch([], 0);
     render(<AuditLogViewer sedeId="3" permitirVerTodasSedes={false} />);
 
@@ -192,7 +252,7 @@ describe('AuditLogViewer', () => {
     expect(screen.queryByText('Ver todas las sedes')).not.toBeInTheDocument();
   });
 
-  it('dado clic en Refrescar entonces vuelve a consultar los registros', async () => {
+  it('dado registros cargados cuando hace clic en Refrescar entonces vuelve a consultarlos', async () => {
     mockFetch([], 0);
     render(<AuditLogViewer />);
 
@@ -203,7 +263,7 @@ describe('AuditLogViewer', () => {
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 
-  it('dado un error en la peticion entonces deja de cargar y muestra el mensaje de vacio', async () => {
+  it('dado un error en la peticion cuando monta entonces deja de cargar y muestra el mensaje de vacio', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGet.mockRejectedValue(new Error('network error'));
 
@@ -215,5 +275,34 @@ describe('AuditLogViewer', () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching audit logs:', expect.any(Error));
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it('dado un registro disperso sin usuario, ip, fecha, accion, tabla ni justificacion cuando renderiza entonces usa todos los valores por defecto', async () => {
+    const LOG_DISPERSO = { id: 9 };
+    mockFetch([LOG_DISPERSO]);
+
+    render(<AuditLogViewer />);
+
+    await waitFor(() => expect(screen.getByText('Sistema')).toBeInTheDocument());
+    expect(screen.getByText('IP: Local')).toBeInTheDocument();
+    expect(screen.getByText('EDITAR')).toBeInTheDocument(); // accion por defecto 'UPDATE'
+    expect(screen.getByText(/N\/A #-/)).toBeInTheDocument();
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0); // fecha y justificacion
+  });
+
+  it('dado un registro con objeto_id en vez de registro_id cuando renderiza entonces usa object_id', async () => {
+    const LOG_OBJECT_ID = { id: 10, tabla_afectada: 'Pedido', object_id: 42, accion: 'UPDATE' };
+    mockFetch([LOG_OBJECT_ID]);
+
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText(/Pedido #42/)).toBeInTheDocument());
+  });
+
+  it('dado accion desconocida cuando renderiza el badge entonces muestra la accion tal cual', async () => {
+    const LOG_ACCION_RARA = { id: 11, accion: 'RESTORE', tabla_afectada: 'X', registro_id: 1 };
+    mockFetch([LOG_ACCION_RARA]);
+
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText('RESTORE')).toBeInTheDocument());
   });
 });

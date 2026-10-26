@@ -1,7 +1,13 @@
-"""Tests para JWTTokenManager. EP + BVA."""
+"""Tests para JWTTokenManager. EP + BVA.
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Partición de equivalencia (EP): token fresco / token por expirar / sin token / 31s de vida / respuesta 200.
+- Caja blanca (CB): ramas de error — respuesta error.
+"""
+
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import jwt
@@ -25,15 +31,19 @@ def rsa_keys():
         serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption(),
     ).decode()
-    TEST_PUBLIC_KEY = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    TEST_PUBLIC_KEY = (
+        private_key.public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
 
 
 def _make_token(exp_seconds: int = 900) -> str:
     """Genera token RS256 con las claves del fixture."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": "scanning_service",
@@ -51,6 +61,7 @@ class TestJWTTokenManager:
 
     def _create_manager(self):
         from src.infrastructure.jwt_token_manager import JWTTokenManager
+
         return JWTTokenManager(
             django_url="http://django:8000",
             service_name="scanning_service",
@@ -98,10 +109,12 @@ class TestJWTTokenManager:
         token_31s = _make_token(exp_seconds=31)
         manager._access_token = token_31s
 
-        with patch("src.infrastructure.jwt_token_manager.time.time", return_value=frozen_now):
-            with patch.object(manager, "_fetch_token") as mock_fetch:
-                manager.get_valid_token()
-                mock_fetch.assert_not_called()
+        with (
+            patch("src.infrastructure.jwt_token_manager.time.time", return_value=frozen_now),
+            patch.object(manager, "_fetch_token") as mock_fetch,
+        ):
+            manager.get_valid_token()
+            mock_fetch.assert_not_called()
 
     def test_fetch_token_dado_respuesta_200_cuando_llama_entonces_retorna_access_y_guarda_refresh(self):
         manager = self._create_manager()
@@ -119,6 +132,8 @@ class TestJWTTokenManager:
     def test_fetch_token_dado_respuesta_error_cuando_llama_entonces_lanza_runtimeerror(self):
         manager = self._create_manager()
         mock_response = MagicMock(status_code=401)
-        with patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response):
-            with pytest.raises(RuntimeError, match="HTTP 401"):
-                manager._fetch_token()
+        with (
+            patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response),
+            pytest.raises(RuntimeError, match="HTTP 401"),
+        ):
+            manager._fetch_token()

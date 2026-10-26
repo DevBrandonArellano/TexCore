@@ -1,5 +1,15 @@
 {
+  "name": "texcore-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend run test",
+    "typecheck": "cd frontend && npx tsc --noEmit",
+    "test:coverage": "npm --prefix frontend run test:coverage"
+  },
   "devDependencies": {
-    "vitest": "^4.1.0"
+    "vitest": "^4.0.18"
   }
 }
+

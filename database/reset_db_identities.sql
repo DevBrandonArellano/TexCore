@@ -47,7 +47,7 @@ DELETE FROM gestion_customuser;
 DELETE FROM gestion_area;
 DELETE FROM gestion_sede;
 
--- Django internals
+-- Internos de Django
 DELETE FROM django_admin_log;
 DELETE FROM django_session;
 DELETE FROM auth_permission;
@@ -90,7 +90,7 @@ DBCC CHECKIDENT ('auth_permission',          RESEED, 0) WITH NO_INFOMSGS;
 DBCC CHECKIDENT ('django_content_type',      RESEED, 0) WITH NO_INFOMSGS;
 
 -- -------------------------------------------------------
--- Re-habilitar FK constraints
+-- Rehabilita las restricciones de clave foránea
 -- -------------------------------------------------------
 PRINT 'Re-habilitando FK constraints...';
 EXEC sp_MSforeachtable 'ALTER TABLE ? WITH CHECK CHECK CONSTRAINT ALL';

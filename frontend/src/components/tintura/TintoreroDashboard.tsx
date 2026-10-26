@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 import { toast } from 'sonner';
-import { FormulaColor, Quimico } from '../../lib/types';
-import { FormulaQuimica } from '../tintura/FormulaQuimica';
+import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
+import { FormulaQuimica, type FormulaFormValues } from '../tintura/FormulaQuimica';
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
+import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
+import { ManageProcesosTintoreria } from './ManageProcesosTintoreria';
+import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintoreria';
+import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { toArray } from '../../lib/collections';
 
 interface FormulaColorWrite {
   codigo: string;
@@ -15,50 +21,77 @@ interface FormulaColorWrite {
   tipo_sustrato?: string;
   estado: string;
   observaciones?: string;
-  fases: any[];
+  es_laboratorio?: boolean;
+  fases: FormulaFormValues['fases'];
 }
 
 export function TintoreroDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [procesos, setProcesos] = useState<ProcesoTintoreria[]>([]);
+  const [incluirLaboratorio, setIncluirLaboratorio] = useState(false);
 
-  // Determine active tab from pathname
+  // Determine active tab from pathname (Fase 3 §8 + catálogo de procesos, 2-oct-2026)
   const pathname = location.pathname;
-  const activeTab = pathname.includes('/stock') ? 'stock' : 'formulas';
+  const activeTab = pathname.includes('/procesos')
+    ? 'procesos'
+    : pathname.includes('/stock')
+    ? 'stock'
+    : pathname.includes('/historial')
+    ? 'historial'
+    : pathname.includes('/descargas')
+    ? 'descargas'
+    : 'formulas';
 
   // Filtros desde URL (Modelo Híbrido)
   const estado = searchParams.get('estado') || '';
   const sustra = searchParams.get('sustrato') || '';
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (estado) params.append('estado', estado);
-      if (sustra) params.append('tipo_sustrato', sustra);
+  // `loading` cubre la carga de cada combinación de filtros (derivado de la
+  // clave) y las recargas pedidas tras una mutación, que se pueden esperar.
+  const claveFiltros = `${estado}|${sustra}|${incluirLaboratorio}`;
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const [recargando, setRecargando] = useState(false);
+  const loading = cargadoPara !== claveFiltros || recargando;
 
-      const [formulasRes, quimicosRes] = await Promise.all([
-        apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
-        apiClient.get<Quimico[]>('/chemicals/'),
-      ]);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
-      setQuimicos(Array.isArray(quimicosRes.data) ? quimicosRes.data : (quimicosRes.data as any).results || []);
-    } catch (error) {
-      console.error('Error al cargar datos de tintoreria', error);
-      toast.error('No se pudieron cargar los datos.');
-    } finally {
-      setLoading(false);
-    }
-  }, [estado, sustra]);
+  const cargarDatos = useCallback(() => {
+    const clave = `${estado}|${sustra}|${incluirLaboratorio}`;
+    const params = new URLSearchParams();
+    if (estado) params.append('estado', estado);
+    if (sustra) params.append('tipo_sustrato', sustra);
+    if (incluirLaboratorio) params.append('incluir_laboratorio', 'true');
+
+    return Promise.all([
+      apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
+      apiClient.get<Quimico[]>('/chemicals/'),
+      apiClient.get<ProcesoTintoreria[]>('/procesos-tintoreria/?activo=true'),
+    ])
+      .then(
+        ([formulasRes, quimicosRes, procesosRes]) => {
+          setFormulas(toArray(formulasRes.data));
+          setQuimicos(toArray(quimicosRes.data));
+          setProcesos(toArray(procesosRes.data));
+        },
+        (error: unknown) => {
+          console.error('Error al cargar datos de tintoreria', error);
+          toast.error('No se pudieron cargar los datos.');
+        },
+      )
+      .finally(() => setCargadoPara(clave));
+  }, [estado, sustra, incluirLaboratorio]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const fetchData = useCallback(() => {
+    setRecargando(true);
+    return cargarDatos().finally(() => setRecargando(false));
+  }, [cargarDatos]);
 
   const handleCreate = async (data: FormulaColorWrite): Promise<boolean> => {
     try {
@@ -66,8 +99,8 @@ export function TintoreroDashboard() {
       toast.success('Formula creada exitosamente.');
       await fetchData();
       return true;
-    } catch (error: any) {
-      const detail = error.response?.data;
+    } catch (error) {
+      const detail = datosDeError(error);
       toast.error(detail ? JSON.stringify(detail) : 'Error al crear la formula.');
       return false;
     }
@@ -79,20 +112,63 @@ export function TintoreroDashboard() {
       toast.success('Formula actualizada exitosamente.');
       await fetchData();
       return true;
-    } catch (error: any) {
-      const detail = error.response?.data;
+    } catch (error) {
+      const detail = datosDeError(error);
       toast.error(detail ? JSON.stringify(detail) : 'Error al actualizar la formula.');
       return false;
     }
   };
 
-  const handleDuplicate = async (id: number): Promise<boolean> => {
+  // Regla 1 (D7): congela la receta viva como un ensayo nuevo, NO oficial.
+  const handleCrearVersion = async (id: number, observaciones: string): Promise<boolean> => {
     try {
-      await apiClient.post(`/formula-colors/${id}/duplicar/`);
+      const { data } = await apiClient.post(`/formula-colors/${id}/versiones/`, { observaciones });
+      toast.success(`Versión v${data.numero} guardada como ensayo.`);
       await fetchData();
       return true;
-    } catch (error: any) {
-      toast.error('Error al duplicar la formula.');
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al guardar la versión.'));
+      return false;
+    }
+  };
+
+  // Reglas 3-5: designa una versión existente como la oficial vigente.
+  const handleMarcarOficial = async (id: number, numero: number): Promise<boolean> => {
+    try {
+      await apiClient.post(`/formula-colors/${id}/versiones/${numero}/marcar-oficial/`, {});
+      toast.success(`Versión v${numero} marcada como oficial.`);
+      await fetchData();
+      return true;
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al marcar la versión oficial.'));
+      return false;
+    }
+  };
+
+  // Reglas 6-7 (D8-D9): crea una fórmula nueva a partir del snapshot de una versión concreta.
+  const handleDerivar = async (
+    id: number, datos: DerivarFormulaDatos & { version_origen: number },
+  ): Promise<boolean> => {
+    try {
+      const { data } = await apiClient.post(`/formula-colors/${id}/derivar/`, datos);
+      toast.success(`Fórmula derivada creada: ${data.codigo}.`);
+      await fetchData();
+      return true;
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al derivar la fórmula.'));
+      return false;
+    }
+  };
+
+  // «Duplicar» crea una variante nueva, en pruebas, con su propio código y color
+  const handleDuplicate = async (id: number, datos: { codigo: string; nombre_color: string }): Promise<boolean> => {
+    try {
+      await apiClient.post(`/formula-colors/${id}/duplicar/`, datos);
+      toast.success('Variante creada en pruebas.');
+      await fetchData();
+      return true;
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al crear la variante.'));
       return false;
     }
   };
@@ -103,7 +179,7 @@ export function TintoreroDashboard() {
       await apiClient.delete(`/formula-colors/${id}/`);
       toast.success('Formula eliminada.');
       await fetchData();
-    } catch (error) {
+    } catch {
       toast.error('Error al eliminar la formula.');
     }
   };
@@ -120,42 +196,69 @@ export function TintoreroDashboard() {
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success('Archivo exportado para Dosificadora (Infotint).');
-    } catch (error) {
+    } catch {
       toast.error('Error al exportar datos al dosificador.');
     }
   };
 
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <h1 className="text-3xl font-bold tracking-tight">Panel de Tintorería</h1>
         <p className="text-muted-foreground">
           Bienvenido, {profile?.user.username}. Gestiona formulas químicas y monitorea el stock.
         </p>
       </div>
 
-      <Tabs value={activeTab} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="formulas">Fórmulas Químicas</TabsTrigger>
-          <TabsTrigger value="stock">Stock Disponible</TabsTrigger>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => navigate(
+          value === 'formulas' ? '/' : `/${value}`
+        )}
+        className="flex-1 flex flex-col"
+      >
+        <TabsList className="grid w-full max-w-3xl grid-cols-5">
+          <TabsTrigger value="formulas">Fórmulas</TabsTrigger>
+          <TabsTrigger value="stock">Stock de Químicos</TabsTrigger>
+          <TabsTrigger value="historial">Historial de Órdenes</TabsTrigger>
+          <TabsTrigger value="descargas">Descargas de Químicos</TabsTrigger>
+          <TabsTrigger value="procesos">Procesos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="formulas" className="flex-1">
           <FormulaQuimica
             formulas={formulas}
             quimicos={quimicos}
+            procesos={procesos}
             loading={loading}
             canDelete={false}
+            incluirLaboratorio={incluirLaboratorio}
+            onToggleIncluirLaboratorio={() => setIncluirLaboratorio((v) => !v)}
             onFormulaCreate={handleCreate}
             onFormulaUpdate={handleUpdate}
+            onFormulaCrearVersion={handleCrearVersion}
+            onFormulaMarcarOficial={handleMarcarOficial}
+            onFormulaDerivar={handleDerivar}
             onFormulaDuplicate={handleDuplicate}
             onFormulaDelete={handleDelete}
             onExportDosificador={handleExportDosificador}
           />
         </TabsContent>
 
+        <TabsContent value="procesos" className="flex-1">
+          <ManageProcesosTintoreria onCatalogoCambiado={fetchData} />
+        </TabsContent>
+
         <TabsContent value="stock" className="flex-1">
           <StockQuimicosDashboard />
+        </TabsContent>
+
+        <TabsContent value="historial" className="flex-1">
+          <HistorialOrdenesTintoreria />
+        </TabsContent>
+
+        <TabsContent value="descargas" className="flex-1">
+          <DescargasQuimicosTintoreria />
         </TabsContent>
       </Tabs>
     </div>

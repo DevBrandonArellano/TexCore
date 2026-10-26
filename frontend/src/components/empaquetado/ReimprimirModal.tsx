@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { printLabel } from '../../lib/printing';
+import { printLabel } from '../../lib/printing';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 const MENSAJE_POR_RESULTADO: Record<string, string> = {
     zebra: 'Enviado a la impresora Zebra.',
@@ -61,16 +62,22 @@ export function ReimprimirModal({ open, onOpenChange, loteId, codigoLote, onReim
         }
         setIsSubmitting(true);
         try {
-            const res = await apiClient.post<{ zpl: string; evento: { version: number; secuencia: number } }>(
+            const res = await apiClient.post<{
+                zpl: string;
+                evento: { tipo_evento: 'REIMPRESION'; version: number; secuencia: number };
+            }>(
                 `/lotes-produccion/${loteId}/reimprimir/`,
                 { motivo, detalle_motivo: detalleMotivo, formato: 'ZPL' }
             );
-            const resultado = await printLabel(loteId, res.data.zpl);
+            const resultado = await printLabel(loteId, res.data.zpl, {
+                tipo_evento: res.data.evento.tipo_evento,
+                version: res.data.evento.version,
+            });
             toast.success(`Etiqueta reimpresa (v${res.data.evento.version}). ${MENSAJE_POR_RESULTADO[resultado]}`);
             onReimpreso?.(res.data.zpl);
             handleClose(false);
-        } catch (error: any) {
-            const msg = error.response?.data?.error?.message || 'Error al reimprimir la etiqueta.';
+        } catch (error) {
+            const msg = mensajeDeLaApi(error, 'Error al reimprimir la etiqueta.');
             toast.error(msg);
         } finally {
             setIsSubmitting(false);

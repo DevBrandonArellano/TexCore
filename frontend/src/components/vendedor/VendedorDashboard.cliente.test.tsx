@@ -1,4 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): el formulario de nuevo cliente completo / un RUC duplicado en el sobre
+ *   unificado / un rechazo del backend / un cliente existente / una justificación de auditoría.
+ * - Análisis de valores límite (BVA): un cliente con saldo menor al limite / un cliente que supera su limite.
+ * - Caja blanca (CB): ramas de error — un rechazo del backend.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -55,8 +62,8 @@ const CLIENTE_1 = {
   is_active: true,
 };
 
-function mockApis(clientes: any[] = [CLIENTE_1]) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+function mockApis(clientes: unknown[] = [CLIENTE_1]) {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: clientes });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
     if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -92,8 +99,8 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Creación de cliente ─────────────────────────────────────────────────────
 
-  it('crea un nuevo cliente y llama a POST /clientes/ con los datos del formulario', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 99 } });
+  it('dado el formulario de nuevo cliente completo cuando guarda entonces llama a POST /clientes/ con sus datos', async () => {
+    (apiClient.post as Mock).mockResolvedValue({ data: { id: 99 } });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -120,15 +127,51 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
         })
       );
     });
-    const payload = (apiClient.post as any).mock.calls[0][1];
+    const payload = (apiClient.post as Mock).mock.calls[0][1];
     expect(payload).not.toHaveProperty('_justificacion_auditoria');
     expect(payload).not.toHaveProperty('saldo_pendiente');
     expect(payload).not.toHaveProperty('cartera_vencida');
     expect(toast.success).toHaveBeenCalledWith('Cliente registrado correctamente');
   });
 
-  it('muestra un toast de error de validación por campo cuando el backend rechaza la creación', async () => {
-    (apiClient.post as any).mockRejectedValue({
+  it('dado un RUC duplicado en el sobre unificado cuando crea un cliente entonces muestra el mensaje de la API', async () => {
+    (apiClient.post as Mock).mockRejectedValue({
+      response: {
+        status: 400,
+        data: {
+          success: false,
+          error: {
+            code: 400,
+            message: '__all__: Ya existe un cliente con esa identificación en esta sede.',
+            fields: { __all__: ['Ya existe un cliente con esa identificación en esta sede.'] },
+          },
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await esperarDirectorio();
+
+    await user.click(screen.getByRole('button', { name: /Nuevo Cliente/i }));
+    await waitFor(() => expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText('RUC/Cédula'), '1234567890');
+    await user.type(screen.getByLabelText('Nombre / Razón Social'), 'Cliente Duplicado');
+    await user.type(screen.getByLabelText('Dirección'), 'Calle X');
+    await user.click(screen.getByRole('button', { name: /^Registrar$/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Error de validación',
+        expect.objectContaining({ description: expect.stringContaining('Ya existe un cliente con esa identificación') })
+      );
+    });
+    const descripcion = (toast.error as Mock).mock.calls.at(-1)?.[1]?.description as string;
+    expect(descripcion).not.toContain('[object Object]');
+  });
+
+  it('dado un rechazo del backend cuando crea un cliente entonces muestra el error de validación por campo', async () => {
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { ruc_cedula: ['Ya existe un cliente con este RUC.'] } },
     });
     const user = userEvent.setup();
@@ -153,7 +196,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Edición de cliente ──────────────────────────────────────────────────────
 
-  it('abre el modal de edición con los datos del cliente precargados', async () => {
+  it('dado un cliente existente cuando abre la edición entonces precarga sus datos', async () => {
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -169,8 +212,8 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(screen.getByPlaceholderText(/Cambio de dirección solicitado/i)).toBeInTheDocument();
   });
 
-  it('llama a PUT /clientes/:id/ con la justificación de auditoría al actualizar', async () => {
-    (apiClient.put as any).mockResolvedValue({ data: {} });
+  it('dado una justificación de auditoría cuando actualiza un cliente entonces llama a PUT /clientes/:id/ con ella', async () => {
+    (apiClient.put as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -203,9 +246,9 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Inactivación de cliente ─────────────────────────────────────────────────
 
-  it('inactiva al cliente cuando se confirma el diálogo nativo de confirmación', async () => {
+  it('dado un cliente activo cuando confirma la inactivación entonces lo inactiva', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -223,7 +266,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(toast.success).toHaveBeenCalledWith('Cliente inactivado correctamente');
   });
 
-  it('no inactiva al cliente cuando se cancela el diálogo nativo de confirmación', async () => {
+  it('dado un cliente activo cuando cancela la inactivación entonces no lo inactiva', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     const user = userEvent.setup();
     renderComponent();
@@ -239,7 +282,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Búsqueda y paginación ────────────────────────────────────────────────────
 
-  it('filtra el directorio de clientes según el término de búsqueda', async () => {
+  it('dado un término de búsqueda cuando lo escribe entonces filtra el directorio de clientes', async () => {
     mockApis([
       CLIENTE_1,
       { ...CLIENTE_1, id: 2, nombre_razon_social: 'Cliente Dos', ruc_cedula: '9999999999' },
@@ -256,7 +299,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(screen.queryByText('Cliente Dos')).not.toBeInTheDocument();
   });
 
-  it('pagina el directorio de clientes cuando hay más de 20 resultados', async () => {
+  it('dado más de 20 clientes cuando muestra el directorio entonces lo pagina', async () => {
     const muchosClientes = Array.from({ length: 25 }, (_, i) => ({
       ...CLIENTE_1,
       id: i + 1,
@@ -282,7 +325,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Expediente de cliente ────────────────────────────────────────────────────
 
-  it('abre el expediente del cliente y muestra su historial de pedidos y pagos', async () => {
+  it('dado un cliente con pedidos y pagos cuando abre su expediente entonces muestra su historial', async () => {
     const clienteDetallado = {
       ...CLIENTE_1,
       pedidos: [
@@ -292,7 +335,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
         { id: 7, fecha: '2026-05-02T10:00:00Z', metodo_pago: 'efectivo', monto: 50 },
       ],
     };
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -314,9 +357,34 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     await waitFor(() => expect(screen.getByText('efectivo')).toBeInTheDocument());
   });
 
+  // TEX-36 CA-1: el estado de cuenta muestra el cupo disponible (límite − saldo pendiente).
+  const abrirExpediente = async (cliente: Record<string, unknown>) => {
+    (apiClient.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/clientes/') return Promise.resolve({ data: [cliente] });
+      if (url === '/clientes/1/') return Promise.resolve({ data: { ...cliente, pedidos: [], pagos: [] } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await esperarDirectorio();
+    await user.click(screen.getByText('Cliente Uno'));
+    await waitFor(() => expect(screen.getByText(/Expediente de Cliente: Cliente Uno/)).toBeInTheDocument());
+  };
+
+  it('dado un cliente con saldo menor al limite cuando abre su expediente entonces muestra el cupo disponible', async () => {
+    await abrirExpediente({ ...CLIENTE_1, limite_credito: 1000, saldo_pendiente: 300 });
+    expect(screen.getByText('Cupo Disponible')).toBeInTheDocument();
+    expect(screen.getByText('$700.000')).toBeInTheDocument();
+  });
+
+  it('dado un cliente que supera su limite cuando abre su expediente entonces indica que no tiene cupo', async () => {
+    await abrirExpediente({ ...CLIENTE_1, limite_credito: 1000, saldo_pendiente: 1200 });
+    expect(screen.getByText('Sin cupo')).toBeInTheDocument();
+  });
+
   // ── Mora / cartera vencida ───────────────────────────────────────────────────
 
-  it('muestra la insignia de mora y los días transcurridos cuando el cliente tiene cartera vencida', async () => {
+  it('dado un cliente con cartera vencida cuando muestra el directorio entonces presenta la mora y los días transcurridos', async () => {
     const haceCincoDias = new Date();
     haceCincoDias.setDate(haceCincoDias.getDate() - 5);
     mockApis([
@@ -339,7 +407,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Reset del formulario de cliente ──────────────────────────────────────────
 
-  it('limpia el formulario de Nuevo Cliente al cerrar el diálogo sin guardar', async () => {
+  it('dado datos escritos en Nuevo Cliente cuando cierra sin guardar entonces limpia el formulario', async () => {
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -360,9 +428,9 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Manejo de errores ────────────────────────────────────────────────────────
 
-  it('muestra un toast de error si la API falla al inactivar un cliente', async () => {
+  it('dado un fallo de la API cuando inactiva un cliente entonces muestra toast de error', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (apiClient.patch as any).mockRejectedValue(new Error('network error'));
+    (apiClient.patch as Mock).mockRejectedValue(new Error('network error'));
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -376,7 +444,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     });
   });
 
-  it('elimina el término de búsqueda y vuelve a mostrar todos los clientes', async () => {
+  it('dado un término de búsqueda activo cuando lo borra entonces vuelve a mostrar todos los clientes', async () => {
     mockApis([
       CLIENTE_1,
       { ...CLIENTE_1, id: 2, nombre_razon_social: 'Cliente Dos', ruc_cedula: '9999999999' },

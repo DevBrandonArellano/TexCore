@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un pedido pendiente / un pedido anulado / el modal de anulación / un
+ *   motivo menor a 10 caracteres / un motivo de 10 o más caracteres.
+ * - Análisis de valores límite (BVA): un motivo menor a 10 caracteres.
+ * - Transición de estados (STT): un pedido pendiente / un pedido anulado.
+ * - Caja blanca (CB): ramas de error — un error de la API.
+ */
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
 import { BrowserRouter } from 'react-router-dom';
@@ -71,7 +79,7 @@ const PEDIDO_ANULADO = {
 };
 
 function mockApis(pedidos = [PEDIDO_PENDIENTE]) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: [{ id: 1, nombre_razon_social: 'Cliente Prueba', limite_credito: 1000, saldo_pendiente: 0, plazo_credito_dias: 30, ruc_cedula: '1700000001', direccion_envio: 'Calle 1', nivel_precio: 'normal', tiene_beneficio: false, cartera_vencida: 0 }] });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: pedidos });
     if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -99,7 +107,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   // ── Render de tabla ─────────────────────────────────────────────────────────
 
-  it('muestra fila del pedido pendiente con botones Editar y Anular', async () => {
+  it('dado un pedido pendiente cuando lista los pedidos entonces muestra sus botones Editar y Anular', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -109,7 +117,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(screen.getByTitle('Anular pedido')).toBeInTheDocument();
   });
 
-  it('muestra fila anulada con estilo tachado y botón de historial', async () => {
+  it('dado un pedido anulado cuando lista los pedidos entonces lo muestra tachado y con botón de historial', async () => {
     mockApis([PEDIDO_ANULADO]);
     const user = userEvent.setup();
     renderComponent();
@@ -122,7 +130,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(screen.getByTitle('Ver motivo de anulación')).toBeInTheDocument();
   });
 
-  it('no muestra botones Editar/Anular para pedidos ya anulados', async () => {
+  it('dado un pedido anulado cuando lista los pedidos entonces no muestra Editar ni Anular', async () => {
     mockApis([PEDIDO_ANULADO]);
     const user = userEvent.setup();
     renderComponent();
@@ -139,7 +147,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   // ── AnularPedidoModal ───────────────────────────────────────────────────────
 
-  it('abre modal de anulación al hacer clic en botón Anular', async () => {
+  it('dado un pedido pendiente cuando hace clic en Anular entonces abre el modal de anulación', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -150,7 +158,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     await waitFor(() => expect(screen.getByText(/Anular Pedido #10/i)).toBeInTheDocument());
   });
 
-  it('muestra contador de caracteres en modal de anulación', async () => {
+  it('dado el modal de anulación cuando escribe el motivo entonces muestra el contador de caracteres', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -161,7 +169,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(screen.getByText(/\/10 caracteres mínimos/)).toBeInTheDocument();
   });
 
-  it('deshabilita botón confirmar con motivo menor a 10 caracteres', async () => {
+  it('dado un motivo menor a 10 caracteres cuando revisa el modal de anulación entonces el botón confirmar está deshabilitado', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -176,7 +184,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(btn).toBeDisabled();
   });
 
-  it('habilita botón confirmar con motivo de 10 o más caracteres', async () => {
+  it('dado un motivo de 10 o más caracteres cuando revisa el modal de anulación entonces el botón confirmar está habilitado', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -191,9 +199,9 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(btn).not.toBeDisabled();
   });
 
-  it('llama a POST /pedidos-venta/:id/anular/ al confirmar anulación', async () => {
+  it('dado un motivo válido cuando confirma la anulación entonces llama a POST /pedidos-venta/:id/anular/', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.post as any).mockResolvedValue({ data: { message: 'Pedido anulado correctamente.' } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { message: 'Pedido anulado correctamente.' } });
     const user = userEvent.setup();
     renderComponent();
     await navigateToPedidos(user);
@@ -212,9 +220,9 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     });
   });
 
-  it('muestra toast de error cuando la API responde con error en anulación', async () => {
+  it('dado un error de la API cuando confirma la anulación entonces muestra toast de error', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { error: 'No tienes permisos para anular pedidos.' } },
     });
     const user = userEvent.setup();
@@ -234,7 +242,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   // ── EditarPedidoModal ───────────────────────────────────────────────────────
 
-  it('abre modal de edición al hacer clic en botón Editar', async () => {
+  it('dado un pedido pendiente cuando hace clic en Editar entonces abre el modal de edición', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -245,7 +253,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     await waitFor(() => expect(screen.getByText(/Editar Pedido #10/i)).toBeInTheDocument());
   });
 
-  it('pre-carga guía de remisión actual en modal de edición', async () => {
+  it('dado un pedido con guía de remisión cuando abre el modal de edición entonces precarga la guía', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -257,7 +265,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(input).toBeInTheDocument();
   });
 
-  it('deshabilita Guardar cambios con motivo menor a 10 chars en edición', async () => {
+  it('dado un motivo menor a 10 caracteres cuando revisa el modal de edición entonces Guardar cambios está deshabilitado', async () => {
     mockApis([PEDIDO_PENDIENTE]);
     const user = userEvent.setup();
     renderComponent();
@@ -271,9 +279,9 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
     expect(screen.getByRole('button', { name: /Guardar cambios/i })).toBeDisabled();
   });
 
-  it('llama a PATCH /pedidos-venta/:id/modificar/ al guardar edición', async () => {
+  it('dado cambios y motivo válidos cuando guarda la edición entonces llama a PATCH /pedidos-venta/:id/modificar/', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.patch as any).mockResolvedValue({ data: { message: 'Pedido modificado correctamente.', cambios: ['guia_remision'] } });
+    (apiClient.patch as Mock).mockResolvedValue({ data: { message: 'Pedido modificado correctamente.', cambios: ['guia_remision'] } });
     const user = userEvent.setup();
     renderComponent();
     await navigateToPedidos(user);
@@ -302,7 +310,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   // ── HistorialPedidoModal ────────────────────────────────────────────────────
 
-  it('abre modal de historial con datos de anulación al clic en Clock', async () => {
+  it('dado un pedido anulado cuando hace clic en el reloj entonces abre el historial con los datos de anulación', async () => {
     mockApis([PEDIDO_ANULADO]);
     const user = userEvent.setup();
     renderComponent();

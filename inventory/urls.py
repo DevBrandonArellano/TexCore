@@ -1,30 +1,40 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import (
-    TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView,
-    MovimientoInventarioViewSet, StockBodegaViewSet,
-    ProcessDespachoAPIView, RetroKardexAPIView,
-    MovimientosPorLoteAPIView, HistorialDespachoViewSet,
-    AuditLogViewSet, RequerimientoMaterialViewSet,
-    OrdenCompraSugeridaViewSet
-)
+
 from .transform_view import TransformacionAPIView
+from .views import (
+    AlertasStockAPIView,
+    AuditLogViewSet,
+    HistorialDespachoViewSet,
+    KardexBodegaAPIView,
+    MovimientoInventarioViewSet,
+    MovimientosPorLoteAPIView,
+    OrdenCompraSugeridaViewSet,
+    ProcessDespachoAPIView,
+    RequerimientoMaterialViewSet,
+    RetroKardexAPIView,
+    StockBodegaViewSet,
+    StockResumenAPIView,
+    TransferenciaStockAPIView,
+)
 
 router = DefaultRouter()
-router.register(r'movimientos', MovimientoInventarioViewSet, basename='movimiento')
-router.register(r'stock', StockBodegaViewSet, basename='stock')
-router.register(r'historial-despachos', HistorialDespachoViewSet, basename='historial-despachos')
-router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
-router.register(r'requerimientos-material', RequerimientoMaterialViewSet, basename='requerimiento-material')
-router.register(r'sugerencias-compra', OrdenCompraSugeridaViewSet, basename='sugerencia-compra')
+router.register(r"movimientos", MovimientoInventarioViewSet, basename="movimiento")
+router.register(r"stock", StockBodegaViewSet, basename="stock")
+router.register(r"historial-despachos", HistorialDespachoViewSet, basename="historial-despachos")
+router.register(r"audit-logs", AuditLogViewSet, basename="audit-log")
+router.register(r"requerimientos-material", RequerimientoMaterialViewSet, basename="requerimiento-material")
+router.register(r"sugerencias-compra", OrdenCompraSugeridaViewSet, basename="sugerencia-compra")
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('transferencias/', TransferenciaStockAPIView.as_view(), name='realizar-transferencia'),
-    path('transformaciones/', TransformacionAPIView.as_view(), name='realizar-transformacion'),
-    path('bodegas/<int:bodega_id>/kardex/', KardexBodegaAPIView.as_view(), name='reporte-kardex'),
-    path('alertas-stock/', AlertasStockAPIView.as_view(), name='alertas-stock'),
-    path('process-despacho/', ProcessDespachoAPIView.as_view(), name='process-despacho'),
-    path('retro-kardex/', RetroKardexAPIView.as_view(), name='retro-kardex'),
-    path('lotes/<str:lote_codigo>/movimientos/', MovimientosPorLoteAPIView.as_view(), name='movimientos-lote'),
+    # Antes del router: 'stock/' es su prefijo.
+    path("stock/resumen/", StockResumenAPIView.as_view(), name="stock-resumen"),
+    path("", include(router.urls)),
+    path("transferencias/", TransferenciaStockAPIView.as_view(), name="realizar-transferencia"),
+    path("transformaciones/", TransformacionAPIView.as_view(), name="realizar-transformacion"),
+    path("bodegas/<int:bodega_id>/kardex/", KardexBodegaAPIView.as_view(), name="reporte-kardex"),
+    path("alertas-stock/", AlertasStockAPIView.as_view(), name="alertas-stock"),
+    path("process-despacho/", ProcessDespachoAPIView.as_view(), name="process-despacho"),
+    path("retro-kardex/", RetroKardexAPIView.as_view(), name="retro-kardex"),
+    path("lotes/<str:lote_codigo>/movimientos/", MovimientosPorLoteAPIView.as_view(), name="movimientos-lote"),
 ]

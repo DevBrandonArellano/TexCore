@@ -1,198 +1,236 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): una ejecucion previa / sin ejecuciones / sugerencias / sin sugerencias /
+ *   la pestaña de requerimientos.
+ * - Caja blanca (CB): ramas de error — un error de la peticion / un error al cargar.
+ */
 import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { format } from 'date-fns';
 import { MRPDashboard } from './MRPDashboard';
-import type { RequerimientoMaterial, OrdenCompraSugerida } from '../../lib/types';
+import type { MRPEjecucion, NecesidadReposicion, OrdenCompraSugerida, RequerimientoMaterial } from '../../lib/types';
 
-const mockGet = vi.fn();
-const mockPost = vi.fn();
-
-vi.mock('../../lib/axios', () => ({
-  default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+const mrp = {
+  listarSugerencias: vi.fn(),
+  listarRequerimientos: vi.fn(),
+  ultimaEjecucion: vi.fn(),
+  necesidadesProduccion: vi.fn(),
+  ejecutar: vi.fn(),
+};
+vi.mock('../../lib/api/mrpApi', () => ({
+  mrpApi: {
+    listarSugerencias: (...a: unknown[]) => mrp.listarSugerencias(...a),
+    listarRequerimientos: (...a: unknown[]) => mrp.listarRequerimientos(...a),
+    ultimaEjecucion: (...a: unknown[]) => mrp.ultimaEjecucion(...a),
+    necesidadesProduccion: (...a: unknown[]) => mrp.necesidadesProduccion(...a),
+    ejecutar: (...a: unknown[]) => mrp.ejecutar(...a),
   },
 }));
 
-const toastErrorMock = vi.fn();
-const toastSuccessMock = vi.fn();
-const toastInfoMock = vi.fn();
+const toast = { error: vi.fn(), success: vi.fn(), warning: vi.fn() };
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
-    info: (...args: any[]) => toastInfoMock(...args),
+    error: (...a: unknown[]) => toast.error(...a),
+    success: (...a: unknown[]) => toast.success(...a),
+    warning: (...a: unknown[]) => toast.warning(...a),
   },
 }));
 
-const SUGERENCIA_1: OrdenCompraSugerida = {
-  id: 1,
-  producto: 10,
-  producto_nombre: 'Hilo Poliéster Blanco',
-  producto_codigo: 'HP-001',
-  sede: 1,
-  sede_nombre: 'Sede Norte',
-  cantidad_sugerida: 1500,
-  estado: 'PENDIENTE',
-  fecha_generacion: '2026-07-10T14:30:00',
+const EJECUCION: MRPEjecucion = {
+  id: 7, sede: 1, sede_nombre: 'Sede Norte', iniciada_por_nombre: 'bodega1',
+  inicio: '2026-10-13T15:30:00Z', fin: '2026-10-13T15:30:02Z', estado: 'completada',
+  requerimientos: 12, sugerencias_compra: 4, productos_a_producir: 3,
+  advertencias: ['OP E1-CONT-01: sin peso requerido (producción continua); no se calculan sus materiales.'],
+  mensaje_error: '',
 };
 
-const REQUERIMIENTO_1: RequerimientoMaterial = {
-  id: 1,
-  producto_requerido: 10,
-  producto_nombre: 'Hilo Poliéster Blanco',
-  producto_codigo: 'HP-001',
-  cantidad_necesaria: 800,
-  sede: 1,
-  sede_nombre: 'Sede Norte',
-  origen_tipo: 'PEDIDO',
-  origen_id: 55,
-  fecha_requerida: '2026-07-15',
-  fecha_calculo: '2026-07-10T10:00:00',
+const SUGERENCIA: OrdenCompraSugerida = {
+  id: 1, ejecucion: 7, producto: 10, producto_nombre: 'Algodón crudo', producto_codigo: 'MP-ALG',
+  sede: 1, sede_nombre: 'Sede Norte', requerido: '60.000', stock_minimo: '20.000', stock_disponible: '10.000',
+  cantidad_sugerida: '70.000', fecha_generacion: '2026-10-13T15:30:01Z',
 };
 
-function mockFetch(sugerencias: OrdenCompraSugerida[] = [], requerimientos: RequerimientoMaterial[] = []) {
-  mockGet.mockImplementation((url: string) => {
-    if (url === '/inventory/sugerencias-compra/') return Promise.resolve({ data: sugerencias });
-    if (url === '/inventory/requerimientos-material/') return Promise.resolve({ data: requerimientos });
-    return Promise.resolve({ data: [] });
-  });
+const REQUERIMIENTO: RequerimientoMaterial = {
+  id: 1, ejecucion: 7, producto_requerido: 10, producto_nombre: 'Igualante', producto_codigo: 'Q-IGU',
+  cantidad_necesaria: '1.600', sede: 1, sede_nombre: 'Sede Norte', orden_produccion: 3,
+  orden_codigo: 'OP-0042', fecha_requerida: '2026-10-20',
+};
+
+const NECESIDAD: NecesidadReposicion = {
+  sede_id: 1, sede_nombre: 'Sede Norte', producto_id: 20, producto_codigo: 'HI-AZ',
+  producto_descripcion: 'Hilo azul', tipo: 'hilo', unidad_medida: 'kg', stock_actual: '20.0000',
+  stock_minimo: '10.0000', demanda_pedidos: '270.0000', demanda_interna: '0.0000', en_produccion: '100.0000',
+  deficit: '160.0000',
+};
+
+const pagina = <T,>(results: T[]) => ({ count: results.length, next: null, previous: null, results });
+
+function datos({
+  ejecuciones = [EJECUCION], sugerencias = [SUGERENCIA], requerimientos = [REQUERIMIENTO], necesidades = [NECESIDAD],
+}: {
+  ejecuciones?: MRPEjecucion[]; sugerencias?: OrdenCompraSugerida[];
+  requerimientos?: RequerimientoMaterial[]; necesidades?: NecesidadReposicion[];
+} = {}) {
+  mrp.ultimaEjecucion.mockResolvedValue(ejecuciones);
+  mrp.listarSugerencias.mockResolvedValue(pagina(sugerencias));
+  mrp.listarRequerimientos.mockResolvedValue(pagina(requerimientos));
+  mrp.necesidadesProduccion.mockResolvedValue(necesidades);
 }
 
 describe('MRPDashboard', () => {
   beforeEach(() => {
-    mockGet.mockReset();
-    mockPost.mockReset();
-    toastErrorMock.mockReset();
-    toastSuccessMock.mockReset();
-    toastInfoMock.mockReset();
+    Object.values(mrp).forEach((m) => m.mockReset());
+    Object.values(toast).forEach((m) => m.mockReset());
+    datos();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('dado datos aun no resueltos cuando monta entonces muestra el estado de carga', async () => {
-    mockGet.mockReturnValue(new Promise(() => {}));
+  it('dado una ejecucion previa cuando carga entonces muestra la ultima ejecucion con sus conteos y advertencias', async () => {
     render(<MRPDashboard />);
-
-    expect(screen.getByText('Cargando planificación...')).toBeInTheDocument();
+    const tarjeta = await screen.findByTestId('ultima-ejecucion-1');
+    expect(within(tarjeta).getByText('Sede Norte')).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/bodega1/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText('Completada')).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/4 sugerencias de compra/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/3 productos a producir/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/E1-CONT-01/)).toBeInTheDocument();
   });
 
-  it('dado sin sugerencias ni requerimientos cuando carga entonces muestra los mensajes vacios', async () => {
-    mockFetch([], []);
+  it('dado sin ejecuciones cuando carga entonces invita a ejecutar el MRP', async () => {
+    datos({ ejecuciones: [] });
     render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
-
-    const tables = screen.getAllByRole('table');
-    expect(tables).toHaveLength(1);
-    const requerimientosTable = tables[0];
-    expect(within(requerimientosTable).queryAllByRole('row')).toHaveLength(1);
+    expect(await screen.findByText(/Aún no se ha ejecutado el MRP/)).toBeInTheDocument();
   });
 
-  it('dado sugerencias y requerimientos existentes cuando carga entonces muestra sus datos reales', async () => {
-    mockFetch([SUGERENCIA_1], [REQUERIMIENTO_1]);
+  it('dado sugerencias cuando carga entonces muestra el desglose de cada una', async () => {
     render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getAllByText('Hilo Poliéster Blanco')).toHaveLength(2));
-
-    expect(screen.getAllByText('HP-001')).toHaveLength(2);
-    expect(screen.getAllByText('Sede Norte')).toHaveLength(2);
-    expect(screen.getByText(Number(SUGERENCIA_1.cantidad_sugerida).toLocaleString())).toBeInTheDocument();
-    expect(screen.getByText(Number(REQUERIMIENTO_1.cantidad_necesaria).toLocaleString())).toBeInTheDocument();
-    expect(screen.getByText('PENDIENTE')).toBeInTheDocument();
-    expect(screen.getByText('PEDIDO #55')).toBeInTheDocument();
-    expect(screen.getByText(format(new Date(SUGERENCIA_1.fecha_generacion), 'dd/MM/yyyy HH:mm'))).toBeInTheDocument();
-    expect(screen.getByText(format(new Date(REQUERIMIENTO_1.fecha_requerida!), 'dd/MM/yyyy'))).toBeInTheDocument();
+    const fila = (await screen.findByText('Algodón crudo')).closest('tr') as HTMLElement;
+    for (const valor of ['60', '20', '10', '70']) {
+      expect(within(fila).getByText(valor)).toBeInTheDocument();
+    }
   });
 
-  it('dado un requerimiento sin fecha requerida cuando carga entonces muestra un guion', async () => {
-    mockFetch([], [{ ...REQUERIMIENTO_1, fecha_requerida: undefined }]);
+  it('dado sin sugerencias cuando carga entonces indica que el stock cubre la demanda', async () => {
+    datos({ sugerencias: [] });
     render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getByText('Hilo Poliéster Blanco')).toBeInTheDocument());
-    expect(screen.getByText('-')).toBeInTheDocument();
+    expect(await screen.findByText(/No hay sugerencias de compra/)).toBeInTheDocument();
   });
 
-  it('dado mas de 20 sugerencias cuando carga entonces pagina los resultados', async () => {
-    const sugerencias = Array.from({ length: 25 }, (_, i) => ({
-      ...SUGERENCIA_1,
-      id: i + 1,
-      producto_nombre: `Producto ${i + 1}`,
+  it('dado la pestaña de requerimientos cuando la abre entonces muestra la orden de origen y su fecha', async () => {
+    render(<MRPDashboard />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Requerimientos por orden/ }));
+    const fila = (await screen.findByText('OP-0042')).closest('tr') as HTMLElement;
+    expect(within(fila).getByText('Igualante')).toBeInTheDocument();
+    expect(within(fila).getByText('1,6')).toBeInTheDocument();
+    expect(within(fila).getByText('20/10/2026')).toBeInTheDocument();
+  });
+
+  it('dado la pestaña de necesidad de produccion cuando la abre entonces muestra el desglose', async () => {
+    render(<MRPDashboard />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Necesidad de producción/ }));
+    const fila = (await screen.findByText('Hilo azul')).closest('tr') as HTMLElement;
+    for (const valor of ['270', '100', '160']) {
+      expect(within(fila).getByText(valor)).toBeInTheDocument();
+    }
+  });
+
+  it('dado un usuario de sede cuando ejecuta entonces calcula su sede y recarga los resultados', async () => {
+    mrp.ejecutar.mockResolvedValueOnce([EJECUCION]);
+    render(<MRPDashboard />);
+    await screen.findByTestId('ultima-ejecucion-1');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP/ }));
+
+    await waitFor(() => expect(mrp.ejecutar).toHaveBeenCalledWith({}));
+    expect(toast.success).toHaveBeenCalledWith('MRP calculado: 4 sugerencias de compra y 3 productos a producir.');
+    expect(toast.warning).toHaveBeenCalledWith('El cálculo dejó 1 advertencia: revísela en la última ejecución.');
+    await waitFor(() => expect(mrp.ultimaEjecucion).toHaveBeenCalledTimes(2));
+  });
+
+  it('dado todas las sedes en un rol global cuando ejecuta entonces calcula todas', async () => {
+    mrp.ejecutar.mockResolvedValueOnce([{ ...EJECUCION, advertencias: [] }]);
+    render(<MRPDashboard sedeId="todas" />);
+    await screen.findByTestId('ultima-ejecucion-1');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP \(todas las sedes\)/ }));
+
+    await waitFor(() => expect(mrp.ejecutar).toHaveBeenCalledWith({ todas: true }));
+    expect(mrp.listarSugerencias).toHaveBeenCalledWith(1, expect.any(Number), undefined);
+  });
+
+  it('dado una sede elegida en un rol global cuando consulta y ejecuta entonces usa esa sede', async () => {
+    mrp.ejecutar.mockResolvedValueOnce([{ ...EJECUCION, advertencias: [] }]);
+    render(<MRPDashboard sedeId="3" />);
+    await screen.findByTestId('ultima-ejecucion-1');
+    expect(mrp.listarSugerencias).toHaveBeenCalledWith(1, expect.any(Number), '3');
+    expect(mrp.ultimaEjecucion).toHaveBeenCalledWith('3');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP/ }));
+
+    await waitFor(() => expect(mrp.ejecutar).toHaveBeenCalledWith({ sede_id: 3 }));
+  });
+
+  it('dado una ejecucion fallida cuando ejecuta entonces muestra el error de la sede', async () => {
+    mrp.ejecutar.mockResolvedValueOnce([{ ...EJECUCION, estado: 'fallida', mensaje_error: 'Error interno al calcular' }]);
+    render(<MRPDashboard />);
+    await screen.findByTestId('ultima-ejecucion-1');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Sede Norte: Error interno al calcular'));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('dado un error de la peticion cuando ejecuta entonces avisa con el mensaje de la API', async () => {
+    mrp.ejecutar.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'Solo puede calcular el MRP de su sede.' } } });
+    render(<MRPDashboard />);
+    await screen.findByTestId('ultima-ejecucion-1');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Solo puede calcular el MRP de su sede.'));
+  });
+
+  it('dado una ultima ejecucion fallida sin usuario cuando carga entonces muestra el error y el origen sistema', async () => {
+    datos({ ejecuciones: [{ ...EJECUCION, estado: 'fallida', iniciada_por_nombre: null, advertencias: [],
+      mensaje_error: 'Error interno al calcular el MRP de la sede.' }] });
+    render(<MRPDashboard />);
+    const tarjeta = await screen.findByTestId('ultima-ejecucion-1');
+    expect(within(tarjeta).getByText('Fallida')).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/sistema/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText('Error interno al calcular el MRP de la sede.')).toBeInTheDocument();
+  });
+
+  it('dado todas las sedes con una fallida y otra completada cuando ejecuta entonces avisa ambas', async () => {
+    mrp.ejecutar.mockResolvedValueOnce([
+      { ...EJECUCION, sede: 1, sede_nombre: 'Sede Norte', estado: 'fallida', mensaje_error: 'Error interno' },
+      { ...EJECUCION, id: 8, sede: 2, sede_nombre: 'Sede Sur', sugerencias_compra: 1, productos_a_producir: 1,
+        advertencias: ['a', 'b'] },
+    ]);
+    render(<MRPDashboard sedeId="todas" />);
+    await screen.findByTestId('ultima-ejecucion-1');
+
+    await userEvent.click(screen.getByRole('button', { name: /Ejecutar MRP/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Sede Norte: Error interno'));
+    expect(toast.success).toHaveBeenCalledWith('MRP calculado: 1 sugerencia de compra y 1 producto a producir.');
+    expect(toast.warning).toHaveBeenCalledWith('El cálculo dejó 2 advertencias: revíselas en la última ejecución.');
+  });
+
+  it('dado mas sugerencias que una pagina cuando carga entonces pagina en el servidor', async () => {
+    const muchas = Array.from({ length: 25 }, (_, i) => ({ ...SUGERENCIA, id: i + 1, producto_codigo: `MP-${i}` }));
+    mrp.listarSugerencias.mockImplementation((bloque: number, tamano: number) => Promise.resolve({
+      count: muchas.length, next: null, previous: null, results: muchas.slice((bloque - 1) * tamano, bloque * tamano),
     }));
-    mockFetch(sugerencias, []);
     render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getByText('Producto 1')).toBeInTheDocument());
-    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
-    expect(screen.queryByText('Producto 21')).not.toBeInTheDocument();
-
-    const siguienteButtons = screen.getAllByRole('button', { name: /Siguiente/ });
-    await userEvent.click(siguienteButtons[0]);
-
-    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
-    expect(screen.getByText('Producto 21')).toBeInTheDocument();
-    expect(screen.queryByText('Producto 1')).not.toBeInTheDocument();
+    expect(await screen.findByText('MP-0')).toBeInTheDocument();
+    expect(screen.queryByText('MP-24')).not.toBeInTheDocument();
+    expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
   });
 
-  it('dado error al obtener datos cuando falla la peticion entonces muestra un toast de error', async () => {
-    mockGet.mockRejectedValue(new Error('network error'));
+  it('dado un error al cargar cuando consulta entonces avisa', async () => {
+    mrp.ultimaEjecucion.mockRejectedValueOnce(new Error('caído'));
     render(<MRPDashboard />);
-
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al cargar datos del MRP'));
-    expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument();
-  });
-
-  it('dado clic en ejecutar motor mrp cuando responde con exito inmediato entonces refresca los datos', async () => {
-    mockFetch([], []);
-    mockPost.mockResolvedValueOnce({ status: 200, data: {} });
-    render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
-    expect(mockGet).toHaveBeenCalledTimes(2);
-
-    await userEvent.click(screen.getByRole('button', { name: /Ejecutar Motor MRP/ }));
-
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Motor MRP ejecutado con éxito'));
-    expect(mockPost).toHaveBeenCalledWith('/inventory/sugerencias-compra/ejecutar-mrp/');
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(4));
-  });
-
-  it('dado clic en ejecutar motor mrp cuando se procesa en segundo plano entonces avisa y refresca tras un tiempo', async () => {
-    vi.useFakeTimers();
-    mockFetch([], []);
-    mockPost.mockResolvedValueOnce({ status: 202, data: {} });
-    render(<MRPDashboard />);
-
-    await vi.waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
-    expect(mockGet).toHaveBeenCalledTimes(2);
-
-    fireEvent.click(screen.getByRole('button', { name: /Ejecutar Motor MRP/ }));
-
-    await vi.waitFor(() =>
-      expect(toastInfoMock).toHaveBeenCalledWith(
-        'Motor MRP iniciado en segundo plano. Los resultados aparecerán en unos instantes.',
-      ),
-    );
-    expect(mockGet).toHaveBeenCalledTimes(2);
-
-    await vi.advanceTimersByTimeAsync(3000);
-
-    expect(mockGet).toHaveBeenCalledTimes(4);
-  });
-
-  it('dado clic en ejecutar motor mrp cuando la peticion falla entonces muestra un toast de error', async () => {
-    mockFetch([], []);
-    mockPost.mockRejectedValueOnce(new Error('boom'));
-    render(<MRPDashboard />);
-
-    await waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole('button', { name: /Ejecutar Motor MRP/ }));
-
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al ejecutar el motor MRP'));
+    expect(await screen.findByText(/No se pudo cargar la información del MRP/)).toBeInTheDocument();
   });
 });

@@ -1,8 +1,13 @@
 """URLs de la API interna. Namespace: internal_api."""
-from django.urls import path
 
+from django.urls import path, re_path
+
+from gestion.models.produccion import CODIGO_LOTE_PATTERN
 from internal_api.views.auth_views import ServiceTokenRefreshView, ServiceTokenView
-from internal_api.views.scanning_views import ValidateLoteView
+from internal_api.views.pdf_produccion_views import (
+    BalanceMasasPdfView,
+    ReporteAvancePdfView,
+)
 from internal_api.views.reporting_views import (
     AgingView,
     DeudoresGerencialView,
@@ -10,6 +15,7 @@ from internal_api.views.reporting_views import (
     KardexView,
     LotesProduccionView,
     OrdenesProduccionView,
+    PlantaPulsoDiarioView,
     ProductosView,
     ResumenMovimientosView,
     RotacionView,
@@ -23,6 +29,7 @@ from internal_api.views.reporting_views import (
     VentasGerencialView,
     VentasVendedorView,
 )
+from internal_api.views.scanning_views import ValidateLoteView
 
 app_name = "internal_api"
 
@@ -30,11 +37,16 @@ urlpatterns = [
     # ── Autenticación ──────────────────────────────────────────────────────
     path("auth/token/", ServiceTokenView.as_view(), name="service_token"),
     path("auth/refresh/", ServiceTokenRefreshView.as_view(), name="service_token_refresh"),
-
     # ── Scanning ───────────────────────────────────────────────────────────
-    path("lotes/<str:codigo_barras>/validate/", ValidateLoteView.as_view(), name="validate_lote"),
-
-    # ── Reporting — Inventario ─────────────────────────────────────────────
+    # Mismo patrón que gestion.models.produccion.CODIGO_LOTE_REGEX exige al crear
+    # el lote (ej. LOT-2026-001) — evita que basura/strings arbitrarios lleguen a
+    # la vista o al audit log, y garantiza que todo codigo_lote válido matchea aquí.
+    re_path(
+        rf"^lotes/(?P<codigo_barras>{CODIGO_LOTE_PATTERN})/validate/$",
+        ValidateLoteView.as_view(),
+        name="validate_lote",
+    ),
+    # Reportes — Inventario ─────────────────────────────────────────────
     path("reports/kardex/", KardexView.as_view(), name="reports_kardex"),
     path("reports/productos/", ProductosView.as_view(), name="reports_productos"),
     path("reports/usuarios/", UsuariosView.as_view(), name="reports_usuarios"),
@@ -44,19 +56,31 @@ urlpatterns = [
     path("reports/rotacion/", RotacionView.as_view(), name="reports_rotacion"),
     path("reports/stock-cero/", StockCeroView.as_view(), name="reports_stock_cero"),
     path("reports/resumen-movimientos/", ResumenMovimientosView.as_view(), name="reports_resumen_movimientos"),
-
-    # ── Reporting — Vendedores ──────────────────────────────────────────────
+    # Reportes — Vendedores ──────────────────────────────────────────────
     path("vendedores/<int:vendedor_id>/ventas/", VentasVendedorView.as_view(), name="vendedores_ventas"),
-    path("vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(), name="vendedores_top_clientes"),
+    path(
+        "vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(), name="vendedores_top_clientes"
+    ),
     path("vendedores/<int:vendedor_id>/deudores/", DeudoresVendedorView.as_view(), name="vendedores_deudores"),
-
-    # ── Reporting — Gerencial ───────────────────────────────────────────────
+    # Reportes — Gerencial ───────────────────────────────────────────────
     path("gerencial/ventas/", VentasGerencialView.as_view(), name="gerencial_ventas"),
     path("gerencial/top-clientes/", TopClientesGerencialView.as_view(), name="gerencial_top_clientes"),
     path("gerencial/deudores/", DeudoresGerencialView.as_view(), name="gerencial_deudores"),
-
     # ── Reporting — Producción ──────────────────────────────────────────────
     path("produccion/ordenes/", OrdenesProduccionView.as_view(), name="produccion_ordenes"),
     path("produccion/lotes/", LotesProduccionView.as_view(), name="produccion_lotes"),
     path("produccion/tendencia/", TendenciaProduccionView.as_view(), name="produccion_tendencia"),
+    # ── PDF de producción (proxy al printing_service) ───────────────────
+    path(
+        "reports/produccion/reporte-avance/",
+        ReporteAvancePdfView.as_view(),
+        name="reports_produccion_reporte_avance",
+    ),
+    path(
+        "reports/produccion/reporte-balance/",
+        BalanceMasasPdfView.as_view(),
+        name="reports_produccion_reporte_balance",
+    ),
+    # ── Pulso Diario Planta ─────────────────────────────────────────────────
+    path("planta/pulso-diario/", PlantaPulsoDiarioView.as_view(), name="planta_pulso_diario"),
 ]

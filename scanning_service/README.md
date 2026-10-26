@@ -1,6 +1,6 @@
-# Microservicio de Escaneo — TexCore
+# Servicio Satélite de Escaneo — TexCore
 
-Microservicio FastAPI dedicado a la validación de códigos QR/barras de lotes de producción durante el proceso de despacho. Opera con latencia ultrabaja (<500 ms) y persiste un log de auditoría local en SQLite.
+Servicio satélite FastAPI dedicado a la validación de códigos QR/barras de lotes de producción durante el proceso de despacho. Opera con latencia ultrabaja (<500 ms) y persiste un log de auditoría local en SQLite.
 
 ## Arquitectura
 
@@ -167,7 +167,7 @@ pytest tests/unit/test_audit_repository.py -v
 ## Despliegue
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml up -d scanning
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod up -d scanning
 ```
 
 El servicio espera `backend: service_healthy` antes de arrancar.

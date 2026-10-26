@@ -1,13 +1,15 @@
 import os
+
 import django
 
-# Setup Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TexCore.settings')
+# Configura el entorno de Django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TexCore.settings")
 django.setup()
 
 import traceback
-from inventory.serializers import TransferenciaSerializer
+
 from gestion.models import Bodega, Producto
+from inventory.serializers import TransferenciaSerializer
 
 try:
     producto = Producto.objects.first()
@@ -20,19 +22,19 @@ try:
             "bodega_origen_id": bodegas[0].id,
             "bodega_destino_id": bodegas[1].id,
             "cantidad": 1,
-            "observaciones": "Test transfer"
+            "observaciones": "Test transfer",
         }
-        
+
         serializer = TransferenciaSerializer(data=payload)
         if not serializer.is_valid():
             print("Serializer errors:", serializer.errors)
         else:
             print("Serializer Validated Data:", serializer.validated_data)
-            from inventory.models import StockBodega
-            from inventory.utils import safe_get_or_create_stock
-            from inventory.models import MovimientoInventario
             from django.db import transaction
-            
+
+            from inventory.models import MovimientoInventario, StockBodega
+            from inventory.utils import safe_get_or_create_stock
+
             with transaction.atomic():
                 stock_origen, _ = safe_get_or_create_stock(StockBodega, bodega=bodegas[0], producto=producto)
                 if stock_origen.cantidad < 1:
@@ -47,16 +49,13 @@ try:
                 stock_origen.save()
 
                 stock_destino, _ = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=bodegas[1], 
-                    producto=producto, 
-                    lote=None
+                    StockBodega, bodega=bodegas[1], producto=producto, lote=None
                 )
                 stock_destino.cantidad += 1
                 stock_destino.save()
 
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='TRANSFERENCIA',
+                    tipo_movimiento="TRANSFERENCIA",
                     producto=producto,
                     cantidad=1,
                     bodega_origen=bodegas[0],
@@ -64,11 +63,11 @@ try:
                     lote=None,
                     usuario=None,
                     documento_ref=None,
-                    observaciones="Test"
+                    observaciones="Test",
                 )
                 print("Transfer successful!")
     else:
         print("Not enough data to test")
-except Exception as e:
+except Exception:
     print("Exception happened:")
     traceback.print_exc()

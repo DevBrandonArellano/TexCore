@@ -17,8 +17,10 @@ El ORM de Django define cómo se comportan las claves foráneas al eliminar un p
 | **Area** | Ninguna | CustomUser, Maquina | **OrdenProduccion** (Impide el borrado) |
 | **Bodega** | StockBodega | Usuarios Asignados (M2M) | **OrdenProduccion**, **MovimientoInventario** (Impide el borrado) |
 | **Usuario** (`CustomUser`) | auth_user_groups, permisos | Cliente, LoteProduccion, OrdenProduccion, Movimientoinventario, Pedidos | Ninguno |
-| **Producto** | Batch, DetalleFormula, DetallePedido, StockBodega | OrdenProduccion | **MovimientoInventario** (Impide el borrado) |
-| **Formula de Color** | DetalleFormula | OrdenProduccion (SET_NULL u opcional a veces es CASCADE según Django pero en SQL es directo) | Ninguno |
+| **Producto** | DetalleFormula, DetallePedido, StockBodega | Ninguno | **MovimientoInventario**, **OrdenProduccion** (`producto_entrada`/`producto_salida`, ambas nullable — impiden el borrado) |
+| **Formula de Color** | FaseReceta (y a través de ésta, DetalleFormula — no hay FK directo `formula_color_id` en `gestion_detalleformula`), VersionFormula | Ninguna | **OrdenProduccion** (`formula_color` y `version_formula`, PROTECT desde la migración 0014/0015: la API responde 409 «tiene N órdenes de producción asociadas») |
+| **Version de Formula** | Ninguna | Ninguna | Inmutable: el modelo rechaza su borrado individual; solo desaparece al borrar la fórmula (y solo si ninguna OP la usa) |
+| **Proceso de Tintoreria** | MaquinaProceso | Ninguna | **FaseReceta** (`proceso`, PROTECT). La API no expone borrado; se desactiva con `activo=False` |
 | **Proveedor** | Ninguna | MovimientoInventario | Ninguno |
 | **Cliente** | PagoCliente, PedidoVenta | Ninguna | Ninguno |
 
@@ -80,8 +82,10 @@ BEGIN TRAN;
            WHERE movimiento_id IN (SELECT id FROM inventory_movimientoinventario WHERE producto_id = @ProductoID);
     DELETE FROM inventory_movimientoinventario WHERE producto_id = @ProductoID;
 
-    -- 3. SET_NULL
-    UPDATE gestion_ordenproduccion SET producto_id = NULL WHERE producto_id = @ProductoID;
+    -- 3. Limpiar referencias PROTECT en OrdenProduccion (producto_entrada/producto_salida
+    --    son nullable; sin este paso el DELETE del paso 4 falla por FK constraint)
+    UPDATE gestion_ordenproduccion SET producto_entrada_id = NULL WHERE producto_entrada_id = @ProductoID;
+    UPDATE gestion_ordenproduccion SET producto_salida_id = NULL WHERE producto_salida_id = @ProductoID;
 
     -- 4. Borrar el producto
     DELETE FROM gestion_producto WHERE id = @ProductoID;
@@ -91,19 +95,40 @@ COMMIT TRAN;
 ---
 
 ### C. Eliminar una Fórmula de Color
-Las fórmulas de color están atadas a `DetalleFormula` (los ingredientes) y a las órdenes de producción.
+Las fórmulas de color están atadas a `FaseReceta` (las fases del proceso), a través de
+ésta a `DetalleFormula` (los ingredientes de cada fase) — no existe un FK directo
+`formula_color_id` en `gestion_detalleformula` — y a `VersionFormula` (su historial).
+
+**Una fórmula usada por órdenes de producción no se elimina.** `OrdenProduccion.formula_color`
+y `OrdenProduccion.version_formula` son `PROTECT` (spec 2026-09-24): las órdenes conservan la
+receta con la que se produjeron. Desvincularlas (`UPDATE ... SET formula_color_id = NULL`)
+destruiría esa trazabilidad, por eso el script aborta si hay órdenes asociadas.
+
+Nota: Django emula `on_delete` en el ORM; en SQL Server las FK se crean sin `ON DELETE`
+(NO ACTION), así que un `DELETE` directo sobre una tabla referenciada falla por FK en vez
+de borrar en cascada. De ahí el orden de los pasos.
 
 ```sql
 DECLARE @FormulaID INT = 1; -- Cambiar por el ID de la fórmula
 
-BEGIN TRAN;
-    -- 1. Borrar registros hijos en cascada
-    DELETE FROM gestion_detalleformula WHERE formula_color_id = @FormulaID;
-    
-    -- 2. Quitar la referencia en las órdenes de producción (Evitar romper el historial de producción)
-    UPDATE gestion_ordenproduccion SET formula_color_id = NULL WHERE formula_color_id = @FormulaID;
+IF EXISTS (SELECT 1 FROM gestion_ordenproduccion WHERE formula_color_id = @FormulaID)
+BEGIN
+    RAISERROR('La fórmula tiene órdenes de producción asociadas: no se elimina.', 16, 1);
+    RETURN;
+END
 
-    -- 3. Borrar la fórmula
+BEGIN TRAN;
+    -- 1. Borrar los detalles (ingredientes) de cada fase de la fórmula
+    DELETE FROM gestion_detalleformula
+           WHERE fase_id IN (SELECT id FROM gestion_fasereceta WHERE formula_id = @FormulaID);
+
+    -- 2. Borrar las fases de la fórmula
+    DELETE FROM gestion_fasereceta WHERE formula_id = @FormulaID;
+
+    -- 3. Borrar su historial de versiones (ninguna OP la usa: se comprobó arriba)
+    DELETE FROM gestion_versionformula WHERE formula_id = @FormulaID;
+
+    -- 4. Borrar la fórmula
     DELETE FROM gestion_formulacolor WHERE id = @FormulaID;
 COMMIT TRAN;
 ```
@@ -119,7 +144,9 @@ DECLARE @BodegaReemplazoID INT = 2; -- Si deseas reasignar movimientos en vez de
 
 BEGIN TRAN;
     -- Opción A: Reasignar los registros conflictivos (RECOMENDADO PARA DBs EN PRODUCCIÓN)
-    UPDATE gestion_ordenproduccion SET bodega_id = @BodegaReemplazoID WHERE bodega_id = @BodegaID;
+    -- OrdenProduccion no tiene columna 'bodega': son bodega_entrada/bodega_salida
+    UPDATE gestion_ordenproduccion SET bodega_entrada_id = @BodegaReemplazoID WHERE bodega_entrada_id = @BodegaID;
+    UPDATE gestion_ordenproduccion SET bodega_salida_id = @BodegaReemplazoID WHERE bodega_salida_id = @BodegaID;
     UPDATE inventory_movimientoinventario SET bodega_origen_id = @BodegaReemplazoID WHERE bodega_origen_id = @BodegaID;
     UPDATE inventory_movimientoinventario SET bodega_destino_id = @BodegaReemplazoID WHERE bodega_destino_id = @BodegaID;
 

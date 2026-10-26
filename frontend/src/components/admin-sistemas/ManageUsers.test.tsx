@@ -1,3 +1,8 @@
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): sin usuarios / loading / usuarios existentes / usuario sin sede ni area
+ *   asignada / usuario con un grupo que no existe en la lista de grupos.
+ */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -5,42 +10,44 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ManageUsers } from './ManageUsers';
 
+import { Area, Sede, User } from '../../lib/types';
+
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const SEDE_NORTE = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
-const SEDE_SUR = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
+const SEDE_NORTE: Sede = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
+const SEDE_SUR: Sede = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
 
-const AREA_TINTORERIA = { id: 1, nombre: 'Tintorería', sede: 1 };
-const AREA_CORTE = { id: 2, nombre: 'Corte', sede: 2 };
+const AREA_TINTORERIA: Area = { id: 1, nombre: 'Tintorería', sede: 1 };
+const AREA_CORTE: Area = { id: 2, nombre: 'Corte', sede: 2 };
 
 const GROUP_OPERARIO = { id: 1, name: 'operario' };
 const GROUP_JEFE_AREA = { id: 2, name: 'jefe_area' };
 const GROUP_ADMIN_SISTEMAS = { id: 3, name: 'admin_sistemas' };
 const GROUP_JEFE_PLANTA = { id: 4, name: 'jefe_planta' };
 
-const USER_OPERARIO = {
+const USER_OPERARIO: User = {
   id: 1,
   username: 'jdoe',
   first_name: 'Juan',
@@ -53,7 +60,7 @@ const USER_OPERARIO = {
   bodegas_asignadas: [],
 };
 
-const USER_ADMIN_SISTEMAS = {
+const USER_ADMIN_SISTEMAS: User = {
   id: 2,
   username: 'msmith',
   first_name: 'Maria',
@@ -66,17 +73,7 @@ const USER_ADMIN_SISTEMAS = {
   bodegas_asignadas: [],
 };
 
-function renderComponent(props: Partial<{
-  users: any[];
-  sedes: any[];
-  areas: any[];
-  groups: any[];
-  selectedSedeId?: string;
-  onUserCreate: (data: any) => Promise<boolean>;
-  onUserUpdate: (id: number, data: any) => Promise<boolean>;
-  onUserDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageUsers>> = {}) {
   const defaults = {
     users: [],
     sedes: [SEDE_NORTE, SEDE_SUR],
@@ -180,6 +177,31 @@ describe('ManageUsers', () => {
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
     expect(screen.getByText('user021')).toBeInTheDocument();
     expect(screen.queryByText('user001')).not.toBeInTheDocument();
+  });
+
+  it('dado mas de 20 usuarios cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 usuarios cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
 
   it('dado nuevo usuario cuando guarda sin llenar campos requeridos entonces muestra errores de validacion', async () => {
@@ -487,5 +509,113 @@ describe('ManageUsers', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onUserCreate).not.toHaveBeenCalled();
+  });
+
+  it('dado sin sedes disponibles cuando crea un administrador de sistemas entonces envia sede nula', async () => {
+    const onUserCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onUserCreate, sedes: [] });
+
+    await openCreateDialog();
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText(/Usuario/), 'admin2');
+    await userEvent.type(within(dialog).getByLabelText(/Contraseña/), 'Clave123');
+    await userEvent.type(within(dialog).getByLabelText(/Nombre/), 'Admin');
+    await userEvent.type(within(dialog).getByLabelText(/Apellido/), 'Dos');
+    await userEvent.click(within(dialog).getByText('Administrador de Sistemas'));
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    await waitFor(() => expect(onUserCreate).toHaveBeenCalledWith(expect.objectContaining({
+      sede: null,
+    })));
+  });
+
+  it('dado un usuario con grupos representados como cadena cuando edita entonces los convierte a numero', async () => {
+    // Dato fuera de contrato a propósito: la API antigua enviaba los grupos como texto.
+    const userConGrupoTexto = { ...USER_OPERARIO, id: 5, username: 'texto1', groups: ['1'] } as unknown as User;
+    renderComponent({ users: [userConGrupoTexto] });
+
+    const row = getRowFor('texto1');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Actualizar Usuario')).toBeInTheDocument();
+  });
+
+  it('dado un usuario con sede y area nulas cuando edita entonces precarga los campos vacios', async () => {
+    renderComponent({ users: [USER_ADMIN_SISTEMAS] });
+
+    const row = getRowFor('msmith');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText(/^Sede/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Área/)).not.toBeInTheDocument();
+  });
+
+  it('dado un usuario con un rol sin etiqueta amigable cuando lista entonces muestra el nombre crudo del grupo', () => {
+    const grupoDesconocido = { id: 9, name: 'super_admin' };
+    const usuarioConRolDesconocido = { ...USER_OPERARIO, id: 6, username: 'raro1', groups: [9] };
+    renderComponent({ users: [usuarioConRolDesconocido], groups: [grupoDesconocido] });
+
+    expect(screen.getByText('super_admin')).toBeInTheDocument();
+  });
+
+  it('dado un rol sin etiqueta amigable cuando abre el selector de rol entonces muestra el nombre crudo', async () => {
+    const grupoDesconocido = { id: 9, name: 'super_admin' };
+    renderComponent({ groups: [grupoDesconocido] });
+
+    await openCreateDialog();
+
+    expect(screen.getByText('super_admin')).toBeInTheDocument();
+  });
+
+  it('dado un usuario editado cuya sede no esta en la lista de sedes cuando abre el dialogo entonces muestra el id crudo', async () => {
+    const userSedeHuerfana = { ...USER_OPERARIO, id: 7, username: 'huerfano1', sede: 999 };
+    renderComponent({ users: [userSedeHuerfana] });
+
+    const row = getRowFor('huerfano1');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    expect(document.getElementById('sede')).toHaveTextContent('999');
+  });
+
+  it('dado sin sede seleccionada cuando elige un rol que requiere area entonces el placeholder pide seleccionar sede primero', async () => {
+    renderComponent({ sedes: [] });
+
+    await openCreateDialog();
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByText('Operario'));
+
+    expect(within(dialog).getByText('Primero selecciona una sede')).toBeInTheDocument();
+  });
+
+  it('dado un termino de busqueda cuando lo borra por completo entonces vuelve a mostrar todos los usuarios', async () => {
+    renderComponent({ users: [USER_OPERARIO, USER_ADMIN_SISTEMAS] });
+
+    const input = screen.getByPlaceholderText('Buscar por nombre, usuario, email...');
+    await userEvent.type(input, 'jdoe');
+    expect(screen.queryByText('msmith')).not.toBeInTheDocument();
+
+    await userEvent.clear(input);
+
+    expect(screen.getByText('jdoe')).toBeInTheDocument();
+    expect(screen.getByText('msmith')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 usuarios cuando escribe una pagina valida y quita el foco entonces navega a esa pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2');
+    await userEvent.tab();
+
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
   });
 });

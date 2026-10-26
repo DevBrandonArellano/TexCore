@@ -1,0 +1,152 @@
+# Manual de Usuario — Jefe de Área
+
+## 1. ¿Qué hace usted en TexCore?
+
+Usted supervisa la eficiencia y la calidad de una sección específica de producción: asigna las órdenes que crea el Jefe de Planta a máquina y operario, controla el estado de las máquinas de su área, registra paros, consulta e imprime el historial de mantenimiento y decide cuándo un lote no cumple la calidad esperada.
+
+## 2. Ingresar al sistema
+
+Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-roles). Su panel se llama **Panel de Control - Área de Producción**. A diferencia de otros roles, no está dividido en pestañas: todo se organiza en secciones dentro de la misma pantalla.
+
+## 3. Indicadores de su área (KPIs)
+
+En la parte superior se muestran las tarjetas de desempeño del área, calculadas con datos reales (no estimados):
+
+- **Producción Total (Kg)** del ciclo actual.
+- **Rendimiento (Yield)** = peso neto producido / (peso neto + merma). Debajo se muestra el **FPY 1ª calidad** (First Pass Yield = kg de primera calidad / kg total): cuánto sale bien a la primera.
+- **Tiempo Promedio** por lote operado.
+- **Alertas Activas**: productos con stock bajo crítico.
+- **OEE (histórico)** = Disponibilidad × Desempeño × Calidad, con el desglose de los tres componentes. La Disponibilidad se calcula a partir de los paros de máquina registrados (vea las secciones 5 y 5.1).
+
+## 4. Asignar Órdenes de Producción
+
+Solo pueden **asignarse** órdenes que el Jefe de Planta ya creó para el área — no es posible crear órdenes nuevas.
+
+1. En **Órdenes de Producción de tu Área**, elija la orden a asignar (se ven su peso requerido y su fórmula).
+2. Seleccione la **máquina** y el **operario** que la van a ejecutar.
+3. Pulse **Asignar** — la orden pasa a "En Proceso" para ese operario.
+
+La máquina y el operario deben ser de su área y su sede. La asignación y el inicio se guardan juntos: si algo falla (por ejemplo, la orden ya no está pendiente), no queda nada a medias. Además de asignar, este rol no puede editar los demás datos de la orden (producto, peso, fórmula); eso corresponde al Jefe de Planta.
+
+**Componentes de mezcla.** Si la orden mezcla varios productos (por ejemplo, 70 % algodón crudo y 30 % hilo teñido), defínalos **antes de asignarla**:
+1. Pulse **Componentes de mezcla** en la orden pendiente.
+2. Elija **Producto**, **Bodega** de origen y **% Mezcla**, y pulse **+**. El sistema calcula los kg según el peso de la orden.
+3. Repita hasta que el total marque **100 % ✓**. La suma no puede pasar del 100 %.
+4. Para quitar un componente, pulse **✕** e indique la justificación (mínimo 10 caracteres); queda en la Auditoría.
+
+La mezcla solo se modifica mientras la orden está **Pendiente**: una vez iniciada, los lotes ya consumen según ella.
+
+## 5. Gestionar máquinas y registrar paros
+
+En **Gestión de Máquinas** se ven las máquinas del área (estado, capacidad y producto de merma) con los botones **Editar**, **Procesos** y **Eliminar**. Con **+ Nueva Máquina** se crea una.
+
+**Formulario de máquina.** Es el mismo al crear y al editar, y también se abre con el ícono de lápiz (**Editar máquina**) de cada tarjeta en **Máquinas por línea**, donde además se ve su badge de **OEE**. Contiene:
+- **Nombre de la Máquina** y **Estado** (Operativa, Mantenimiento o Inactiva).
+- **Capacidad máx. (kg/turno)**, mayor que 0, y **Eficiencia ideal (0–1)**, por defecto 0,85.
+- **Operarios Asignados**: marque los operarios del área que controlan la máquina.
+- **Configuración de Merma Vendible**: el **Producto de Merma** y la **Bodega de Merma** donde ingresa. La merma queda con el mismo código de lote que la producción, pero Despacho **no la vende** al escanear ese lote; se vende con su propio pedido. Elija «Sin merma vendible» o «Sin bodega asignada» para quitarlos.
+
+**Guardar** se habilita cuando el nombre, la capacidad y la eficiencia son válidos. Lo que guarde en un lugar se refleja enseguida en el otro: en las tarjetas y en la tabla. Al editar, solo cambian los datos del formulario; la configuración que no toque se conserva.
+
+**Eliminar una máquina** pide una justificación de al menos 10 caracteres, que queda en la Auditoría.
+
+**Procesos de la máquina.** El botón **Procesos** de cada máquina abre la lista de procesos de tintorería activos de la sede (descrude, lavado reductivo…). Marque los que ejecuta esa máquina y pulse **Guardar procesos**. Si la lista está vacía, pida al Tintorero que cree los procesos en su pestaña **Procesos**. El Jefe de Planta ve estos procesos en la dosificación de cada orden.
+
+**Registrar un paro (downtime):**
+1. Haga clic en **Registrar Paro** sobre la máquina correspondiente.
+2. Elija la **categoría** (una de las Seis Grandes Pérdidas): Avería, Setup, Microparo, Velocidad Reducida, Rechazo de Arranque, Defecto de Proceso, Falta de Material, Mantenimiento Planificado, u Otro.
+3. Indique **inicio** y, si ya terminó, la **hora de fin** (puede dejarse vacío si el paro sigue en curso).
+4. Marque la casilla **Planificado** si se trata de un paro programado (mantenimiento, cambio de turno) — los paros planificados **no penalizan** la Disponibilidad del OEE.
+5. Agregue una descripción y guarde.
+
+**El cambio de estado también registra el paro.** Cuando usted pone una máquina en **Mantenimiento** o
+**Inactiva**, el sistema abre un paro con la fecha y la hora de ese momento, y lo cierra cuando la
+devuelve a **Operativa**. Así el historial dice cuántos días estuvo detenida sin que usted tenga que
+registrarlo a mano. Esos paros aparecen marcados como **Automático**:
+- Mantenimiento → paro **Mantenimiento Planificado**, marcado como planificado (no penaliza el OEE);
+- Inactiva → paro **Otro**, no planificado (sí penaliza la Disponibilidad, porque la máquina está
+  parada sin mantenimiento programado).
+
+Los paros que usted registra a mano no se modifican nunca.
+
+## 5.1 Historial de Mantenimiento y Paros
+
+La sección **Historial de Mantenimiento y Paros** responde dos preguntas: qué mantenimientos hubo y
+qué días se detuvo cada máquina.
+
+**Filtros.** Por omisión muestra los **últimos 30 días**. Puede cambiar **Desde** y **Hasta**, elegir
+una **máquina** o una **categoría**, y usar los atajos **Solo mantenimiento**, **Solo averías** y
+**Últimos 30 días** (que devuelve todo a su estado inicial). El rango no puede superar un año.
+
+**Lo que ve.**
+- Arriba, los totales del rango: paros, horas detenidas, horas planificadas y paros en curso.
+- La tabla de **resumen por máquina**: paros, horas detenidas, horas planificadas, cuántos siguen en
+  curso y la fecha del **último mantenimiento** (planificado o avería). Las máquinas se ordenan de más
+  a menos horas detenidas, así que la primera fila es la que más le está costando.
+- La tabla de **detalle**: cada paro con inicio, fin, horas, categoría, quién lo registró y la
+  descripción. Un paro sin cerrar aparece como **En curso** y cuenta sus horas hasta ahora.
+
+**Las horas se cuentan dentro del rango.** Si un paro empezó antes de la fecha «Desde» y sigue
+abierto, aparece en la tabla, pero solo se suman las horas que caen dentro de las fechas consultadas:
+dos rangos seguidos nunca cuentan dos veces el mismo tiempo.
+
+**Imprimir.** El botón **Imprimir** genera un PDF horizontal con los totales, el resumen por máquina y
+el detalle completo del rango (no solo la página que está viendo), con los filtros aplicados y su
+nombre al pie. Se abre en una pestaña nueva. Si el servicio de impresión no está disponible, aparece
+el aviso «No se pudo generar el historial en PDF» y nada más cambia.
+
+## 6. Gestionar Líneas de Producción
+
+En **Líneas de Producción** pueden crearse, editarse o eliminarse líneas del área, asignando varias máquinas a cada una. Esto permite compartir máquinas rápidas entre distintas líneas sin duplicar la capacidad calculada del área.
+
+## 7. Rechazar un lote
+
+Si un lote no cumple calidad:
+
+1. Debe ubicarse (en los lotes recientes o en el buscador) y seleccionarse **Rechazar**.
+2. Escriba el **motivo obligatorio** — queda trazado para auditoría de calidad (ISO 9001).
+3. Al confirmar, el sistema **revierte automáticamente** el stock, el consumo de mezcla y la merma que ese lote había generado.
+
+## 8. Reetiquetar un lote
+
+Como supervisor, es posible corregir el peso o reclasificar la calidad de un lote ya registrado:
+
+1. En el **Buscador de Lotes**, ubique el lote y haga clic en **Reetiquetar**.
+2. Corrija el peso y/o la calidad, escriba el motivo obligatorio y confirme.
+3. Se anula la etiqueta anterior y se imprime una nueva versión; si cambió el peso, el stock se ajusta automáticamente. El código de lote y el QR de trazabilidad **nunca cambian**.
+
+También es posible autorizar in situ un reetiquetado que un operario de Empaquetado inicie desde su propio panel: debe ingresarse el usuario y la contraseña del supervisor en el modal correspondiente, sin necesidad de cerrar la sesión activa de dicho operario.
+
+## 9. Eficiencia del día y desempeño de operarios
+
+La sección **Eficiencia del día** muestra la producción de hoy de su área:
+
+- Por **máquina**: producción (kg) y eficiencia.
+- Por **operario**: lotes, producción (kg) y productividad. Al pulsar sobre un operario se abre **Desempeño de [operario]** con su producción de hoy y sus últimos lotes.
+
+El botón **Actualizar** vuelve a calcular los números. Solo se ven las máquinas y los operarios de su área.
+
+## 10. Otras secciones de su panel
+
+- **Producción en Curso — Trazabilidad**: las órdenes en proceso del área. **Ver flujo / Registrar** abre el **Flujo de Producción** de la orden: el árbol de transformaciones máquina a máquina con la merma acumulada, la lista de todos sus registros (máquina, operario, entrada, salida, merma y estado) y el botón **Registrar transformación**.
+- **Buscador de Lotes**: busca lotes por fechas, turno, código o calidad para reimprimir, reetiquetar (sección 8) o abrir su ficha.
+- **Máquinas por línea**: capacidad, avance y personal asignado de cada línea de manufactura.
+- **Alertas de Inventario**: químicos e hilos bajo su mínimo.
+- **Gestión de Lotes Recientes**: los últimos lotes del área, paginados, con las acciones de rechazar (sección 7) y ver ficha.
+- **Flujo de Producción General**: entrada y salida de las órdenes del área.
+- **Etapas de Producción**: configura los procesos secuenciales del área (**Nueva Etapa**: nombre, orden secuencial, máquina, bodegas de entrada y salida y tiempo estimado).
+- **Ficha de lote**: muestra las pestañas **Resumen**, **Genealogía**, **Movimientos** y **Consumos** (los lotes de origen consumidos para producirlo y en qué cantidad).
+
+## 11. Reglas que debe conocer
+
+- Todo lo que se ve y se gestiona está limitado al **área y sede** del usuario.
+- No es posible crear Órdenes de Producción — solo asignarlas.
+- Rechazar y reetiquetar siempre exigen motivo obligatorio.
+
+## 12. Preguntas frecuentes
+
+**No aparece la opción de crear una orden nueva.** Es correcto: esa función es exclusiva del Jefe de Planta/Administrador. La función de este rol es asignar las órdenes ya existentes.
+
+**El OEE se ve bajo aunque no hubo fallas grandes.** Debe revisarse que los paros planificados estén marcados como tales — si no lo están, penalizan la Disponibilidad aunque hayan sido programados.
+
+**Un operario necesita reetiquetar un lote y el supervisor no está en su puesto.** Puede autorizarse a distancia si el supervisor está junto a la pantalla: el modal de reetiquetado solicita usuario y contraseña sin afectar la sesión del operario.

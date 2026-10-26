@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 // En Docker use backend:8000; en host local use localhost:8000
@@ -8,7 +9,8 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react()],
+    // Tailwind 4 se integra como plugin de Vite (sin PostCSS ni autoprefixer).
+    plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
             "@": path.resolve(__dirname, "./src"),
@@ -52,6 +54,13 @@ export default defineConfig({
         environment: 'jsdom',
         setupFiles: ['./vitest.setup.ts'],
         globals: true,
+        // Los dashboards grandes (Vendedor, InventoryDashboard, …) renderizan
+        // mucho DOM y usan userEvent; en aislamiento tardan ~3s, pero al correr
+        // toda la suite (~1000 tests en paralelo) la contención de CPU los empuja
+        // sobre el default de 5s y fallaban por timeout (no por lógica). Se da
+        // holgura para que la suite completa sea determinista.
+        testTimeout: 20000,
+        hookTimeout: 20000,
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
@@ -68,19 +77,16 @@ export default defineConfig({
                 'src/lib/*.code-workspace',
                 'src/types/**',
             ],
-            // Objetivo del plan de cobertura QA: 90%. Estado (2026-07-10) tras
-            // cerrar las Fases 4a-4c: lib/ (96%), produccion/ (100% de la
-            // carpeta), y 3 componentes sueltos con tests reales de
-            // comportamiento (no smoke). Piso protegido justo debajo del nivel
-            // real alcanzado (statements ~37%). Pendiente — Fase 4d: convertir
-            // los ~28 smoke tests de los dashboards grandes (VendedorDashboard,
-            // EjecutivosDashboard, AdminSistemasDashboard, etc.) en tests
-            // reales; subir este piso progresivamente a medida que se cierre.
+            // Objetivo del plan de testabilidad: 90% en las 4 métricas.
+            // Estado (2026-08-27, cierre del plan): las 4 métricas alcanzan
+            // el objetivo — statements 95.29%, branches 90.02%, functions
+            // 92.05%, lines 96.45%. Piso protegido justo debajo del nivel
+            // real alcanzado.
             thresholds: {
-                lines: 37,
-                functions: 22,
-                branches: 27,
-                statements: 34,
+                lines: 95,
+                functions: 91,
+                branches: 89,
+                statements: 94,
             },
         },
     }

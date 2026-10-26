@@ -1,5 +1,104 @@
 # AUDITORÍA DE CALIDAD DE SOFTWARE — TEXCORE
 
+> **Este documento tiene dos partes.**
+>
+> - **Parte I — Contraste con la tesis (19-oct-2026):** lo que la tesis afirma sobre calidad, seguridad y gobierno, frente al sistema de hoy.
+> - **Parte II — Historial de la auditoría (27-mar a 10-abr-2026, v1.5):** el documento original, con los 45 defectos y los 6 sprints de remediación. Sus afirmaciones describen el sistema **de ese momento**; donde hoy serían falsas llevan una nota `[Al 14-oct-2026: …]`. El historial de la remediación posterior está en `CHANGELOG.md`, los ADR y `REGISTRO_RIESGOS.md`.
+
+---
+
+# Parte I — Contraste con la tesis (19-oct-2026)
+
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0010` · **Fecha:** 19-oct-2026
+> **Propósito:** respaldar el paso a producción contrastando con el sistema lo que la tesis afirma sobre calidad, seguridad y gobierno.
+> **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
+> **Fuente de la tesis:** `docs/Anteproyecto_Capstone_Final_Version.pdf` — marco de calidad y de gobierno (§«validación global de los atributos del sistema», ISO/IEC 25010:2023, COBIT 2019, ITIL v4, NIST SP 800-207, OWASP Top 10, ISO/IEC 27001 y LOPDP) y la Tabla 11 (matriz de decisión según ISO/IEC 25010:2023).
+> **Documentos hermanos:** `docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md` (DoD y Tabla 14), `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md` (pruebas por historia), `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` (RNF-03 y RNF-05) y `docs/requerimientos/REGISTRO_RIESGOS.md`.
+
+**Veredicto:** ✅ cumple · ❌ no cumple como está redactado · ⏳ pendiente · 📅 planificado para la puesta en marcha.
+
+Esta parte **no vuelve a puntuar** las dimensiones: las notas sobre 5 de la Parte II son de abril de 2026 y se dejan como historial. Aquí cada afirmación de la tesis se contrasta con evidencia verificable.
+
+## I.1 ISO/IEC 25010:2023 — las nueve características
+
+| Característica | Lo que exige la tesis | Evidencia al 14-oct-2026 | Veredicto |
+|---|---|---|---|
+| Adecuación funcional | Las 54 historias de la Tabla 14 y sus criterios de aceptación | 54/54 historias con implementación localizada y 166 criterios revisados (`docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md`, hallazgos cerrados); **2348 pruebas citadas por el backlog, 0 fallidas** (`EVIDENCIA_POR_SPRINT.md`, 14-oct) | ✅ |
+| Eficiencia de desempeño | RNF-03: consultas de inventario y producción < 3 s, escaneo QR < 2500 ms | Con 100 usuarios concurrentes: escaneo p95 **89 ms**, panel de planta p95 **220 ms**, kárdex p95 **610 ms**; con 250 usuarios, p95 de 200/380/390 ms (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
+| Compatibilidad | Monolito modular con servicios satélite que interoperan | Los 3 satélites se consumen por contrato HTTP con JWT RS256 y corren aislados (`MICROSERVICIOS.md`); esquema OpenAPI publicado en `/api/docs/` (`TexCore/urls.py:48`) | ⚠️ ✅ con reserva: el esquema describe de menos lo que la API hace (**124 avisos**, riesgo **RC-09** abierto con su plan) |
+| Capacidad de interacción | RNF-05: tareas frecuentes en ≤ 3 pasos, capacitación ≤ 2 h | Las rutas están implementadas; la cuenta de pasos se demuestra con las grabaciones y capturas que hace el usuario (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4) | ⏳ pendiente de las grabaciones; la capacitación es 📅 de la puesta en marcha |
+| Fiabilidad | Operación sin fallos bajo carga y contenedores saludables | **0,09 %** de error con 100 usuarios y **0,31 %** con 250, todos rechazos correctos de negocio; ningún proceso reiniciado; `HEALTHCHECK` propio en las 5 imágenes y el de `db` en el compose, los 6 contenedores en `healthy`; **stock = kárdex en 51 994 combinaciones** y 0 saldos negativos tras la concurrencia | ⚠️ ✅ en lo medido; sin réplica de base de datos (**RD-03** abierto) y `reporting_excel` con health check que no verifica la base (**RD-01** parcial) |
+| Seguridad | OWASP Top 10, Zero Trust y protección de datos (ver I.2, I.4 y I.5) | Gates en **0**: Semgrep ERROR, detect-secrets (línea base auditada por completo), `pip-audit` en los 4 servicios Python y `npm audit` de producción y de desarrollo; Trivy por digest y firma **cosign** verificada antes de desplegar (`build:imagenes`, `deploy:produccion`); RBAC de los 11 roles, aislamiento por sede y área, auditoría inmutable con justificación obligatoria, JWT RS256 en cookies `HttpOnly`/`Secure`, HTTPS con HSTS y límite de 5 intentos/min en `/api/token/`; los 19 riesgos `RS-01`…`RS-19` mitigados | ✅ (incluido el **cifrado de los datos personales en reposo** desde el 19-oct-2026: **RS-19** cerrado, ver I.5) |
+| Mantenibilidad | Código verificable y sostenible (criterio de la Tabla 11) | Cobertura **92,2 %** en el backend (gate bloqueante del 90 %) sobre 1814 pruebas en SQL Server 2022; frontend con sus 4 métricas sobre 90 % (1972 pruebas); `printing_service` 98,89 %, `scanning_service` y `reporting_excel` con su umbral propio. `ruff check` 0, `ruff format` 420 archivos conformes, `mypy` 0 sobre 302 archivos, `tsc` 0, `typecheck:tests` 0 y ESLint 0; complejidad acotada por `C901` (máx. 15); 7 ADR y el grafo de conocimiento `graphify-out/` al día | ✅ |
+| Flexibilidad | Operación multi-sede y multi-empresa, parametrizable | Aislamiento por sede en todo el modelo; equivalencias de empaque configurables por sede sin constantes en el código (**ADR-011**), MRP por sede (**ADR-012**), recursos y dominios por `.env`, y el mismo compose en cualquier host con Docker | ✅ |
+| Protección (*safety*) | Característica nueva de la edición 2023, citada por la tesis en el análisis de alternativas | Validaciones de negocio en `Model.clean()`, `select_for_update()` en cada movimiento de stock, 5 CHECK nativos de T-SQL (`database/V2__optimize_sqlserver2022_texcore.sql`), auditoría que no se puede editar ni borrar y paros de máquina manuales inmutables | ✅ |
+
+## I.2 OWASP Top 10 y OWASP API Security
+
+| Riesgo | Control en el sistema | Veredicto |
+|---|---|---|
+| A01 Control de acceso roto | RBAC de los 11 roles, autenticación obligatoria como permiso por omisión de la API, aislamiento por sede y área en cada consulta; `/api/groups/` cerrado (hallazgo C-1). Las escrituras con la cookie JWT exigen el token CSRF (`gestion/tests/test_cookie_jwt_auth.py`) | ✅ |
+| A02 Fallas criptográficas | TLS 1.2/1.3 con HSTS y redirección 301 del puerto 80; cookies `Secure`, `HttpOnly` y `SameSite`; conexión a SQL Server con `Encrypt=yes`; datos personales de identificación cifrados en reposo con Fernet y clave en el entorno (**RS-19** cerrado el 19-oct-2026, ver I.5) | ✅ |
+| A03 Inyección | ORM de Django en todas las rutas de negocio, SQL nativo solo en migraciones e índices, reglas `S` de Ruff y Semgrep como gates | ✅ |
+| A04 Diseño inseguro | Decisiones de diseño con su ADR y su registro de riesgos; reglas de negocio en el modelo, no en la interfaz | ✅ |
+| A05 Configuración incorrecta | `DEBUG=0` verificado por prueba, secretos sin valor por omisión (fail-fast), CORS y CSRF por lista explícita, puerto 1433 sin publicar | ✅ |
+| A06 Componentes vulnerables | `pip-audit` en los 4 servicios y `npm audit` en 0; Trivy sobre las 6 imágenes por digest; Renovate y versiones fijadas con `==` | ✅ |
+| A07 Fallas de identificación y autenticación | JWT en cookies `HttpOnly` con lista de revocación al cerrar sesión; 5 intentos/min en `/api/token/` y 10/min en el refresco | ✅ |
+| A08 Fallas de integridad del software | Imágenes firmadas con cosign y verificadas antes del despliegue; imágenes de los jobs fijadas por digest; `yamllint` y `shellcheck` como gates (**RS-13**) | ✅ |
+| A09 Fallas de registro y monitoreo | Auditoría inmutable con usuario, IP real validada y justificación; logs RFC 5424 a stdout y a archivo rotativo; métricas DORA (`scripts/metricas_dora.py`) | ✅ |
+| A10 SSRF | El proxy de reportes valida la ruta contra una lista blanca; el guion de humo valida el esquema de cada URL (solo `http`/`https`) | ✅ |
+| API1/API2 (OWASP API Security, citados en la Tabla 11) | **API2:** el auditor de rutas (`scripts/auditar_permisos_backend.py`) falla si una ruta es pública fuera de la lista blanca de 6, y el anónimo recibe 401/403 en todas las demás (`gestion/tests/test_acceso_no_autorizado_global.py`); el escaneo de despacho pasa por la verificación de sesión de nginx (`auth_request`) antes del `scanning_service` (**RS-20**). **API1:** en cada ruta de objeto, los 9 roles acotados a una sede no leen, modifican, borran ni accionan un objeto de otra sede (misma prueba), y la sede del usuario llega verificada a la `internal_api` en el escaneo. Entre servicios, JWT RS256 firmado por el núcleo en los **3** satélites (**RS-09**) | ✅ |
+
+## I.3 COBIT 2019 e ITIL v4 — gobierno y gestión de servicios
+
+| Práctica | Evidencia | Veredicto |
+|---|---|---|
+| APO12 Gestión de riesgos | `REGISTRO_RIESGOS.md`: riesgos de seguridad, disponibilidad, calidad y gobierno, con probabilidad, impacto, exposición, estado y plan; los abiertos (`RC-09`, `RC-10`, `RD-01`, `RD-03`, `RD-05`) llevan su plan escrito | ✅ |
+| BAI06/BAI07 Gestión de cambios y de la puesta en producción | `.gitlab-ci.yml` con *environment* `production`, despliegue manual de un Maintainer, staging efímero con pruebas de humo, `rollback:produccion` y la guía de despliegue | ⏳ el pipeline no puede desplegar hasta que se hagan las acciones pendientes en GitHub (hoja de ruta del `CHANGELOG`, paso 9) |
+| MEA Medición y seguimiento | Métricas DORA (`gobierno:dora`), los gates de calidad del `.gitlab-ci.yml` y la matriz de trazabilidad de pruebas. OpenSSF Scorecard no existe en GitLab y queda fuera (ADR-014) | ✅ |
+| Gestión del conocimiento y de la configuración | `CHANGELOG.md`, 7 ADR, manuales por rol, `ESTANDARES_DESARROLLO.md` y el grafo de conocimiento | ✅ |
+
+## I.4 NIST SP 800-207 (Zero Trust) — lo que la tesis afirma literalmente
+
+> «la validación entre el núcleo y los servicios satélites requiere autenticación continua basada en tokens JWT firmados asimétricamente y protegidos en cookies HttpOnly».
+
+| Afirmación | Evidencia | Veredicto |
+|---|---|---|
+| Autenticación en cada petición entre el núcleo y los satélites | Los 3 satélites verifican un JWT **RS256** que firma el núcleo con su clave privada; sin token o con token forjado responden 401 | ✅ |
+| Firma asimétrica | Par de claves RSA propio (`scripts/generate_rsa_keys.py`), la privada solo en el núcleo | ✅ |
+| Cookies `HttpOnly` para la sesión del usuario | Cookies `HttpOnly`, `Secure` y `SameSite`, con prueba de regresión | ✅ |
+| Red sin confianza implícita | Nginx como único punto de entrada, redes `dmz_net` e `internal_net` separadas, 1433 sin publicar y `X-Forwarded-For` validado contra las redes de confianza | ✅ |
+
+La tesis no promete mTLS ni políticas por dispositivo, así que no se contrastan: el alcance comprometido es la autenticación continua entre servicios, que sí está.
+
+## I.5 ISO/IEC 27001 y LOPDP
+
+| Afirmación de la tesis | Estado | Veredicto |
+|---|---|---|
+| Control de acceso y trazabilidad de quién hace cada cosa | RBAC de 11 roles, auditoría inmutable con justificación obligatoria en datos maestros | ✅ |
+| Cifrado de las comunicaciones | TLS 1.2/1.3 con HSTS en el perímetro y `Encrypt=yes` hacia la base | ✅ |
+| Gestión de riesgos de la información | `REGISTRO_RIESGOS.md`, revisado en cada cambio | ✅ |
+| Respaldo y recuperación | Respaldo previo a cada migración y `scripts/respaldar_bd.sh`; sin réplica (**RD-03**) | ⚠️ parcial |
+| «Privacidad desde el diseño» con las medidas técnicas que exige la LOPDP para los datos de identificación | **Cifrado selectivo en reposo desde el 19-oct-2026**: `Cliente.ruc_cedula` y `CustomUser.date_of_birth` se guardan cifrados con Fernet (AES-128-CBC + HMAC-SHA256) con la clave en el entorno (`FIELD_ENCRYPTION_KEYS`, rotable), y la búsqueda por identificación y la unicidad `(RUC, sede)` van por un índice ciego HMAC-SHA256. La fecha de nacimiento se audita por su HMAC, no en claro. Migración `gestion/0010`, 34 pruebas en `gestion/tests/test_cifrado_datos_personales.py`, detalle en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md`. Cierra el defecto `SEC-08` de abril y el riesgo **RS-19** | ✅ |
+| Políticas organizativas (consentimiento, retención, responsable de datos) | Corresponden a Interfibra S.A. | 📅 de la puesta en marcha (§5.4 de la tesis) |
+
+## I.6 Lo que esta parte deja abierto
+
+| # | Punto | Dónde se sigue |
+|---|---|---|
+| 1 | Esquema OpenAPI incompleto (124 avisos) | **RC-09** |
+| 2 | Usabilidad medida (RNF-05): grabaciones y capturas | `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4 |
+| 3 | Acciones en GitHub para que el release pueda desplegar | Hoja de ruta del `CHANGELOG`, paso 9 |
+| 4 | Réplica de base de datos y health check real de `reporting_excel` | **RD-03** y **RD-01** |
+
+> El cifrado de datos personales en reposo (**RS-19**), que era el único ❌ de este contraste, quedó cerrado el 19-oct-2026 (ver §I.5). TDE sigue siendo una medida complementaria sujeta a la edición de SQL Server que se licencie (**RS-18**).
+
+---
+
+# Parte II — Historial de la auditoría (marzo-abril de 2026)
+
+> Documento original, conservado como historial. **Describe el sistema de abril de 2026**, con la rama `staging` y los sprints 1 a 6 de la auditoría interna; sus puntuaciones y conteos son de esa fecha. Las notas `[Al 14-oct-2026: …]` marcan lo que hoy sería falso.
+
 ### Versión 1.5 | Fecha: 2026-04-10 | Autor: Auditoría Técnica Interna
 ### Sprints 1–6 completados — Capa de servicios ejecutivos implementada, CU-EJ-07 funcional, cobertura frontend ampliada
 
@@ -50,7 +149,7 @@
 | S1.6 | Rate limiting en Nginx (login: 5r/m, api: 100r/s) | `nginx/nginx.conf` | ✅ |
 | S1.7 | X-Forwarded-For validado contra redes de confianza | `gestion/middleware.py` | ✅ |
 | S1.8 | CORS restrictivo en reporting_excel | `reporting_excel/src/main.py` | ✅ |
-| S1.9 | JWT Blacklist — tokens revocados al hacer logout | `TexCore/settings.py`, `gestion/custom_jwt_views.py` | ✅ |
+| S1.9 | JWT Blacklist — tokens revocados al hacer logout | `TexCore/settings.py`, `gestion/views/custom_jwt_views.py` | ✅ |
 | S1.10 | Archivo de test renombrado (nombre incorrecto) | `InventoryDashboard.reportes.test.tsx` | ✅ |
 
 ### Cambios técnicos detallados del Sprint 1
@@ -83,7 +182,7 @@
 - Cleanup con `_local.__dict__.pop()` en bloque `finally` — garantiza limpieza incluso con excepciones
 - Añadido `logger = logging.getLogger(__name__)`
 
-**`gestion/custom_jwt_views.py`** — 2 cambios:
+**`gestion/views/custom_jwt_views.py`** — 2 cambios:
 - Importados `RefreshToken`, `TokenError` de simplejwt
 - `LogoutView.post()` ahora llama `token.blacklist()` antes de borrar la cookie — tokens revocados son inválidos inmediatamente en el servidor
 
@@ -112,7 +211,9 @@ docker compose exec backend python manage.py migrate
 
 ### Dictamen General
 
-TexCore es un sistema con una arquitectura sólida de microservicios, RBAC granular y un sistema de auditoría bien concebido. Tras la ejecución de los 6 sprints de la auditoría, los **7 defectos críticos de seguridad fueron resueltos**, la deuda técnica en calidad de código fue saneada, se estableció una infraestructura de testing ISTQB y las prácticas de gobierno de TI (CI/CD, pre-commit, OpenAPI, registro de riesgos) fueron formalizadas. El Sprint 6 completó la funcionalidad ejecutiva: capa de servicios (`ProduccionKPIService`, `ExecutiveKPIService`) con Value Objects inmutables, 3 Stored Procedures de producción en SQL Server, router FastAPI para reportes de producción y el tab "Reportes" gerencial (CU-EJ-07) con 11 tests ISTQB. El sistema está **operativo en staging** y **apto para producción** sin acciones pendientes bloqueantes.
+TexCore es un sistema con una arquitectura sólida de monolito con servicios satélite, RBAC granular y un sistema de auditoría bien concebido. Tras la ejecución de los 6 sprints de la auditoría, los **7 defectos críticos de seguridad fueron resueltos**, la deuda técnica en calidad de código fue saneada, se estableció una infraestructura de testing ISTQB y las prácticas de gobierno de TI (CI/CD, pre-commit, OpenAPI, registro de riesgos) fueron formalizadas. El Sprint 6 completó la funcionalidad ejecutiva: capa de servicios (`ProduccionKPIService`, `ExecutiveKPIService`) con Value Objects inmutables, 3 Stored Procedures de producción en SQL Server, router FastAPI para reportes de producción y el tab "Reportes" gerencial (CU-EJ-07) con 11 tests ISTQB. El sistema está **operativo en staging** y **apto para producción** sin acciones pendientes bloqueantes.
+
+`[Al 14-oct-2026: los 3 Stored Procedures se eliminaron como código muerto (database/V6__drop_obsolete_stored_procedures.sql); las consultas gerenciales se sirven con el ORM de Django y internal_api sobre los índices nativos V2, V4 y V5. El dictamen de hoy está en la Parte I.]`
 
 ### Puntuación por Dimensión
 
@@ -151,7 +252,7 @@ TexCore es un sistema con una arquitectura sólida de microservicios, RBAC granu
 | Backend Django (gestion)| `settings.py` ✏️, `urls.py` ✏️, `models.py` ✏️, `views.py` ✏️, `permissions.py` ✏️, `middleware.py` ✏️, `exceptions.py` 🆕, `auth_backends.py` ✏️, `custom_jwt_views.py` ✏️ |
 | Servicios de dominio    | `gestion/services/produccion_kpi_service.py` 🆕, `inventory/services/executive_kpi_service.py` 🆕 |
 | App Inventory           | `models.py`, `views.py`, `reporting_proxy.py` ✏️ |
-| Microservicios FastAPI  | `reporting_excel/src/main.py` ✏️, `reporting_excel/src/routers/produccion.py` 🆕, `printing_service/src/main.py`, `scanning_service/src/main.py` |
+| Servicios Satélite FastAPI  | `reporting_excel/src/main.py` ✏️, `reporting_excel/src/routers/produccion.py` 🆕, `printing_service/src/main.py`, `scanning_service/src/main.py` |
 | Frontend React          | `VendedorDashboard.tsx`, `BodegueroDashboard.tsx`, `InventoryDashboard.reportes.test.tsx` ✏️, `EjecutivosDashboard.tsx` ✏️, `EjecutivosDashboard.reportes.test.tsx` 🆕 |
 | Infraestructura         | `nginx/nginx.conf` ✏️, `docker-compose.prod.yml` ✏️, `requirements.txt` ✏️ |
 | Tests                   | `gestion/tests/factories.py` 🆕, `test_cliente_credito.py` 🆕, `test_orden_produccion_estados.py` 🆕, `printing_service/tests/` 🆕, `scanning_service/tests/` 🆕 |
@@ -187,7 +288,7 @@ TexCore es un sistema con una arquitectura sólida de microservicios, RBAC granu
 - Kardex funcional con saldo denormalizado para rendimiento
 - Motor MRP para planificación de requerimientos de material
 - **[S6]** Capa de servicios ejecutivos completa: `ProduccionKPIService` y `ExecutiveKPIService` con Value Objects inmutables (`dataclass(frozen=True)`) — ninguna vista computa datos de negocio directamente
-- **[S6]** 3 Stored Procedures de producción gerencial en SQL Server (`sp_GetOrdenesProduccionGerencial`, `sp_GetLotesProduccionGerencial`, `sp_GetTendenciaProduccionGerencial`) con soporte de calendario continuo (sin huecos en serie temporal)
+- **[S6]** 3 Stored Procedures de producción gerencial en SQL Server (`sp_GetOrdenesProduccionGerencial`, `sp_GetLotesProduccionGerencial`, `sp_GetTendenciaProduccionGerencial`) con soporte de calendario continuo (sin huecos en serie temporal) — `[Al 14-oct-2026: eliminados (V6__drop_obsolete_stored_procedures.sql); hoy se usan el ORM y internal_api.]`
 - **[S6]** CU-EJ-07 implementado: tab "Reportes" en `EjecutivosDashboard.tsx` — centro unificado de 6 exports gerenciales con validación de rango de fechas, bloqueo de descarga simultánea y feedback visual (spinner + `disabled`)
 - **[S6]** Endpoints ejecutivos expuestos: `GET /kpi-ejecutivo/`, `GET /produccion/resumen/`, `GET /produccion/tendencia/` — todos filtran por `sede_id` opcional
 
@@ -250,7 +351,7 @@ Ver sección 10 para detalle completo.
 
 - Race condition en `TransferenciaStockAPIView` sin `select_for_update()`
 - `bare except: pass` en `gestion/models.py:47-48` silencia errores críticos en producción
-- Sin circuit breaker entre microservicios
+- Sin circuit breaker entre servicios satélite
 
 ### 3.6 Seguridad — 2.0/5
 
@@ -260,7 +361,7 @@ Ver sección 4 para detalle completo.
 
 **Fortalezas:**
 
-- Arquitectura de microservicios bien separada
+- Arquitectura de servicios satélite bien separada
 - Modelos bien documentados con campos descriptivos
 - Migrations organizadas secuencialmente
 
@@ -284,6 +385,8 @@ Ver sección 4 para detalle completo.
 - `dockerfile.windows` existe pero no está integrado en docker-compose principal
 - `docker-compose.windows.yml` crea bifurcación de mantenimiento
 
+> **Resuelto (13-oct-2026):** se eliminó la variante de contenedores Windows (`docker-compose.windows.yml`, `dockerfile.windows`, `database/Dockerfile.windows`, `entrypoint.ps1`). En Windows se usan contenedores Linux con Docker Desktop.
+
 ---
 
 ## 4. HALLAZGOS DE SEGURIDAD — OWASP TOP 10
@@ -302,7 +405,7 @@ url = f"{REPORTING_SERVICE_URL}/{clean_path}"
 # O: report_path = "kardex/../admin/secret"
 ```
 
-**Impacto:** Un usuario autenticado puede acceder a endpoints no autorizados del microservicio de reportes modificando el parámetro `report_path`.
+**Impacto:** Un usuario autenticado puede acceder a endpoints no autorizados del servicio satélite de reportes modificando el parámetro `report_path`.
 
 **Corrección requerida:**
 
@@ -335,14 +438,14 @@ if not validate_report_path(report_path):
 - `reporting_excel/src/main.py`: `INTERNAL_KEY = os.getenv(..., "dev-internal-secret-key-change-in-prod")`
 - `docker-compose.prod.yml`: `REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY:-dev-internal-secret-key-change-in-prod}`
 
-**Impacto:** Si la variable de entorno no está configurada en producción, el sistema usa la clave pública del repositorio. Cualquier persona que haya leído el código puede impersonar el backend y acceder al microservicio.
+**Impacto:** Si la variable de entorno no está configurada en producción, el sistema usa la clave pública del repositorio. Cualquier persona que haya leído el código puede impersonar el backend y acceder al servicio satélite.
 
 **OWASP:** A02:2021 – Cryptographic Failures
 
 **Corrección requerida:** Aplicar el mismo patrón de `settings.py` que ya usa Fail-Fast:
 
 ```python
-# Patrón correcto ya existente — replicar en todos los microservicios
+# Patrón correcto ya existente — replicar en todos los servicios satélite
 def get_required_env(var_name: str) -> str:
     value = os.environ.get(var_name)
     if not value:
@@ -485,7 +588,7 @@ def get_client_ip(request) -> str:
 
 ---
 
-### [SEC-06] 🔴 CRÍTICO — CORS completamente abierto en microservicio
+### [SEC-06] 🔴 CRÍTICO — CORS completamente abierto en servicio satélite
 
 **Archivo:** `reporting_excel/src/main.py:36`
 
@@ -501,7 +604,7 @@ app.add_middleware(
 )
 ```
 
-**Impacto:** Aunque el microservicio está protegido por `X-Internal-Key`, la política CORS abierta permite que scripts maliciosos en cualquier dominio realicen requests preflight exitosos.
+**Impacto:** Aunque el servicio satélite está protegido por `X-Internal-Key`, la política CORS abierta permite que scripts maliciosos en cualquier dominio realicen requests preflight exitosos.
 
 **Corrección requerida:**
 
@@ -585,6 +688,8 @@ class Cliente(AuditableModelMixin):
 Bajo la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP), los datos de identificación personal requieren medidas técnicas adecuadas de protección.
 
 **Recomendación:** Evaluar `django-encrypted-model-fields` o cifrado a nivel de campo con `Fernet`.
+
+`[Al 19-oct-2026: resuelto. Se tomó el cifrado a nivel de campo con Fernet (AES-128-CBC + HMAC-SHA256), no la dependencia externa: `gestion/crypto.py` y `gestion/model_fields.py`, migración `gestion/0010`. Los dos campos que cita este hallazgo son justo los que se cifran. La búsqueda por identificación y la unicidad (RUC, sede) pasan a un índice ciego HMAC-SHA256, porque el texto cifrado de un mismo valor cambia en cada escritura. Detalle en `docs/arquitectura/CIFRADO_DATOS_PERSONALES.md`; el dictamen vigente está en la Parte I, §I.5.]`
 
 ---
 
@@ -1231,11 +1336,11 @@ No existe documentación de estándares de desarrollo. El equipo no tiene una re
 
 ### [COBIT-APO-03] Gestión de Arquitectura — Riesgo de Acoplamiento
 
-Los microservicios `scanning_service` y `reporting_excel` se conectan directamente al SQL Server del backend Django. Esto crea acoplamiento fuerte en el esquema de BD.
+Los servicios satélite `scanning_service` y `reporting_excel` se conectan directamente al SQL Server del backend Django. Esto crea acoplamiento fuerte en el esquema de BD.
 
-**Riesgo:** Un cambio en la estructura de tablas de Django requiere actualización coordinada en todos los microservicios.
+**Riesgo:** Un cambio en la estructura de tablas de Django requiere actualización coordinada en todos los servicios satélite.
 
-**Recomendación:** Crear vistas SQL o Stored Procedures estables como "contrato de datos" entre servicios. Los microservicios solo acceden a las vistas, no a las tablas directamente.
+**Recomendación:** Crear vistas SQL o Stored Procedures estables como "contrato de datos" entre servicios. Los servicios satélite solo acceden a las vistas, no a las tablas directamente.
 
 ### [COBIT-BAI-03] Pipeline CI/CD — Ausente
 
@@ -1310,7 +1415,7 @@ jobs:
 | R1  | Fuga de credenciales en .env           | Alta         | Crítico | Ninguno             | git-secrets + .gitignore estricto |
 | R2  | DoS por falta de rate limiting         | Media        | Alto    | Ninguno             | Rate limiting Nginx               |
 | R3  | Corrupción de stock por race condition | Media        | Alto    | Ninguno             | select_for_update()               |
-| R4  | Fallo de microservicio reportes        | Alta         | Medio   | Health check básico | Health check real + alertas       |
+| R4  | Fallo de servicio satélite reportes    | Alta         | Medio   | Health check básico | Health check real + alertas       |
 | R5  | Despliegue con DEBUG=True              | Media        | Alto    | Ninguno             | CI gate + Fail-Fast               |
 | R6  | Dependencia vulnerable en requirements | Alta         | Alto    | Ninguno             | safety check en CI                |
 | R7  | Token JWT comprometido sin revocación  | Media        | Alto    | Ninguno             | JWT Blacklist                     |
@@ -1321,7 +1426,7 @@ jobs:
 
 ### [ITIL-01] Gestión de Incidentes — Sin Observabilidad
 
-En el estado actual, si un microservicio falla en producción:
+En el estado actual, si un servicio satélite falla en producción:
 
 1. El usuario recibe un error genérico sin contexto
 2. No hay alerta automática al equipo de operaciones
@@ -1618,7 +1723,7 @@ operations = [
 | COBIT-02 | Sin pipeline CI/CD                        | `.github/`                                                 | —                   | 🟠 Alta    | Gobierno        | BAI03       |
 | COBIT-03 | Sin gestión de riesgos formal             | —                                                          | —                   | 🟡 Media   | Gobierno        | APO12       |
 | ITIL-01  | Sin observabilidad/alertas                | Todo el proyecto                                           | —                   | 🟡 Media   | Servicios       | —           |
-| ITIL-02  | Health checks superficiales               | Microservicios                                             | —                   | 🟡 Media   | Servicios       | —           |
+| ITIL-02  | Health checks superficiales               | Servicios Satélite                                          | —                   | 🟡 Media   | Servicios       | —           |
 | ITIL-03  | Sin documentación de API                  | Backend Django                                             | —                   | 🟡 Media   | Servicios       | —           |
 | ITIL-04  | Commits sin convención                    | `.git/`                                                    | —                   | 🔵 Baja    | Gobierno        | —           |
 
@@ -1640,7 +1745,7 @@ operations = [
 | S1.6  | Rate limiting: login(5r/m), refresh(10r/m), api(100r/s) | `nginx/nginx.conf`                                                | ✅ Implementado          |
 | S1.7  | X-Forwarded-For validado contra redes Docker de confianza| `gestion/middleware.py`                                           | ✅ Implementado          |
 | S1.8  | CORS restrictivo — solo orígenes internos, solo GET      | `reporting_excel/src/main.py`                                     | ✅ Implementado          |
-| S1.9  | JWT Blacklist — logout revoca token inmediatamente       | `TexCore/settings.py`, `gestion/custom_jwt_views.py`              | ✅ Implementado          |
+| S1.9  | JWT Blacklist — logout revoca token inmediatamente       | `TexCore/settings.py`, `gestion/views/custom_jwt_views.py`              | ✅ Implementado          |
 | S1.10 | Archivo de test renombrado a nombre correcto             | `InventoryDashboard.reportes.test.tsx`                            | ✅ Implementado          |
 
 > ⚠️ **Acción requerida post-Sprint 1:** ejecutar `python manage.py migrate` para aplicar tablas de JWT Blacklist (`rest_framework_simplejwt.token_blacklist`).
@@ -1731,7 +1836,7 @@ omit = */migrations/*, */tests/*
 | ---- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ | ------ |
 | G4.1 | Pipeline CI/CD con gates de calidad y seguridad                                    | `.github/workflows/ci.yml`                             | ✅ |
 | G4.2 | Pre-commit hooks (flake8, bandit, detect-secrets, conventional commits)            | `.pre-commit-config.yaml`                              | ✅ |
-| G4.3 | Health checks reales en microservicios                                             | `scanning_service/src/main.py` (ya verificaba BD)      | ✅ Ya implementado |
+| G4.3 | Health checks reales en servicios satélite                                          | `scanning_service/src/main.py` (ya verificaba BD)      | ✅ Ya implementado |
 | G4.4 | Logging JSON estructurado (stdout + archivo rotativo)                              | `TexCore/settings.py` (`_JsonFormatter`, `console` handler) | ✅ |
 | G4.5 | OpenAPI 3.1 con drf-spectacular en `/api/docs/`                                    | `requirements.txt`, `settings.py`, `urls.py`           | ✅ |
 | G4.6 | Estándares de desarrollo documentados                                              | `docs/DEVELOPMENT_STANDARDS.md`                        | ✅ |
@@ -1741,7 +1846,7 @@ omit = */migrations/*, */tests/*
 ### Detalle técnico Sprint 4
 
 **`.github/workflows/ci.yml`** — Pipeline con 5 jobs + quality gate:
-- `backend-lint`: flake8 + bandit + detect-secrets
+- `backend-lint`: flake8 + bandit + detect-secrets `[Al 14-oct-2026: Ruff (estilo y reglas de seguridad S, que reemplazan a flake8 y bandit), ruff format --check, mypy y detect-secrets, todos bloqueantes; Semgrep en su propio job.]`
 - `backend-test`: Django tests + cobertura ≥75%
 - `printing-service-test`: pytest unitarios sin WeasyPrint
 - `scanning-service-test`: pytest con mock de BD
@@ -1773,7 +1878,7 @@ omit = */migrations/*, */tests/*
 - Reglas de seguridad con checklist de PR
 - Reglas de ORM (N+1, select_for_update, validaciones en clean)
 - Niveles de testing ISTQB, reglas de cobertura
-- Tabla de contratos entre microservicios
+- Tabla de contratos entre servicios satélite
 
 **`docs/RISK_REGISTER.md`** — 22 riesgos catalogados:
 - RS: Seguridad (8 riesgos), RD: Disponibilidad (4), RC: Calidad (5), RG: Gobierno (5)
@@ -2007,7 +2112,7 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 
 | Criterio | Estado |
 |----------|--------|
-| ✅ Arquitectura de microservicios funcional | Cumplido (pre-existente) |
+| ✅ Arquitectura de monolito con servicios satélite funcional | Cumplido (pre-existente) |
 | ✅ RBAC implementado | Cumplido (pre-existente) |
 | ✅ Auditoría funcional (AuditableModelMixin) | Cumplido (pre-existente) |
 | ✅ 7 defectos críticos de seguridad resueltos | Sprint 1 |
@@ -2015,7 +2120,7 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 | ✅ Handler de excepciones unificado | Sprint 2 |
 | ✅ N+1 queries resueltas en vistas críticas | Sprint 2 |
 | ✅ Infraestructura de testing ISTQB establecida | Sprint 3 |
-| ✅ Umbral de cobertura 75% configurado en CI | Sprint 3 |
+| ✅ Umbral de cobertura 75% configurado en CI | Sprint 3. `[Al 14-oct-2026: 90 % bloqueante en .coveragerc.]` |
 | ✅ CI/CD activo con quality gates | Sprint 4 |
 | ✅ Logging JSON estructurado (stdout + archivo) | Sprint 4 |
 | ✅ Documentación OpenAPI en `/api/docs/` | Sprint 4 |
@@ -2024,17 +2129,19 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 | ⚠️ Cobertura ≥ 75% en módulos críticos | Parcial (~59%) — requiere tests de integración adicionales |
 | ✅ Health checks con verificación real | `scanning_service` verifica BD · `printing_service` verifica templates (Sprint 5) |
 | ✅ Secrets baseline inicializado | `.secrets.baseline` generado (Sprint 5) — 6 FP de test aceptados |
-| ✅ Versiones fijadas en microservicios | `printing_service` fijada (Sprint 5) · `scanning_service` ya estaba fijada |
+| ✅ Versiones fijadas en servicios satélite | `printing_service` fijada (Sprint 5) · `scanning_service` ya estaba fijada |
 | ✅ Service Layer para KPIs ejecutivos | `ProduccionKPIService` + `ExecutiveKPIService` con Value Objects inmutables (Sprint 6) |
-| ✅ SPs de producción gerencial en BD | 3 SPs con migración `0020` aplicable — datos sin huecos temporales (Sprint 6) |
+| ✅ SPs de producción gerencial en BD | 3 SPs con migración `0020` aplicable — datos sin huecos temporales (Sprint 6). `[Al 14-oct-2026: eliminados; ORM + internal_api.]` |
 | ✅ CU-EJ-07 implementado | Tab Reportes con 6 exports, validación fechas, UX de carga (Sprint 6) |
 | ✅ Tests ISTQB para dashboard ejecutivo | 11 tests EP+BVA+estado — 11/11 ✅ (Sprint 6) |
-| ⚠️ Cobertura ≥ 75% en módulos críticos | Parcial (~62%) — `gestion` e `inventory` base requieren tests integración adicionales |
+| ⚠️ Cobertura ≥ 75% en módulos críticos | Parcial (~62%) — `gestion` e `inventory` base requieren tests integración adicionales. `[Al 14-oct-2026: el umbral es 90 % y bloquea el CI; la cobertura real del backend es 92,2 %.]` |
 
-**Veredicto:** El proyecto está **operativo en staging y apto para producción** sin acciones pendientes bloqueantes. Los 2 ítems diferidos (tests de integración BD real, PII encryption) no bloquean el funcionamiento del sistema.
+**Veredicto (abril de 2026):** El proyecto está **operativo en staging y apto para producción** sin acciones pendientes bloqueantes. Los 2 ítems diferidos (tests de integración BD real, PII encryption) no bloquean el funcionamiento del sistema.
+
+`[Al 19-oct-2026: el veredicto vigente es el de la Parte I. Los 2 diferidos están cerrados: las pruebas de integración sobre base real se cubren desde el 14-oct (la suite completa corre en SQL Server 2022, 92,2 % de cobertura) y el cifrado de PII se implementó el 19-oct (RS-19, ver §I.5 y el hallazgo SEC-08 de esta misma parte). El contraste con la tesis ya no tiene ningún ❌.]`
 
 ---
 
-_Documento generado: 2026-03-27 | Última actualización: 2026-04-10 (v1.5)_
-_Próxima revisión programada: 2026-05-10_
+_Parte II generada: 2026-03-27 | Última actualización de la Parte II: 2026-04-10 (v1.5)_
+_Parte I (contraste con la tesis): 2026-10-14_
 _Estándares aplicados: ISO/IEC 25010:2023 · ISTQB CTFL v4.0 · COBIT 2019 · ITIL 4 · OWASP Top 10 2021 · SOLID · 12-Factor App · RUP (documentación de artefactos)_

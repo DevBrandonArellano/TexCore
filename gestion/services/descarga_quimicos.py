@@ -7,28 +7,29 @@ SOLID: SRP — este módulo solo gestiona ciclo de vida de descarga química
 
 import logging
 from decimal import Decimal
-from django.db import transaction
-from django.core.exceptions import ValidationError
 
-from gestion.models import DescargaQuimicoOP, Producto, Bodega
-from gestion.services_formula import DosificacionCalculator
-from inventory.models import StockBodega, MovimientoInventario
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from gestion.models import Bodega, DescargaQuimicoOP
+from gestion.services.services_formula import calcular_dosificacion_de_orden
+from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
-logger = logging.getLogger('gestion.services.descarga_quimicos')
+logger = logging.getLogger("gestion.services.descarga_quimicos")
 
 
 class DescargaQuimicosService:
     """
     Servicio de descarga automática de químicos al crear/modificar/eliminar órdenes de producción.
-    Reutiliza DosificacionCalculator para cálculos y safe_get_or_create_stock para acceso thread-safe.
+    Reutiliza calcular_dosificacion_de_orden para cálculos y safe_get_or_create_stock para acceso thread-safe.
     """
 
     @staticmethod
     @transaction.atomic
     def descargar_para_op(orden, usuario) -> list:
         """
-        SRP: solo ejecuta descarga inicial. Cálculo delegado a DosificacionCalculator.
+        SRP: solo ejecuta descarga inicial. Cálculo delegado a calcular_dosificacion_de_orden.
 
         Args:
             orden: Instancia de OrdenProduccion con formula_color y bodega_quimicos
@@ -45,30 +46,32 @@ class DescargaQuimicosService:
         if not orden.formula_color:
             raise ValidationError("Fórmula de color no asignada a la orden.")
 
-        # Cálculo de dosificación usando DosificacionCalculator (reutilización de patrón Strategy)
+        # Cálculo de dosificación: regla única compartida con el MRP y los requisitos
+        # de materiales de la orden (calcular_dosificacion_de_orden).
         try:
-            resultado = DosificacionCalculator(orden.formula_color).calcular(
-                kg_tela=orden.peso_neto_requerido,
-                relacion_bano=Decimal('10')  # configurable por sed/fórmula en versión futura
-            )
+            resultado = calcular_dosificacion_de_orden(orden)
         except Exception as e:
-            logger.error(f"Error calculando dosificación para OP {orden.codigo}: {str(e)}")
-            raise ValidationError(f"Error calculando dosificación: {str(e)}")
+            logger.exception(
+                "Error calculando dosificación para OP %s: %s",
+                orden.codigo,
+                str(e),
+            )
+            raise ValidationError(f"Error calculando dosificación: {e!s}") from e
 
         registros = []
 
         for insumo in resultado.insumos:
             try:
-                # Thread-safe get-or-create con savepoint
+                # Get-or-create seguro para hilos con savepoint
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=orden.bodega_quimicos,
                     producto=insumo.producto_id,  # Se pasa el ID al campo ForeignKey
-                    lote=None
+                    lote=None,
                 )
 
                 # Descuento del stock (3 decimales — precisión estándar del sistema, P1-008)
-                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal('0.001'))
+                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal("0.001"))
 
                 # P0-006: validar disponibilidad ANTES de descontar — el stock
                 # jamás debe quedar negativo. transaction.atomic revierte los
@@ -90,49 +93,59 @@ class DescargaQuimicosService:
                 # tránsito (el protocolo 3-fase aplica a TRANSFERENCIAS vía
                 # TransicionBodegaService).
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='CONSUMO',
+                    tipo_movimiento="CONSUMO",
                     producto_id=insumo.producto_id,
                     bodega_origen=orden.bodega_quimicos,
                     bodega_destino=None,
                     cantidad=cantidad_descontar,
                     usuario=usuario,
-                    documento_ref=f'OP-{orden.codigo}',
-                    estado_movimiento='completado',
-                    saldo_resultante=stock.cantidad
+                    documento_ref=f"OP-{orden.codigo}",
+                    estado_movimiento="completado",
+                    saldo_resultante=stock.cantidad,
                 )
 
                 # Registro de descarga química (auditoría)
                 registro = DescargaQuimicoOP.objects.create(
                     orden_produccion=orden,
                     producto_id=insumo.producto_id,
-                    fase=insumo.fase_id if hasattr(insumo, 'fase_id') else None,
+                    fase=insumo.fase_id if hasattr(insumo, "fase_id") else None,
                     bodega=orden.bodega_quimicos,
                     tipo_calculo=insumo.tipo_calculo,
                     cantidad_calculada_kg=insumo.cantidad_kg,
-                    estado='aplicada',
-                    descargado_por=usuario
+                    estado="aplicada",
+                    descargado_por=usuario,
                 )
                 registros.append(registro)
 
                 # Verificar alertas de stock bajo
                 DescargaQuimicosService._verificar_alertas(
                     bodega=orden.bodega_quimicos,
-                    producto_id=insumo.producto_id,
-                    saldo=stock.cantidad
+                    producto_descripcion=insumo.producto_descripcion,
+                    stock_minimo=insumo.stock_minimo,
+                    saldo=stock.cantidad,
                 )
 
             except ValidationError:
                 # Errores de negocio (ej. stock insuficiente) suben sin re-envolver
                 raise
             except Exception as e:
-                logger.error(f"Error descargando {insumo.producto_descripcion} en OP {orden.codigo}: {str(e)}")
-                raise ValidationError(f"Error descargando {insumo.producto_descripcion}: {str(e)}")
+                logger.exception(
+                    "Error descargando %s en OP %s: %s",
+                    insumo.producto_descripcion,
+                    orden.codigo,
+                    str(e),
+                )
+                raise ValidationError(f"Error descargando {insumo.producto_descripcion}: {e!s}") from e
 
         # Marcar orden como con inventario descontado
         orden.inventario_descontado = True
-        orden.save(update_fields=['inventario_descontado'])
+        orden.save(update_fields=["inventario_descontado"])
 
-        logger.info(f"Descarga exitosa OP-{orden.codigo}: {len(registros)} químicos descargados")
+        logger.info(
+            "Descarga exitosa OP-%s: %s químicos descargados",
+            orden.codigo,
+            len(registros),
+        )
         return registros
 
     @staticmethod
@@ -150,50 +163,56 @@ class DescargaQuimicosService:
         if not justificacion:
             raise ValidationError("Justificación obligatoria para revertir descarga de químicos.")
 
-        descargas = orden.descargas_quimicos.filter(estado='aplicada').select_related('producto', 'bodega')
+        descargas = orden.descargas_quimicos.filter(estado="aplicada").select_related("producto", "bodega")
 
         for descarga in descargas:
             try:
                 # Recuperar stock de forma thread-safe
                 stock, _ = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=descarga.bodega,
-                    producto=descarga.producto_id,
-                    lote=None
+                    StockBodega, bodega=descarga.bodega, producto=descarga.producto_id, lote=None
                 )
 
                 # Devolución al stock (3 decimales — precisión estándar del sistema, P1-008)
-                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.001'))
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal("0.001"))
                 stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = justificacion
                 stock.save()
 
                 # Registro de movimiento de devolución
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='DEVOLUCION',
+                    tipo_movimiento="DEVOLUCION",
                     producto_id=descarga.producto_id,
                     bodega_origen=None,
                     bodega_destino=descarga.bodega,
                     cantidad=cantidad_revertir,
                     usuario=usuario,
-                    documento_ref=f'REVERT-OP-{orden.codigo}',
-                    saldo_resultante=stock.cantidad
+                    documento_ref=f"REVERT-OP-{orden.codigo}",
+                    saldo_resultante=stock.cantidad,
                 )
 
                 # Marcar descarga como revertida
-                descarga.estado = 'revertida'
+                descarga.estado = "revertida"
                 descarga.justificacion = justificacion
-                descarga.save(update_fields=['estado', 'justificacion'])
+                descarga.save(update_fields=["estado", "justificacion"])
 
             except Exception as e:
-                logger.error(f"Error revirtiendo descarga {descarga.id} de OP {orden.codigo}: {str(e)}")
-                raise ValidationError(f"Error revirtiendo {descarga.producto.descripcion}: {str(e)}")
+                logger.exception(
+                    "Error revirtiendo descarga %s de OP %s: %s",
+                    descarga.id,
+                    orden.codigo,
+                    str(e),
+                )
+                raise ValidationError(f"Error revirtiendo {descarga.producto.descripcion}: {e!s}") from e
 
         # Marcar orden como sin inventario descontado
         orden.inventario_descontado = False
-        orden.save(update_fields=['inventario_descontado'])
+        orden.save(update_fields=["inventario_descontado"])
 
-        logger.info(f"Reversión exitosa OP-{orden.codigo}: {descargas.count()} químicos revertidos")
+        logger.info(
+            "Reversión exitosa OP-%s: %s químicos revertidos",
+            orden.codigo,
+            descargas.count(),
+        )
 
     @staticmethod
     @transaction.atomic
@@ -216,28 +235,33 @@ class DescargaQuimicosService:
         # Paso 2: Realizar nueva descarga con valores actualizados
         DescargaQuimicosService.descargar_para_op(orden, usuario)
 
-        logger.info(f"Ajuste exitoso OP-{orden.codigo}: reversión + nueva descarga")
+        logger.info(
+            "Ajuste exitoso OP-%s: reversión + nueva descarga",
+            orden.codigo,
+        )
 
     @staticmethod
-    def _verificar_alertas(bodega: Bodega, producto_id: int, saldo: Decimal):
+    def _verificar_alertas(bodega: Bodega, producto_descripcion: str, stock_minimo: Decimal, saldo: Decimal):
         """
         Verifica si el stock ha caído por debajo del mínimo.
         Emite warning en logs y puede extenderse para crear AlertaStock.
 
+        Recibe stock_minimo/producto_descripcion ya resueltos por DosificacionCalculator
+        (que hace select_related('producto') sobre los detalles de la fórmula) en vez de
+        volver a consultar Producto por cada insumo del loop en descargar_para_op.
+
         Args:
             bodega: Instancia de Bodega
-            producto_id: ID del producto
+            producto_descripcion: Descripción del producto (para el mensaje de alerta)
+            stock_minimo: Stock mínimo configurado del producto
             saldo: Saldo resultante después de descarga
         """
-        try:
-            producto = Producto.objects.get(pk=producto_id)
-            if saldo < producto.stock_minimo:
-                alerta_msg = (
-                    f"[ALERTA STOCK] {producto.descripcion} en bodega "
-                    f"'{bodega.nombre}': {saldo}kg "
-                    f"(mínimo: {producto.stock_minimo}kg)"
-                )
-                logger.warning(alerta_msg)
-                # Extensión futura: crear instancia de AlertaStock si existe
-        except Producto.DoesNotExist:
-            logger.error(f"Producto {producto_id} no encontrado al verificar alertas")
+        if stock_minimo is not None and saldo < stock_minimo:
+            logger.warning(
+                "[ALERTA STOCK] %s en bodega '%s': %skg (mínimo: %skg)",
+                producto_descripcion,
+                bodega.nombre,
+                saldo,
+                stock_minimo,
+            )
+            # Extensión futura: crear instancia de AlertaStock si existe

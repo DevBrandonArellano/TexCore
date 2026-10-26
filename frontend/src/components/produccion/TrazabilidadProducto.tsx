@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import apiClient from '../../lib/axios';
 import { Maquina, Producto } from '../../lib/types';
 import { Trazabilidad } from '../../types/produccion';
@@ -7,6 +7,8 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ArrowRight, ArrowDown, Cog, TrendingDown, PlusCircle, RefreshCw } from 'lucide-react';
 import { RegistrarTransformacion } from './RegistrarTransformacion';
+import { RegistrosTransformacion } from './RegistrosTransformacion';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 /**
  * Reporte/timeline de trazabilidad de una OP: muestra el flujo máquina a máquina
@@ -19,7 +21,7 @@ interface TrazabilidadProductoProps {
   allowRegister?: boolean;
 }
 
-function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: boolean }) {
+export function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: boolean }) {
   const pct = parseFloat(nivel.merma_porcentaje);
   return (
     <div className="space-y-3">
@@ -43,10 +45,10 @@ function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: bo
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {nivel.pasos.length === 0 && (
+          {(!nivel.pasos || nivel.pasos.length === 0) && (
             <p className="text-sm text-muted-foreground italic">Sin transformaciones registradas todavía.</p>
           )}
-          {nivel.pasos.map((paso) => (
+          {nivel.pasos?.map((paso) => (
             <div
               key={paso.numero_secuencia}
               className="flex items-center gap-3 rounded-md border p-2 text-sm"
@@ -91,29 +93,15 @@ function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: bo
 }
 
 export function TrazabilidadProducto({ ordenId, allowRegister = false }: TrazabilidadProductoProps) {
-  const [traza, setTraza] = useState<Trazabilidad | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    setError(null);
-    try {
-      const { data } = await apiClient.get<Trazabilidad>(`/ordenes-produccion/${ordenId}/trazabilidad/`);
-      setTraza(data);
-    } catch {
-      setError('No se pudo cargar la trazabilidad de la orden.');
-    } finally {
-      setCargando(false);
-    }
-  }, [ordenId]);
-
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  const { datos: traza, cargando, error, recargar: cargar } = useCargaRemota(
+    () => apiClient.get<Trazabilidad>(`/ordenes-produccion/${ordenId}/trazabilidad/`).then(({ data }) => data),
+    ordenId,
+    { mensajeDeError: () => 'No se pudo cargar la trazabilidad de la orden.' },
+  );
 
   useEffect(() => {
     if (!allowRegister) return;
@@ -161,6 +149,9 @@ export function TrazabilidadProducto({ ordenId, allowRegister = false }: Trazabi
         {cargando && <p className="text-sm text-muted-foreground">Cargando trazabilidad…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!cargando && !error && traza && <NivelTrazabilidad nivel={traza} esRaiz />}
+        <div className="mt-4 border-t pt-3">
+          <RegistrosTransformacion key={ordenId} ordenId={ordenId} />
+        </div>
       </CardContent>
 
       {allowRegister && (

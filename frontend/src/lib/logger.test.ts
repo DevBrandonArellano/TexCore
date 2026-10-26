@@ -1,9 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+/**
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): un mensaje info / un mensaje error / un mensaje critical / un mensaje
+ *   warning / un mensaje notice.
+ * - Análisis de valores límite (BVA): sin datos estructurados.
+ * - Caja blanca (CB): ramas de error — un mensaje error / que sendBeacon lanza excepcion.
+ */
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { createLogger, Severity } from './logger';
 
 describe('RFC5424Logger', () => {
   let consoleSpies: Record<string, ReturnType<typeof vi.spyOn>>;
-  let sendBeaconSpy: ReturnType<typeof vi.fn>;
+  let sendBeaconSpy: Mock<typeof navigator.sendBeacon>;
 
   beforeEach(() => {
     consoleSpies = {
@@ -12,8 +19,8 @@ describe('RFC5424Logger', () => {
       warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
       error: vi.spyOn(console, 'error').mockImplementation(() => {}),
     };
-    sendBeaconSpy = vi.fn().mockReturnValue(true);
-    (navigator as any).sendBeacon = sendBeaconSpy;
+    sendBeaconSpy = vi.fn<typeof navigator.sendBeacon>().mockReturnValue(true);
+    navigator.sendBeacon = sendBeaconSpy;
   });
 
   afterEach(() => {
@@ -107,14 +114,14 @@ describe('RFC5424Logger', () => {
   });
 
   it('dado que sendBeacon lanza excepcion cuando hace relay entonces no propaga el error', () => {
-    (navigator as any).sendBeacon = () => {
+    navigator.sendBeacon = () => {
       throw new Error('sendBeacon no disponible');
     };
     const logger = createLogger('TestModule');
     expect(() => logger.error('x')).not.toThrow();
   });
 
-  it('Severity expone los 8 niveles RFC 5424', () => {
+  it('Severity dado RFC 5424 cuando se consulta entonces expone los 8 niveles', () => {
     expect(Severity.EMERGENCY).toBe(0);
     expect(Severity.DEBUG).toBe(7);
   });
