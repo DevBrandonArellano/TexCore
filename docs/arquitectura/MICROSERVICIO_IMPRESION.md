@@ -53,7 +53,7 @@ sequenceDiagram
     DJN->>Router: POST NotaVentaRequest (DTO)
     Router->>DS: construir_contexto(request)
     DS->>DS: calcular_subtotal / calcular_iva / calcular_total
-    DS->>DS: formatear_fecha (ISO → dd/mm/YYYY)
+    DS->>DS: formatear_fecha (ISO → dd/mm/YYYY HH:MM en hora de la planta)
     DS-->>Router: NotaVentaContexto (con cálculos)
     Router->>PDF: render("nota_venta.html", contexto, filename)
     PDF->>Tmpl: template.render(**contexto)
@@ -96,6 +96,18 @@ class OutputStrategy(Protocol):
 class PdfOutputStrategy:   ...  # WeasyPrint
 class ZplOutputStrategy:   ...  # Jinja2 texto plano
 ```
+
+### Fechas en hora de la planta
+
+Django envía las fechas en UTC. `DocumentService.formatear_fecha` las muestra como `dd/mm/aaaa HH:MM` en la zona de `ZONA_HORARIA_PLANTA` (`config.py`, por defecto `America/Guayaquil`):
+
+| Entrada | Salida |
+|---|---|
+| ISO con zona, por ejemplo `2026-10-27T18:23:00Z` | `27/10/2026 13:23`. Pasada la medianoche UTC, se respeta el día de la planta |
+| ISO sin zona, por ejemplo `2026-10-27T13:23:00` | `27/10/2026 13:23`; se asume que ya es hora local |
+| Texto ya formateado, por ejemplo `27/10/2026 13:23` | igual |
+
+`get_pdf_strategy()` la registra como el filtro `fecha_hora` de Jinja. Las plantillas lo usan para `generado_en` (`{{ generado_en | fecha_hora }}`) y la nota de venta, para `fecha_pedido`. Las pruebas que renderizan plantillas reales usan ese mismo entorno.
 
 ### Fragilidad operacional eliminada (config.py)
 

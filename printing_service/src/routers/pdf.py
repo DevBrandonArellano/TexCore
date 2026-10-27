@@ -36,6 +36,8 @@ def get_pdf_strategy() -> PdfOutputStrategy:
         loader=FileSystemLoader(TEMPLATES_DIR),
         autoescape=select_autoescape(["html"]),
     )
+    # ISO en UTC → «dd/mm/aaaa HH:MM» en hora de la planta; un texto ya formateado pasa igual.
+    env.filters["fecha_hora"] = DocumentService.formatear_fecha
     return PdfOutputStrategy(env)
 
 

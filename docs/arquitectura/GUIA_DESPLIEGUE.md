@@ -80,6 +80,7 @@ Completa cada valor del archivo. Cada variable está comentada en el propio ejem
 | `DB_PASSWORD` | Contraseña fuerte para la cuenta `sa` de SQL Server |
 | `MSSQL_PID` | Edición licenciada por la organización (`Standard` o `Enterprise`) |
 | `REDIS_PASSWORD` | `openssl rand -hex 24` — solo hexadecimal, porque va dentro de la URL del broker de Celery |
+| `ZONA_HORARIA_PLANTA` (opcional) | Zona de las fechas y horas que se muestran en PDF y mensajes. Por defecto `America/Guayaquil`; el compose la pasa a `backend`, `celery_worker` y `printing` |
 
 Además:
 - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `TRAZABILIDAD_BASE_URL` usan el dominio o la IP real del servidor, con `https://`. El primer valor de `ALLOWED_HOSTS` es el que usa el `HEALTHCHECK` del backend.

@@ -84,6 +84,8 @@ services:
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
       - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      # Hora de la planta en PDF y mensajes (gestion/hora_planta.py); se guarda en UTC.
+      - ZONA_HORARIA_PLANTA=${ZONA_HORARIA_PLANTA:-America/Guayaquil}
       - PRINTING_SERVICE_URL=http://printing:8001
       - TRAZABILIDAD_BASE_URL=${TRAZABILIDAD_BASE_URL}
       - INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
@@ -165,6 +167,8 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      # Hora de la planta en PDF y mensajes (gestion/hora_planta.py); se guarda en UTC.
+      - ZONA_HORARIA_PLANTA=${ZONA_HORARIA_PLANTA:-America/Guayaquil}
       - INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - REPORTES_ASYNC_DIR=/home/appuser/app/reportes_async
@@ -214,6 +218,8 @@ services:
       # localmente (auditoría de performance 2026-08-31).
       - AUDIT_DB_PATH=/data/logs.db
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      # Zona en la que se muestran las fechas de los documentos (filtro fecha_hora).
+      - ZONA_HORARIA_PLANTA=${ZONA_HORARIA_PLANTA:-America/Guayaquil}
     volumes:
       - printing_audit_data:/data
     expose:

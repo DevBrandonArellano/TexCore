@@ -9,7 +9,9 @@ No conoce HTTP, Jinja2 ni WeasyPrint.
 
 import datetime
 import logging
+from zoneinfo import ZoneInfo
 
+from ..config import ZONA_HORARIA_PLANTA
 from ..schemas.printing import DetallePedido, NotaVentaContexto, NotaVentaRequest
 
 logger = logging.getLogger(__name__)
@@ -41,11 +43,15 @@ class DocumentService:
     @staticmethod
     def formatear_fecha(fecha_iso: str) -> str:
         """
-        Convierte fecha ISO 8601 a formato de display dd/mm/YYYY HH:MM.
-        Si el parsing falla, retorna el string original para no romper el documento.
+        Convierte fecha ISO 8601 a formato de display dd/mm/YYYY HH:MM, en hora de la planta.
+        Una fecha con zona (Z o +00:00) se pasa a ZONA_HORARIA_PLANTA; una sin zona ya es local.
+        Si el parsing falla (p. ej., un texto ya formateado), retorna el string original para
+        no romper el documento. También es el filtro `fecha_hora` de las plantillas.
         """
         try:
             dt = datetime.datetime.fromisoformat(fecha_iso.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(ZoneInfo(ZONA_HORARIA_PLANTA))
             return dt.strftime("%d/%m/%Y %H:%M")
         except (ValueError, AttributeError):
             logger.warning("No se pudo parsear fecha: %s", fecha_iso)

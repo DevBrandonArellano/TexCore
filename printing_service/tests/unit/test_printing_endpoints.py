@@ -435,11 +435,8 @@ class TestPdfFormulaDosificacion:
             app.dependency_overrides.clear()
 
     def test_formula_dosificacion_dado_plantilla_real_cuando_renderiza_entonces_incluye_fases_e_insumos(self):
-        from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-        from src.config import TEMPLATES_DIR
-
-        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        env = get_pdf_strategy()._env  # el mismo entorno del router, con el filtro fecha_hora
         html = env.get_template("formula_dosificacion.html").render(**self._payload(es_oficial=False))
         assert "AZ-001" in html
         assert "Tintura Principal" in html
@@ -536,11 +533,8 @@ class TestHistorialMantenimientoEndpoint:
         assert response.content == b"%PDF-1.4"
 
     def test_historial_dado_plantilla_real_cuando_renderiza_entonces_incluye_resumen_y_detalle(self):
-        from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-        from src.config import TEMPLATES_DIR
-
-        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        env = get_pdf_strategy()._env  # el mismo entorno del router, con el filtro fecha_hora
         html = env.get_template("historial_mantenimiento.html").render(**self._payload())
         assert "Tejedora 1" in html
         assert "Mantenimiento Planificado" in html
@@ -550,24 +544,18 @@ class TestHistorialMantenimientoEndpoint:
         assert "e1_jefe_area" in html
 
     def test_historial_dado_paro_en_curso_cuando_renderiza_entonces_lo_marca(self):
-        from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-        from src.config import TEMPLATES_DIR
 
         payload = self._payload()
         payload["detalle"][0].update({"fin": "", "en_curso": True, "horas": 5.0})
-        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        env = get_pdf_strategy()._env  # el mismo entorno del router, con el filtro fecha_hora
         html = env.get_template("historial_mantenimiento.html").render(**payload)
         assert "En curso" in html
 
     def test_historial_dado_sin_paros_cuando_renderiza_entonces_avisa_que_no_hay_datos(self):
-        from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-        from src.config import TEMPLATES_DIR
 
         payload = self._payload(resumen=[], detalle=[])
         payload["totales"] = {"maquinas": 0, "paros": 0, "horas_total": 0, "horas_planificadas": 0, "paros_en_curso": 0}
-        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        env = get_pdf_strategy()._env  # el mismo entorno del router, con el filtro fecha_hora
         html = env.get_template("historial_mantenimiento.html").render(**payload)
         assert "Sin paros" in html
 

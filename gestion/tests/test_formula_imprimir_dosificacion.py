@@ -165,6 +165,14 @@ class ImprimirDosificacionFormulaTestCase(TestCase):
         self.assertEqual(resp.content, b"%PDF-hoja")
         self.assertIn("dosificacion_AZ-001.pdf", resp["Content-Disposition"])
 
+    # TIME_ZONE es UTC: el «Generado» de la hoja va en hora de la planta (UTC-5).
+    def test_imprimir_dado_hora_utc_cuando_arma_el_pdf_entonces_generado_en_hora_de_la_planta(self):
+        from datetime import UTC, datetime
+
+        with patch("gestion.views.formula_views.timezone.now", return_value=datetime(2026, 10, 27, 18, 23, tzinfo=UTC)):
+            _, generar = self._imprimir()
+        self.assertEqual(generar.call_args[0][0]["generado_en"], "27/10/2026 13:23")
+
 
 class TextoDosisTestCase(TestCase):
     """La dosis impresa sale de la receta: g/L, %, o «—» si el insumo no trae su valor."""

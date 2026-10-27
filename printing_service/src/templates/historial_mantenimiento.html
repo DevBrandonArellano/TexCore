@@ -121,7 +121,7 @@
         <div class="header-right">
             <div class="doc-title">Historial de mantenimiento y paros</div>
             <p>Del {{ filtros.fecha_desde_texto or filtros.fecha_desde }} al {{ filtros.fecha_hasta_texto or filtros.fecha_hasta }}</p>
-            <p>Generado: {{ generado_en }}</p>
+            <p>Generado: {{ generado_en | fecha_hora }}</p>
         </div>
     </div>
 

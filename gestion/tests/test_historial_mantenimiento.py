@@ -269,6 +269,22 @@ class HistorialMantenimientoTest(TestCase):
         self.assertRegex(resumen["ultimo_mantenimiento"], r"^\d{2}/\d{2}/\d{4}$")
 
     @patch("gestion.views.production_maquina_views.PrintingService.generate_historial_mantenimiento_pdf")
+    def test_imprimir_dado_paro_a_las_18_23_utc_cuando_arma_el_pdf_entonces_13_23_hora_de_la_planta(self, mock_pdf):
+        """El defecto 60 dejó el formato legible pero en UTC (TIME_ZONE): el patrón dd/mm/aaaa
+        HH:MM también lo cumple una hora en UTC, así que se fija la hora exacta."""
+        from zoneinfo import ZoneInfo
+
+        mock_pdf.return_value = b"%PDF-1.4"
+        inicio = (self.hoy - timedelta(days=2)).replace(hour=18, minute=23, second=0, microsecond=0)
+        ParoMaquinaFactory(maquina=self.tejedora, inicio=inicio, fin=inicio + timedelta(hours=1), categoria="AVERIA")
+
+        self.client.post(IMPRIMIR, {}, format="json")
+
+        esperado = inicio.astimezone(ZoneInfo("America/Guayaquil")).strftime("%d/%m/%Y %H:%M")
+        self.assertTrue(esperado.endswith("13:23"))
+        self.assertEqual(mock_pdf.call_args[0][0]["detalle"][0]["inicio"], esperado)
+
+    @patch("gestion.views.production_maquina_views.PrintingService.generate_historial_mantenimiento_pdf")
     def test_imprimir_dado_servicio_caido_cuando_post_entonces_503(self, mock_pdf):
         mock_pdf.return_value = None
 

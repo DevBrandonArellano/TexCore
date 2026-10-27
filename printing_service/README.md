@@ -109,6 +109,7 @@ printing_service/
 | Variable | Descripción |
 |---|---|
 | `AUDIT_DB_PATH` | Ruta del archivo SQLite de auditoría (default: `/data/logs.db`) |
+| `ZONA_HORARIA_PLANTA` | Zona en la que se muestran las fechas de los documentos (default: `America/Guayaquil`). Django envía UTC; ver `formatear_fecha` y el filtro `fecha_hora` |
 
 ## Auditoría Local (ISO 27001 A.12.4)
 

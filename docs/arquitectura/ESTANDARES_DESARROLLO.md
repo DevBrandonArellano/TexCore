@@ -61,6 +61,15 @@ Los **exportes pesados** usan además:
 
 No se abren toasts nuevos por cada paso. Los mocks de `sonner` en las pruebas deben incluir `loading`: sin él, Vitest registra un error no manejado y la corrida falla aunque pasen todos los tests.
 
+### Fechas y horas visibles para el usuario
+
+`TIME_ZONE` es UTC (se guarda y se calcula en UTC), pero todo texto con fecha u hora que lee una persona va en **hora de la planta**: `ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`.
+
+- **Backend:** un texto con hora que arma Django (PDF o mensaje) usa `gestion/hora_planta.py`: `texto_fecha_hora`, `texto_fecha` y `fecha_hoy_planta`. Nunca `timezone.localtime()` ni `strftime` sobre un instante UTC, ni `timezone.now().date()` para «hoy»: después de las 19:00 de Ecuador en UTC ya es mañana.
+- **printing_service:** las fechas que llegan en ISO con zona se muestran con el filtro `fecha_hora`.
+- **Frontend:** recibe ISO y lo convierte con la zona del navegador.
+- **Pruebas:** fijan la hora exacta (por ejemplo, 18:23 UTC → 13:23), no solo el patrón `dd/mm/aaaa HH:MM`, que una hora en UTC también cumple.
+
 ### Commits (Conventional Commits)
 
 ```

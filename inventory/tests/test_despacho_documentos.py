@@ -299,6 +299,18 @@ class HistorialDespachosDocumentosTestCase(TestCase):
         pedidos = mock_pdf.call_args[0][0]["despachos"][0]["pedidos"]
         self.assertEqual(pedidos, "Cliente Documentos (GR-DOC-001), N/A (GR-SIN-CLI)")
 
+    def test_imprimir_dado_despacho_a_las_18_23_utc_cuando_arma_el_pdf_entonces_13_23_hora_de_la_planta(self):
+        HistorialDespacho.objects.filter(id=self.historial.id).update(
+            fecha_despacho=datetime(2026, 10, 27, 18, 23, tzinfo=UTC)
+        )
+        with patch(
+            "inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf",
+            return_value=b"%PDF-fake",
+        ) as mock_pdf:
+            self.client.get(reverse("historial-despachos-imprimir"))
+
+        self.assertEqual(mock_pdf.call_args[0][0]["despachos"][0]["fecha_despacho"], "27/10/2026 13:23")
+
     # -------------------------------------------------------------- guia_remision
 
     def _payload_guia_valido(self, **overrides):
@@ -312,6 +324,23 @@ class HistorialDespachosDocumentosTestCase(TestCase):
         }
         payload.update(overrides)
         return payload
+
+    def test_guia_remision_dado_madrugada_utc_cuando_emite_entonces_fecha_del_dia_en_la_planta(self):
+        # 02:00 UTC del 28 son las 21:00 del 27 en la planta: la guía no puede salir con fecha de mañana.
+        with (
+            patch("gestion.hora_planta.timezone.now", return_value=datetime(2026, 10, 28, 2, 0, tzinfo=UTC)),
+            patch(
+                "inventory.views.despacho_views.PrintingService.generate_guia_remision_pdf",
+                return_value=b"%PDF-fake",
+            ) as mock_pdf,
+        ):
+            self.client.post(
+                reverse("historial-despachos-guia-remision", args=[self.historial.id]),
+                self._payload_guia_valido(),
+                format="json",
+            )
+
+        self.assertEqual(mock_pdf.call_args[0][0]["fecha_emision"], "27/10/2026")
 
     def test_guia_remision_dado_datos_validos_cuando_post_entonces_200_pdf(self):
         with patch(

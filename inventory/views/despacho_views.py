@@ -11,6 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from gestion.hora_planta import fecha_hoy_planta, texto_fecha, texto_fecha_hora
 from gestion.models import LoteProduccion, PedidoVenta, Producto
 from gestion.permissions import filtrar_lotes_por_sede, filtrar_por_sede
 from gestion.utils import PrintingService
@@ -235,7 +236,7 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
             despachos.append(
                 {
                     "id": h["id"],
-                    "fecha_despacho": h["fecha_despacho"].strftime("%d/%m/%Y %H:%M"),
+                    "fecha_despacho": texto_fecha_hora(h["fecha_despacho"]),
                     "usuario_nombre": (nombre_completo or h["usuario__username"]) if h["usuario__username"] else None,
                     "pedidos": ", ".join(pedidos_por_historial[h["id"]]) or "—",
                     "total_bultos": h["total_bultos"],
@@ -330,7 +331,7 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
         sede_usuario = getattr(request.user, "sede", None)
         data = {
             "numero": f"001-001-{historial.id:09d}",
-            "fecha_emision": timezone.now().strftime("%d/%m/%Y"),
+            "fecha_emision": texto_fecha(fecha_hoy_planta()),
             "empresa_nombre": sede_usuario.nombre if sede_usuario else "TexCore",
             "empresa_ruc": settings.EMPRESA_RUC or None,
             "punto_partida": punto_partida,

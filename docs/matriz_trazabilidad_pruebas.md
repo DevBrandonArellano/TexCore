@@ -302,7 +302,7 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | `POST /paros-maquina/imprimir-historial/`: PDF con el rango completo sin paginar, filtros del body aplicados, servicio caído → 503, vendedor → 403 † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
 | `printing_service` `/pdf/historial-mantenimiento`: PDF con la plantilla real (resumen, detalle, filtros y quién imprimió), paro en curso marcado, rango sin paros, auditoría con su plantilla, filtros incompletos → 422, error → 500, sin token → 401 † | `printing_service/tests/unit/test_printing_endpoints.py` | EP, BVA | ✅ |
 | El payload que recibe `PrintingService` es JSON serializable: ningún `datetime` en el resumen (defecto 59) † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
-| Las fechas del PDF van en dd/mm/aaaa y hora local, sin microsegundos; el paro en curso va con el fin vacío (defecto 60) † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| Las fechas del PDF van en dd/mm/aaaa y en hora de la planta, sin microsegundos; el paro en curso va con el fin vacío (defecto 60). Hasta el 27-oct la hora salía en UTC: la prueba solo validaba el patrón, y desde entonces fija la hora exacta † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
 | Capas sin ciclos: ningún módulo de `services/` ni de `serializers/` importa de `gestion.views`; `gestion/params.py` es neutral; el reexport de `views/_common.py` sigue sirviendo (defecto 58) † | `gestion/tests/test_capas_sin_ciclos.py` | EP, estática | ✅ |
 | Frontend: panel con totales, resumen y detalle; rango por omisión de 30 días; atajos de mantenimiento y averías; cambio de fechas y de máquina; paro en curso y paro automático marcados; rango vacío; error de carga con reintento; impresión con los filtros vigentes y fallo del servicio; paginación † | `HistorialMantenimientoPanel.test.tsx`, `mantenimientoApi.test.ts` | EP, BVA | ✅ |
 
@@ -330,6 +330,18 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Validación interna del escaneo: `motivo_sin_stock` con quién y cuándo; `None` si hay stock † | `internal_api/tests/test_scanning_views.py` | EP, STT | ✅ |
 | `scanning_service`: el cliente traduce `motivo_sin_stock` al dominio y la validación lo usa como `reason`; sin motivo, la razón genérica † | `scanning_service/tests/test_django_client.py`, `scanning_service/tests/unit/test_validation_service.py` | EP | ✅ |
 | Frontend: aviso «Despacho rechazado» con el motivo, lote marcado en rojo (`role="alert"`), **Confirmar Salida** deshabilitado hasta quitarlo; otro 400 muestra el mensaje del servidor en vez del genérico † | `DespachoDashboard.test.tsx` | EP, STT | ✅ |
+
+### Hora de la planta en los PDF (27-oct-2026)
+
+`TIME_ZONE` es UTC. Los textos con hora que arma el backend usan `gestion/hora_planta.py` (`ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`), y `printing_service` convierte a esa zona las fechas que recibe en ISO (filtro `fecha_hora`). Cada prueba fija una hora a las 18:23 UTC y exige las 13:23. Con la zona forzada a UTC, las cinco pruebas de backend fallan.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Helper: instante UTC → hora de la planta; pasada la medianoche UTC sigue siendo el día anterior; respeta otra zona configurada y su horario de verano † | `gestion/tests/test_hora_planta.py` | EP, BVA | ✅ |
+| Historial de mantenimiento: inicio del paro en hora de la planta † | `gestion/tests/test_historial_mantenimiento.py` | EP | ✅ |
+| Hoja de dosificación: «Generado» en hora de la planta † | `gestion/tests/test_formula_imprimir_dosificacion.py` | EP | ✅ |
+| Historial de despachos: fecha de cada despacho en hora de la planta; guía de remisión: a las 02:00 UTC la emisión lleva la fecha del día en la planta, no la de mañana † | `inventory/tests/test_despacho_documentos.py` | EP, BVA | ✅ |
+| `printing_service`: `formatear_fecha` convierte un ISO con zona a la hora de la planta (también el cambio de día) y deja igual un texto ya formateado; las seis plantillas con «Generado» muestran la hora de la planta y no el ISO crudo † | `printing_service/tests/unit/test_document_service.py` | EP, BVA | ✅ |
 
 ### Casos de uso pendientes del backlog (7-oct-2026)
 

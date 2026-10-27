@@ -406,6 +406,8 @@ No hay paquetes `infrastructure/` ni `repositories/`: `django_client.py`, `jwt_t
 **Tecnologia:** FastAPI + Uvicorn + WeasyPrint (PDF) + Jinja2 (ZPL)
 **Acceso a BD:** Ninguno. Recibe datos completos en el payload del request.
 
+**Fechas:** Django envía UTC; el servicio las muestra en hora de la planta (`ZONA_HORARIA_PLANTA`, filtro `fecha_hora`). Los textos con hora que arma Django usan `gestion/hora_planta.py`. Regla en `ESTANDARES_DESARROLLO.md`, *Fechas y horas visibles para el usuario*.
+
 **Endpoints:**
 
 Todos los `POST` exigen el JWT RS256 que firma el backend; solo el backend los llama.

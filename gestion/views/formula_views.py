@@ -12,6 +12,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from gestion.hora_planta import texto_fecha_hora
 from gestion.models import (
     DetalleFormula,
     FaseReceta,
@@ -255,7 +256,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         data = {
             "empresa_nombre": sede.nombre if sede else "TexCore",
             "sede_nombre": sede.nombre if sede else "Todas las sedes",
-            "generado_en": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+            "generado_en": texto_fecha_hora(timezone.now()),
             "formula_codigo": formula.codigo,
             "formula_nombre": formula.nombre_color,
             "tipo_sustrato": formula.tipo_sustrato or None,

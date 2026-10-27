@@ -12,6 +12,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from gestion.hora_planta import texto_fecha, texto_fecha_hora
 from gestion.models import LineaProduccion, LoteProduccion, Maquina, ParoMaquina, ProcesoTintoreria
 from gestion.permissions import (
     IsJefeAreaOrAdmin,
@@ -237,7 +238,8 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
     @staticmethod
     def _fechas_para_imprimir(resumen, detalle):
         """El PDF lleva las fechas en dd/mm/aaaa y hora local, sin microsegundos ni zona: un
-        documento para planta no se lee en ISO. Lo que viaja a printing_service ya va formateado."""
+        documento para planta no se lee en ISO. Lo que viaja a printing_service ya va formateado,
+        en hora de la planta (gestion/hora_planta.py): TIME_ZONE es UTC."""
 
         def texto(valor, con_hora=True):
             if not valor:
@@ -245,8 +247,7 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             fecha = parse_datetime(valor) if isinstance(valor, str) else valor
             if fecha is None:
                 return ""
-            local = timezone.localtime(fecha)
-            return local.strftime("%d/%m/%Y %H:%M" if con_hora else "%d/%m/%Y")
+            return texto_fecha_hora(fecha) if con_hora else texto_fecha(fecha)
 
         resumen_pdf = [
             {**fila, "ultimo_mantenimiento": texto(fila["ultimo_mantenimiento"], con_hora=False)} for fila in resumen
@@ -267,7 +268,7 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             "empresa_nombre": sede.nombre if sede else "TexCore",
             "sede_nombre": sede.nombre if sede else "Todas las sedes",
             "area_nombre": request.user.area.nombre if request.user.area else "Todas las áreas",
-            "generado_en": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+            "generado_en": texto_fecha_hora(timezone.now()),
             "impreso_por": request.user.username,
             "filtros": filtros.como_texto(),
             "resumen": resumen_pdf,

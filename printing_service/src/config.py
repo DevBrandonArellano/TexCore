@@ -3,11 +3,15 @@ Configuración centralizada del printing_service.
 Elimina dependencias de cwd (fragilidad operacional).
 """
 
+import os
 from pathlib import Path
 
 _SRC_DIR = Path(__file__).parent
 
 TEMPLATES_DIR = str(_SRC_DIR / "templates")
+
+# Las fechas llegan en UTC; los documentos se leen con el reloj de la planta.
+ZONA_HORARIA_PLANTA = os.environ.get("ZONA_HORARIA_PLANTA", "America/Guayaquil")
 
 REQUIRED_TEMPLATES = [
     "nota_venta.html",

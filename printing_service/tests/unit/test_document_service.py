@@ -88,6 +88,59 @@ class TestDocumentService_FormatearFecha:
         result = DocumentService.formatear_fecha("2026-01-15T00:00:00")
         assert result == "15/01/2026 00:00"
 
+    # El backend guarda en UTC; el documento se lee con el reloj de la planta (Ecuador, UTC-5).
+    def test_formatear_fecha_dado_utc_cuando_formatear_entonces_hora_de_la_planta(self):
+        assert DocumentService.formatear_fecha("2026-10-27T18:23:00Z") == "27/10/2026 13:23"
+
+    # BVA: pasada la medianoche UTC sigue siendo el día anterior en la planta.
+    def test_formatear_fecha_dado_madrugada_utc_cuando_formatear_entonces_fecha_del_dia_anterior(self):
+        assert DocumentService.formatear_fecha("2026-10-28T02:00:00+00:00") == "27/10/2026 21:00"
+
+    def test_formatear_fecha_dado_texto_ya_formateado_cuando_formatear_entonces_lo_deja_igual(self):
+        assert DocumentService.formatear_fecha("27/10/2026 13:23") == "27/10/2026 13:23"
+
+
+class TestFiltroFechaHoraEnPlantillas:
+    """Las plantillas muestran `generado_en` en hora de la planta, no el ISO crudo en UTC."""
+
+    def test_filtro_dado_entorno_pdf_cuando_se_crea_entonces_registra_fecha_hora(self):
+        from src.routers.pdf import get_pdf_strategy
+
+        assert "fecha_hora" in get_pdf_strategy()._env.filters
+
+    def test_plantillas_dado_generado_en_iso_utc_cuando_renderizan_entonces_hora_de_la_planta(self):
+        from jinja2 import ChainableUndefined
+
+        from src.routers.pdf import get_pdf_strategy
+
+        # Solo se pasa generado_en: ChainableUndefined deja vacío el resto de los datos.
+        env = get_pdf_strategy()._env.overlay(undefined=ChainableUndefined)
+        plantillas = [
+            "reporte_avance.html",
+            "reporte_balance.html",
+            "historial_despachos.html",
+            "produccion_por_producto.html",
+            "formula_dosificacion.html",
+            "historial_mantenimiento.html",
+        ]
+        for nombre in plantillas:
+            html = env.get_template(nombre).render(
+                generado_en="2026-10-27T18:23:00Z",
+                filtros={},
+                totales={"horas_total": 0, "horas_planificadas": 0, "paros_en_curso": 0},
+                detalles=[],
+                despachos=[],
+                productos=[],
+                fases=[],
+                detalle=[],
+                resumen=[],
+                peso_kg=0,
+                litros_bano=0,
+                relacion_bano=0,
+            )
+            assert "27/10/2026 13:23" in html, nombre
+            assert "2026-10-27T18:23:00Z" not in html, nombre
+
 
 class TestDocumentService_ConstruirContexto:
     def test_construir_contexto_dado_request_valido_cuando_construir_entonces_tiene_subtotal(self):

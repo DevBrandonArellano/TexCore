@@ -68,6 +68,40 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Hora de la planta en los PDF (sin commitear)
+
+A pedido del usuario. `TIME_ZONE` es `"UTC"`: el sistema guarda y calcula en UTC, pero los PDF se leen con el reloj de la planta (Ecuador, UTC-5). Antes:
+- **Hora 5 h adelantada:** nota de venta, fecha de cada despacho del historial, inicio y fin de los paros de mantenimiento, y «Generado» de mantenimiento y de la hoja de dosificación.
+- **ISO crudo en UTC:** en historial de despachos, producción por producto y reportes de avance y balance, «Generado» se imprimía como `2026-10-27T20:05:…+00:00`.
+- **Fecha de mañana:** entre las 19:00 y la medianoche, la guía de remisión salía con la fecha del día siguiente.
+- **Defecto 60:** había dejado el formato legible pero en UTC. La matriz afirmaba «hora local» porque la prueba solo validaba el patrón `dd/mm/aaaa HH:MM`.
+
+**Corrección:**
+- **Backend:** `gestion/hora_planta.py` (`texto_fecha_hora`, `texto_fecha`, `fecha_hoy_planta`) con el ajuste `ZONA_HORARIA_PLANTA` (por defecto `America/Guayaquil`). Lo usan el historial de mantenimiento, la hoja de dosificación, el historial de despachos, la guía de remisión y el motivo del lote ya despachado.
+- **`printing_service`:**
+  - `formatear_fecha` pasa a la hora de la planta todo ISO con zona; un ISO sin zona o un texto ya formateado pasan igual.
+  - Es además el filtro `fecha_hora`, que usan las seis plantillas con «Generado».
+  - Las pruebas de endpoints usan el mismo entorno de Jinja del router.
+
+**Verificación:**
+- Pruebas:
+  - Backend: 1990 tests OK sobre SQL Server, 92,6 %. Cada prueba nueva fija las 18:23 UTC y exige las 13:23; con la zona forzada a UTC, las cinco fallan.
+  - `printing_service`: 119 tests OK, 98,9 %.
+  - `scanning_service`: 69 tests OK.
+  - ruff y mypy limpios.
+- PDF reales generados en `texcore-prod` y leídos con `pdftotext`:
+  - historial de despachos: «Generado: 27/10/2026 15:05» (en la planta eran las 15:05) y despachos a las 13:23;
+  - nota de venta: 13:23 (en la base, 18:23 UTC);
+  - producción por producto: «Generado: 27/10/2026 15:05».
+- Documentación:
+  - `docs/matriz_trazabilidad_pruebas.md`: fila del defecto 60 corregida y sección nueva.
+  - `ESTANDARES_DESARROLLO.md`: regla *Fechas y horas visibles para el usuario*.
+  - `MICROSERVICIO_IMPRESION.md`: §*Fechas en hora de la planta* y diagrama.
+  - `printing_service/README.md`: variable de entorno.
+  - `ARQUITECTURA_SISTEMA.md` §3.5.
+  - `GUIA_DESPLIEGUE.md` y `.env.prod.example`: variable opcional.
+- **Configuración:** `docker-compose.prod.yml` pasa `ZONA_HORARIA_PLANTA` (por defecto `America/Guayaquil`) a `backend`, `celery_worker` y `printing`. Sin esto, ponerla en `.env.prod` no tenía efecto.
+
 ### 27 de Octubre de 2026 — Despacho: el segundo despachador sabe por qué se rechazó su lote (sin commitear)
 
 A pedido del usuario. Cuando dos despachadores escanean el mismo lote, el primero que confirma se lo lleva y al segundo se le rechaza. Antes, ese segundo despachador:
@@ -101,7 +135,7 @@ En ningún caso se enteraba de que otra persona ya se lo había llevado.
   - el despacho responde 400 `lote_ya_despachado` con el mismo texto.
 - Documentación: `MANUAL_DESPACHO.md`, `ANALISIS_SISTEMA_DESPACHO.md` y la matriz de trazabilidad.
 
-**Hallazgo, sin corregir:** con `TIME_ZONE="UTC"`, otros textos con hora que arma el backend también salen en UTC: el PDF de historial de mantenimiento (`production_maquina_views.py:248`) y los «generado en» de los PDF de mantenimiento y fórmulas. La matriz de pruebas (defecto 60) afirma «hora local»; hay que revisarlo.
+**Hallazgo:** con `TIME_ZONE="UTC"`, otros textos con hora de los PDF también salían en UTC. Se corrigió en la entrada siguiente, *Hora de la planta en los PDF*.
 
 ### 27 de Octubre de 2026 — Dimensionamiento para el uso previsto: 50 conectados, 10 simultáneos (sin commitear)
 

@@ -8,10 +8,7 @@ solo veía «ya no tiene stock disponible» y no sabía qué hacer. Lo usan el d
 (internal_api/views/scanning_views.py), para que los dos digan lo mismo.
 """
 
-from zoneinfo import ZoneInfo
-
-from django.conf import settings
-
+from gestion.hora_planta import en_hora_planta
 from inventory.models import DetalleHistorialDespacho
 
 
@@ -40,7 +37,7 @@ def motivo_lote_despachado(lote, ids_bodegas):
     usuario = historial.usuario
     quien = (usuario.get_full_name() or usuario.username) if usuario else "otro usuario"
     # Hora de la planta: TIME_ZONE es UTC y el despachador lee la hora de su reloj.
-    cuando = historial.fecha_despacho.astimezone(ZoneInfo(settings.ZONA_HORARIA_PLANTA))
+    cuando = en_hora_planta(historial.fecha_despacho)
     return (
         f"El lote {lote.codigo_lote} ya fue despachado por {quien} el {cuando:%d/%m/%Y} "
         f"a las {cuando:%H:%M} (despacho #{historial.id})."
