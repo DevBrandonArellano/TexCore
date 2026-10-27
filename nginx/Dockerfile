@@ -1,4 +1,4 @@
-FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
+FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS builder
 
 # Establecer el directorio de trabajo para la construcción del frontend
 WORKDIR /app/frontend
@@ -17,7 +17,7 @@ RUN npm run build
 
 
 # --- Etapa 2: Configurar el servidor Nginx ---
-FROM nginx:alpine@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
+FROM nginx:alpine@sha256:a3554c0d0b48177b1413c26e01f695334428020d9df01243fbae3e11cfd17417
 
 # Eliminar la configuración por defecto de Nginx
 RUN rm /etc/nginx/conf.d/default.conf

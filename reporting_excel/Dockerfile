@@ -1,6 +1,6 @@
 # Dockerfile para reporting_excel. Solo formatea a Excel/CSV las filas que le envía el
 # backend: no se conecta a la base de datos, así que no lleva driver ODBC.
-FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.12.15-slim@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 
 # Usuario sin privilegios (UID fijo para que los volúmenes conserven el dueño).
 # /data guarda la auditoría local (AUDIT_DB_PATH=/data/logs.db).

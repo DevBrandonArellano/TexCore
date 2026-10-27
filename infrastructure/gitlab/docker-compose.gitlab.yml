@@ -13,7 +13,7 @@ name: texcore-gitlab
 services:
   gitlab:
     # Versión y digest fijos: una actualización se hace a propósito (ver la guía).
-    image: gitlab/gitlab-ce:19.4.2-ce.0@sha256:b65c3ece044d125254b4c4a99b10676bbd2502f05f8c628cb60628f44f4df11b
+    image: gitlab/gitlab-ce:19.4.3-ce.0@sha256:483fb4cc5c75237a7a6c7c8b8b2a1832ed790d86e0449ff55e8b6f6d62d2d5f5
     restart: unless-stopped
     hostname: ${GITLAB_HOST:-192.168.1.55}
     shm_size: 256m
@@ -63,7 +63,7 @@ services:
 
   # Runner de integración: ejecutor Docker. Los jobs NO reciben el socket del host.
   runner-ci:
-    image: gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    image: gitlab/gitlab-runner:v19.5.1@sha256:8e049fb719162488893a9eccc48f3a05259d02f2386dfbb20f3e379a50575afd
     restart: unless-stopped
     depends_on:
       gitlab:
@@ -76,7 +76,7 @@ services:
   # Runner de release y staging: solo ramas protegidas. Los jobs reciben el socket del
   # host para construir y levantar el staging efímero, y usan la red del host.
   runner-staging:
-    image: gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    image: gitlab/gitlab-runner:v19.5.1@sha256:8e049fb719162488893a9eccc48f3a05259d02f2386dfbb20f3e379a50575afd
     restart: unless-stopped
     depends_on:
       gitlab:

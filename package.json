@@ -9,7 +9,6 @@
     "test:coverage": "npm --prefix frontend run test:coverage"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.12"
   }
 }
-

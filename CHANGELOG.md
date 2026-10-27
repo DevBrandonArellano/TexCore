@@ -68,6 +68,33 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Parcheo de seguridad por la oleada de CVE de octubre (sin commitear)
+
+Del 14 al 21 de octubre salieron parches críticos para GitLab, Node.js, Redis, Next.js y PHP. TexCore no usa Next.js ni PHP (`next-themes` es solo una librería de temas). Todas las imágenes quedan fijadas por versión y digest, como pide `renovate.json`.
+
+| Componente | Antes | Ahora | Motivo |
+|---|---|---|---|
+| GitLab CE | 19.4.2 | **19.4.3** | CVE-2026-110264 (CVSS 10, RCE sin autenticación) |
+| GitLab Runner | v19.4.1 | v19.5.1 | Última publicada; compatible con 19.4.x |
+| Node.js (build de nginx, frontend dev, CI) | 24.21.0 | **24.22.1** | CVE-2026-111497 (Brotli) y 9 CVE más |
+| Redis (compose de dev, broker de Celery) | `6-alpine` (EOL, sin digest) | **8.10.3-alpine** | CVE-2026-25243 (explotado) y CVE-2026-81934 |
+| Python (backend, microservicios, CI) | 3.12 (digest antiguo) | **3.12.15** | tarfile/zipfile, TLS y OpenSSL |
+| nginx | `alpine` (digest antiguo) | `alpine` 1.31.8 | Digest renovado |
+| zod / vitest / nanoid (npm) | 4.3.x / 4.1.11 / ≤3.3.17 | 4.6.7 / 4.1.12 / parcheado | `npm audit`: 0 vulnerabilidades en `frontend/` y la raíz |
+
+Archivos: `infrastructure/gitlab/docker-compose.gitlab.yml`, `infrastructure/docker/docker-compose.yml`, `infrastructure/docker/Dockerfile{,.prod}`, `nginx/Dockerfile`, `frontend/Dockerfile.dev`, `docker/Dockerfile.django-test`, los `Dockerfile` de `printing_service`, `scanning_service` y `reporting_excel`, `.gitlab-ci.yml`, `package.json`/`package-lock.json` (raíz y `frontend/`).
+
+**Despliegue en el equipo Linux:**
+- GitLab: respaldo previo en `../respaldos-gitlab/2026-10-27-0902/` (backup, `gitlab-secrets.json`, `gitlab.rb`). Tras actualizar: 0 migraciones pendientes, todos los servicios arriba y los 2 runners válidos.
+- Stack `texcore-prod` recreado con las imágenes `texcore-local/*:parche-1027`: 6/6 contenedores `healthy`.
+- Node local: actualizado a 24.22.1 con fnm; la 24.16.0 se desinstaló.
+
+**Verificación:**
+- Backend (`run_backend_tests.sh`, SQL Server): 1944 tests OK, cobertura 92,5 %.
+- Microservicios: 66 + 76 + 114 tests OK.
+- Frontend: `tsc` limpio y 1981 tests OK.
+- detect-secrets: limpio, sin cambios en la línea base.
+
 ### 26 de Octubre de 2026 — Limpieza del historial en GitHub y release a master
 
 - **Coautores de IA:** se quitaron las líneas `Co-Authored-By` de los mensajes de commit de `MES`, `staging` y `master` en GitHub (38, 2 y 2 commits). El árbol de archivos no cambió. La reescritura se hizo sobre un clon espejo y se verificó antes de subirla, con `--force-with-lease`. La regla de protección de `master` se desactivó temporalmente para ese `force push` y se volvió a activar.

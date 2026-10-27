@@ -3,7 +3,7 @@
 # Incluye el driver ODBC 18 de Microsoft (necesario para pyodbc/mssql-django).
 # Usada por scripts/run_backend_tests.sh.
 # =============================================================================
-FROM python:3.12-bookworm
+FROM python:3.12.15-bookworm@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
 
 # Driver ODBC para SQL Server + toolchain para compilar pyodbc
 RUN apt-get update && apt-get install -y --no-install-recommends \

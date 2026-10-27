@@ -32,7 +32,7 @@ workflow:
 
 default:
   # Imágenes de los jobs fijadas por digest (nunca `latest`): una actualización es una decisión.
-  image: python:3.12-bookworm@sha256:5560e9ab8709f459489e5b8aa696eda8a07ef821e14bb122be62d91234bfa98b
+  image: python:3.12.15-bookworm@sha256:14a4933e6cef421424f7a66d89a3f4eafcbd0d90e0a822251f298e05132dc735
   interruptible: true
 
 variables:
@@ -280,7 +280,7 @@ test:reporting:
 
 test:frontend:
   stage: test
-  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  image: node:24.22.1-bookworm@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a
   rules: *reglas_ci
   variables:
     # Vitest llegó a usar 3 GB en este equipo compartido: se acota el heap de Node a 1,5 GB.
@@ -320,7 +320,7 @@ audit:dependencias:
 
 audit:npm:
   stage: test
-  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  image: node:24.22.1-bookworm@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a
   rules: *reglas_ci
   script: *script_npm_audit
 
@@ -631,7 +631,7 @@ seguridad:dependencias:
 
 seguridad:npm:
   stage: test
-  image: node:24-bookworm@sha256:14078204b6bb268c107ceff6d3c43f45a888105e5c2b18b14c32b3409d93a1b0
+  image: node:24.22.1-bookworm@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
   script: *script_npm_audit
