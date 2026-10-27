@@ -17,6 +17,7 @@ from internal_api.authentication import JWTServiceAuthentication
 from internal_api.permissions import HasScope, IsInternalService
 from internal_api.views.reporting_views import resolve_sede_scope
 from inventory.models import StockBodega
+from inventory.services.despacho_lote import motivo_lote_despachado
 from inventory.utils import principal_primero, stock_vendible_del_lote
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,9 @@ class ValidateLoteView(APIView):
                 # Un lote puede traer productos agregados a mano además del de su OP; el
                 # despacho los vende si los piden los pedidos.
                 "peso_total_kg": str(sum(f.cantidad for f in filas)) if filas else None,
+                # Sin stock porque otro despachador ya se lo llevó: quién, cuándo y en qué
+                # despacho. El lote ya está acotado a la sede del usuario que escanea.
+                "motivo_sin_stock": None if filas else motivo_lote_despachado(lote, ids_bodegas=None),
                 "productos": [
                     {
                         "producto_id": f.producto_id,

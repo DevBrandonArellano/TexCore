@@ -112,6 +112,25 @@ class TestDjangoApiClient:
         lote = client.get_lote_by_codigo("LOT-001", TODAS)
         stock = client.get_stock_activo_por_lote(lote.id)
         assert stock is None
+        assert lote.motivo_sin_stock is None  # la API no lo informó
+
+    # EP: sin stock porque otro despachador se lo llevó → el motivo llega al dominio
+    def test_get_lote_dado_lote_ya_despachado_cuando_valida_entonces_trae_el_motivo(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        motivo = "El lote LOT-001 ya fue despachado por Ana Pérez el 27/10/2026 a las 10:15 (despacho #8)."
+        respuesta = {
+            **MOCK_VALIDATE_RESPONSE,
+            "stock_id": None,
+            "peso_kg": None,
+            "bodega": None,
+            "motivo_sin_stock": motivo,
+        }
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=respuesta))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+        assert client.get_lote_by_codigo("LOT-001", TODAS).motivo_sin_stock == motivo
 
 
 class TestDjangoApiClientProductosDelLote:

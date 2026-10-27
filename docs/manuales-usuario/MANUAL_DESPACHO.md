@@ -43,6 +43,13 @@ Al iniciar, se ingresa al modo **Procesando Despacho**:
 3. Al confirmar (completo o parcial), el sistema **rebaja el stock automáticamente** y genera la nota de venta/guía en PDF de lo efectivamente despachado, que se abre en una pestaña nueva por cada pedido.
 4. Si se necesita cancelar antes de confirmar, debe usarse **Cancelar** para salir sin afectar nada.
 
+**Si otro despachador ya se llevó un lote.** Puede pasar que dos personas escaneen el mismo lote a la vez: el primero que confirma se lo lleva. Al segundo, al pulsar **Confirmar Salida**:
+- aparece el aviso **Despacho rechazado** con el motivo, por ejemplo: «El lote LOT-2026-001 ya fue despachado por Ana Pérez el 27/10/2026 a las 13:23 (despacho #8). Quítelo de la lista y escanee otro lote.»;
+- el lote se marca **en rojo** en la tabla, con el motivo debajo;
+- **Confirmar Salida** queda deshabilitado hasta que se quite ese lote con la ✗.
+
+No se rebaja stock ni se genera ningún documento: debe quitarse el lote, escanearse otro y volver a confirmar.
+
 ## 7. Historial de despachos
 
 **Ver Historial** abre el **Historial de Despachos** (con **Volver a Despacho** para regresar). Solo muestra los despachos de pedidos **de su sede**; los de otras sedes no se pueden ver, revertir ni borrar.
@@ -56,7 +63,9 @@ Al iniciar, se ingresa al modo **Procesando Despacho**:
 
 ## 8. Preguntas frecuentes
 
-**Al escanear un código aparece "no válido o no disponible".** El lote puede no pertenecer a los pedidos seleccionados, estar ya despachado, o el código puede estar mal impreso o mal leído. Puede intentarse de nuevo o consultarse con el Bodeguero/Jefe de Área.
+**Al escanear un código aparece "no válido o no disponible".** El lote puede no pertenecer a los pedidos seleccionados, o el código puede estar mal impreso o mal leído. Puede intentarse de nuevo o consultarse con el Bodeguero/Jefe de Área.
+
+**Al escanear aparece «El lote … ya fue despachado por …».** Otra persona ya despachó ese lote; el mensaje dice quién, cuándo y en qué despacho. Ese lote ya no está en bodega: debe escanearse otro. Si se cree que es un error, el despacho indicado puede consultarse en **Ver Historial**.
 
 **El cliente devolvió la mercadería.** En **Ver Historial**, ubique el despacho y use **Revertir despacho** con la justificación: el stock vuelve a la bodega.
 

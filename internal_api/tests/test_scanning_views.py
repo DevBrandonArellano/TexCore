@@ -107,6 +107,36 @@ class TestValidateLoteView(_LoteConStockMixin, TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.data["peso_kg"])
 
+    # EP: con stock, no hay motivo de rechazo que informar
+    def test_validate_lote_dado_lote_con_stock_cuando_valida_entonces_sin_motivo(self):
+        resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
+        self.assertIsNone(resp.data["motivo_sin_stock"])
+
+    # STT: despachado por otra persona → el escaneo informa quién, cuándo y en qué despacho
+    def test_validate_lote_dado_lote_ya_despachado_cuando_valida_entonces_motivo_con_quien_y_cuando(self):
+        from zoneinfo import ZoneInfo
+
+        from inventory.models import DetalleHistorialDespacho, HistorialDespacho
+
+        despachador = CustomUser.objects.create_user(
+            username="ana_scan", password="x", sede=self.sede, first_name="Ana", last_name="Pérez"
+        )
+        historial = HistorialDespacho.objects.create(usuario=despachador, total_bultos=1, total_peso=95)
+        DetalleHistorialDespacho.objects.create(historial=historial, lote=self.lote, producto=self.producto, peso=95)
+        self.stock.cantidad = 0
+        self.stock._justificacion_auditoria = "Test lote despachado"
+        self.stock.save()
+        local = historial.fecha_despacho.astimezone(ZoneInfo("America/Guayaquil"))  # hora de la planta, no UTC
+
+        resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.data["motivo_sin_stock"],
+            f"El lote LOT-2026-001 ya fue despachado por Ana Pérez el {local:%d/%m/%Y} a las {local:%H:%M} "
+            f"(despacho #{historial.id}).",
+        )
+
     # EP: sin token → 401
     def test_validate_lote_dado_sin_token_cuando_valida_entonces_retorna_403(self):
         self.client.credentials()

@@ -44,6 +44,7 @@ def _make_lote(codigo: str = "LOTE-00001", orden=None) -> MagicMock:
     lote.id = 1
     lote.codigo_lote = codigo
     lote.orden_produccion = orden or _make_orden()
+    lote.motivo_sin_stock = None
     return lote
 
 
@@ -131,6 +132,19 @@ class TestLoteValidationService_LoteSinStock:
         repo = _make_repo(lote=lote, stock=None)
         LoteValidationService(repo).validate("LOTE-00001", TODAS)
         repo.get_stock_activo_por_lote.assert_called_once_with(42)
+
+    def test_validate_dado_lote_ya_despachado_por_otro_cuando_validar_entonces_la_razon_dice_quien_y_cuando(self):
+        lote = _make_lote()
+        lote.motivo_sin_stock = (
+            "El lote LOTE-00001 ya fue despachado por Ana Pérez el 27/10/2026 a las 10:15 (despacho #8)."
+        )
+        result = LoteValidationService(_make_repo(lote=lote, stock=None)).validate("LOTE-00001", TODAS)
+        assert result.valid is False
+        assert result.reason == lote.motivo_sin_stock
+
+    def test_validate_dado_lote_sin_stock_y_sin_motivo_cuando_validar_entonces_razon_generica(self):
+        result = LoteValidationService(_make_repo(lote=_make_lote(), stock=None)).validate("LOTE-00001", TODAS)
+        assert result.reason == "Lote existe pero no tiene stock disponible (0 kg)"
 
 
 # ---------------------------------------------------------------------------

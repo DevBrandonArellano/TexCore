@@ -433,6 +433,43 @@ describe('DespachoDashboard', () => {
     expect(screen.queryByText('Despacho incompleto')).not.toBeInTheDocument();
   });
 
+  it('dado que otro despachador ya se llevo un lote cuando confirma la salida entonces avisa quien y cuando, marca el lote y bloquea confirmar hasta quitarlo', async () => {
+    const motivo = 'El lote LOTE-1001 ya fue despachado por Ana Pérez el 27/10/2026 a las 10:15 (despacho #8). Quítelo de la lista y escanee otro lote.';
+    await enterDespachoMode([PEDIDO_1]);
+    mockPost.mockResolvedValueOnce({
+      data: { valid: true, lote: { codigo: 'LOTE-1001', producto_id: 10, producto_nombre: 'Hilo Poliéster', peso: '50.00' } },
+    });
+    await scanLote('LOTE-1001');
+    await waitFor(() => expect(screen.getByText('LOTE-1001')).toBeInTheDocument());
+
+    mockPost.mockRejectedValueOnce({
+      response: { status: 400, data: { error: motivo, codigo: 'lote_ya_despachado', lote: 'LOTE-1001' } },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Salida' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Despacho rechazado', { description: motivo, duration: 10000 }));
+    expect(screen.getByRole('alert')).toHaveTextContent(motivo);
+    expect(screen.getByRole('button', { name: 'Confirmar Salida' })).toBeDisabled();
+    expect(screen.getByText('Quite los lotes marcados en rojo para continuar.')).toBeInTheDocument();
+    expect(screen.getByText('Procesando Despacho')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Quitar lote LOTE-1001' }));
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirmar Salida' })).toBeEnabled();
+  });
+
+  it('dado un rechazo 400 con motivo del servidor cuando confirma la salida entonces muestra ese motivo y no el generico', async () => {
+    const motivo = 'El lote LOTE-1001 está reservado para el pedido #9 y no puede ser despachado en los pedidos seleccionados.';
+    await enterDespachoMode([PEDIDO_1]);
+    mockPost.mockRejectedValueOnce({ response: { status: 400, data: { error: motivo } } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Salida' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(motivo));
+    expect(toastErrorMock).not.toHaveBeenCalledWith('Error al procesar el despacho');
+  });
+
   it('dado el modo despacho cuando hace clic en cancelar entonces vuelve a la seleccion de pedidos', async () => {
     await enterDespachoMode([PEDIDO_1]);
 

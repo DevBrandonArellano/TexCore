@@ -173,6 +173,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "UTC"
+# Hora de la planta para los mensajes que el backend arma en texto (p. ej., «despachado a
+# las 13:23»): TIME_ZONE sigue en UTC y el frontend convierte las fechas por su cuenta.
+ZONA_HORARIA_PLANTA = os.environ.get("ZONA_HORARIA_PLANTA", "America/Guayaquil")
 
 USE_I18N = True
 

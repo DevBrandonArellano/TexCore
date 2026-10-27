@@ -58,9 +58,10 @@ class LoteValidationService:
         stock = self._repo.get_stock_activo_por_lote(lote.id)
         if stock is None:
             logger.warning("Lote sin stock", extra={"sd": {"lote_id": lote.id}})
+            # Si otro despachador se lo llevó, el despachador sabe quién y cuándo.
             return ValidateResponse(
                 valid=False,
-                reason="Lote existe pero no tiene stock disponible (0 kg)",
+                reason=lote.motivo_sin_stock or "Lote existe pero no tiene stock disponible (0 kg)",
             )
 
         producto = lote.orden_produccion.producto_salida

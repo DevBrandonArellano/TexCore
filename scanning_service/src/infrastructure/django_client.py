@@ -114,6 +114,7 @@ class DjangoApiClient:
                 )
                 for fila in data.get("productos", [])
             ],
+            motivo_sin_stock=data.get("motivo_sin_stock"),
         )
 
     def get_stock_activo_por_lote(self, lote_id: int) -> StockBodega | None:

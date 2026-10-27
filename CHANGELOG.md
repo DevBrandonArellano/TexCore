@@ -68,6 +68,41 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Despacho: el segundo despachador sabe por qué se rechazó su lote (sin commitear)
+
+A pedido del usuario. Cuando dos despachadores escanean el mismo lote, el primero que confirma se lo lleva y al segundo se le rechaza. Antes, ese segundo despachador:
+- al confirmar, veía el diálogo **«Despacho incompleto»**, porque el lote ya no sumaba stock al cálculo; si aun así confirmaba, recibía un **«Error al procesar el despacho»** genérico, porque el frontend descartaba el mensaje del backend;
+- al escanear, veía «Lote existe pero no tiene stock disponible (0 kg)».
+
+En ningún caso se enteraba de que otra persona ya se lo había llevado.
+
+**Ahora:**
+- **Backend:**
+  - `inventory/services/despacho_lote.py` arma el motivo: «El lote X ya fue despachado por <persona> el dd/mm/aaaa a las HH:MM (despacho #N).».
+  - `ProcessDespachoAPIView` rechaza estos lotes **antes** de calcular si el despacho queda incompleto, y también dentro de la transacción para la carrera exacta. Responde 400 con `codigo` (`lote_ya_despachado` o `lote_sin_stock`) y `lote`, y agrega «Quítelo de la lista y escanee otro lote.».
+  - El nombre solo se revela si el lote salió de una bodega que el usuario ve (OWASP A01).
+- **Escaneo:** el endpoint interno devuelve `motivo_sin_stock` y el `scanning_service` lo usa como `reason`.
+- **Frontend (`DespachoDashboard`):**
+  - aviso «Despacho rechazado» con el motivo (10 s);
+  - el lote queda marcado en rojo con el motivo debajo;
+  - **Confirmar Salida** queda deshabilitado hasta quitarlo;
+  - el botón ✗ ahora tiene nombre accesible («Quitar lote X»);
+  - otros 400 muestran el mensaje del servidor en vez del genérico.
+- **Hora:** la del motivo se muestra en la zona de la planta. Con `TIME_ZONE="UTC"`, salía «18:23» en vez de «13:23». Se agregó el ajuste `ZONA_HORARIA_PLANTA` (por defecto `America/Guayaquil`).
+
+**Verificación:**
+- Pruebas:
+  - Backend: 1980 tests OK sobre SQL Server, 92,6 %, 9 nuevos.
+  - `scanning_service`: 69 tests OK, 94 %.
+  - Frontend: 2002 tests OK, sin errores no manejados.
+  - ruff y mypy limpios.
+- En vivo por HTTPS con `e1_despacho`:
+  - el escaneo devuelve el motivo con la hora local correcta;
+  - el despacho responde 400 `lote_ya_despachado` con el mismo texto.
+- Documentación: `MANUAL_DESPACHO.md`, `ANALISIS_SISTEMA_DESPACHO.md` y la matriz de trazabilidad.
+
+**Hallazgo, sin corregir:** con `TIME_ZONE="UTC"`, otros textos con hora que arma el backend también salen en UTC: el PDF de historial de mantenimiento (`production_maquina_views.py:248`) y los «generado en» de los PDF de mantenimiento y fórmulas. La matriz de pruebas (defecto 60) afirma «hora local»; hay que revisarlo.
+
 ### 27 de Octubre de 2026 — Dimensionamiento para el uso previsto: 50 conectados, 10 simultáneos (sin commitear)
 
 El usuario estima 50 personas conectadas, de las cuales unas 10 trabajan a la vez, y pidió optimizar el sistema con un margen prudente. Los 40 inactivos casi no generan carga: solo el panel del Ejecutivo se refresca solo, una vez por minuto. Se midió con Locust (empresa `e1_`, 3 años de datos, HTTPS, exportes por la cola) con 10 usuarios y con 20, el doble como margen.

@@ -57,6 +57,9 @@ class LoteProduccion:
     orden_produccion: OrdenProduccion
     # Filas vendibles (sin la merma), la del producto del lote primero.
     productos: list[LineaStock] = field(default_factory=list)
+    # Sin stock porque otro despachador ya se lo llevó: quién, cuándo y en qué despacho
+    # (lo arma el backend, inventory/services/despacho_lote.py).
+    motivo_sin_stock: str | None = None
 
 
 @dataclass

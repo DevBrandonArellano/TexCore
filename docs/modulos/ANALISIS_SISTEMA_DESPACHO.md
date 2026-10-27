@@ -274,6 +274,9 @@ Response (lote no encontrado):
 Response (sin stock):
   200 { "valid": false, "reason": "Lote existe pero no tiene stock disponible (0 kg)" }
 
+Response (sin stock porque otro despachador ya lo despachó):
+  200 { "valid": false, "reason": "El lote LOT-2026-001 ya fue despachado por Ana Pérez el 27/10/2026 a las 13:23 (despacho #8)." }
+
 Response (sin orden/producto):
   200 { "valid": false, "reason": "Lote no tiene orden de produccion o producto asociado" }
 ```
@@ -613,6 +616,29 @@ HistorialDespacho (1)
 ```
 
 `confirmar_incompleto` es opcional, por defecto `false`.
+
+### Lote ya despachado: rechazo con motivo
+
+Cuando dos despachadores escanean el mismo lote, el primero que confirma se lo lleva. Al segundo se le rechaza el despacho con un **400** que dice quién lo despachó, cuándo (en hora de la planta, `ZONA_HORARIA_PLANTA`) y en qué despacho:
+
+```json
+{
+  "error": "El lote LOT-2026-001 ya fue despachado por Ana Pérez el 27/10/2026 a las 13:23 (despacho #8). Quítelo de la lista y escanee otro lote.",
+  "codigo": "lote_ya_despachado",
+  "lote": "LOT-2026-001"
+}
+```
+
+- **Dos comprobaciones:**
+  - antes de `_calcular_incompletos`, `_rechazar_lotes_sin_stock` rechaza los lotes que ya no tienen stock (sin esto, el despachador veía «despacho incompleto»);
+  - dentro de la transacción, `_lote_y_filas` cubre la carrera exacta de dos confirmaciones simultáneas (`select_for_update`).
+- **Una sola fuente del motivo:** `inventory/services/despacho_lote.py` (`motivo_lote_despachado`). La usan también la validación del escaneo (`motivo_sin_stock` en `GET /api/internal/v1/lotes/{codigo}/validate/`) y el `reason` del `scanning_service`.
+- **Sin stock por otra causa:** `codigo: "lote_sin_stock"` y el mensaje «El lote X ya no tiene stock disponible.».
+- **OWASP A01:** el nombre solo se revela si el lote salió de una bodega que el usuario ve.
+- **Frontend (`DespachoDashboard`):**
+  - muestra el aviso «Despacho rechazado» con el motivo;
+  - marca el lote en rojo en la lista;
+  - deshabilita **Confirmar Salida** hasta que se quite.
 
 ### Logica de Validacion de Completitud (_calcular_incompletos)
 

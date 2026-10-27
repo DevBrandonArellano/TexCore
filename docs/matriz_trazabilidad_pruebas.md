@@ -320,6 +320,17 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Frontend: un solo toast desde el clic ("Generando reporte…"); a los 10 s, una sola vez, avisa que es un reporte grande; pasa a "Descargando archivo…" y termina en éxito, advertencia o error con el mismo `id` † | `lib/avisoReporte.test.ts`, `useReportesExport.test.ts` | STT, BVA | ✅ |
 | Frontend: el botón activo gira (`IconoCarga`), dice "Generando...", tiene `aria-busy` y deja los demás deshabilitados; el resto no gira † | `components/ui/icono-carga.test.tsx`, `EjecutivosDashboard.reportes.test.tsx`, `InventoryDashboard.reportes.test.tsx` | EP | ✅ |
 
+### Despacho: rechazo por lote ya despachado con motivo (27-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Dos despachadores con el mismo lote: el segundo recibe 400 `lote_ya_despachado` con quién lo despachó, la fecha y la hora de la planta, el número de despacho y qué hacer, en vez del diálogo «despacho incompleto» † | `inventory/tests/test_despacho_lote_ya_despachado.py` | EP, STT | ✅ |
+| Carrera exacta dentro de la transacción (`select_for_update`): mismo motivo y código † | `inventory/tests/test_despacho_lote_ya_despachado.py` | STT | ✅ |
+| Lote sin stock que nadie despachó → `lote_sin_stock` con el mensaje genérico; lote despachado desde una bodega de otra sede → no revela quién (OWASP A01); despachador sin nombre → su usuario † | `inventory/tests/test_despacho_lote_ya_despachado.py` | EP | ✅ |
+| Validación interna del escaneo: `motivo_sin_stock` con quién y cuándo; `None` si hay stock † | `internal_api/tests/test_scanning_views.py` | EP, STT | ✅ |
+| `scanning_service`: el cliente traduce `motivo_sin_stock` al dominio y la validación lo usa como `reason`; sin motivo, la razón genérica † | `scanning_service/tests/test_django_client.py`, `scanning_service/tests/unit/test_validation_service.py` | EP | ✅ |
+| Frontend: aviso «Despacho rechazado» con el motivo, lote marcado en rojo (`role="alert"`), **Confirmar Salida** deshabilitado hasta quitarlo; otro 400 muestra el mensaje del servidor en vez del genérico † | `DespachoDashboard.test.tsx` | EP, STT | ✅ |
+
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
 Cierre de los criterios abiertos en `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md`. Las marcadas con † fallan contra `HEAD`.
@@ -610,7 +621,8 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | CI/CD Fase 2 y Ruff Etapas 1-3 (5-oct-2026, SQLite local) | 91.2% | 1490 ✅ |
 | Ruff Etapa 4: DJ001, DJ012 y C901 (5-oct-2026, SQLite local, igual que el CI con `.coveragerc`) | **91.8%** | **1530 ✅** |
 | Validación con topes de memoria del CI (26-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.5% | 1944 ✅ |
-| Exportes por la cola Celery + Redis (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.6%** | **1971 ✅** |
+| Exportes por la cola Celery + Redis (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.6% | 1971 ✅ |
+| Rechazo por lote ya despachado con motivo (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.6%** | **1980 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).

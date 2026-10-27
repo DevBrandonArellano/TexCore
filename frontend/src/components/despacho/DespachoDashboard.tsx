@@ -39,7 +39,12 @@ interface ScannedItem {
     peso: number;
     /** Filas vendibles del lote: la de su producto primero y las agregadas a mano. */
     lineas: LineaLote[];
+    /** Motivo por el que el backend rechazó este lote al confirmar (p. ej., otro despachador ya se lo llevó). */
+    rechazo?: string;
 }
+
+/** Rechazos de un lote concreto en process-despacho: el lote se marca en la lista. */
+const CODIGOS_LOTE_RECHAZADO = ['lote_ya_despachado', 'lote_sin_stock'];
 
 /**
  * Líneas del lote que salen con estos pedidos (misma regla que process-despacho): la del
@@ -239,18 +244,31 @@ export function DespachoDashboard() {
             fetchPedidos();
 
         } catch (error) {
-            const datos = datosDeError(error) as { items_incompletos?: typeof itemsIncompletos } | undefined;
+            const datos = datosDeError(error) as {
+                items_incompletos?: typeof itemsIncompletos;
+                error?: string;
+                codigo?: string;
+                lote?: string;
+            } | undefined;
             if (estadoHttp(error) === 409 && datos?.items_incompletos) {
                 setItemsIncompletos(datos.items_incompletos);
                 setShowIncompleteModal(true);
+            } else if (datos?.lote && datos.error && CODIGOS_LOTE_RECHAZADO.includes(datos.codigo ?? '')) {
+                // Otro despachador se llevó el lote (o ya no tiene stock): se dice quién y cuándo
+                // y se marca el lote para que lo quite antes de volver a confirmar.
+                const motivo = datos.error;
+                setScannedItems(prev => prev.map(i => (i.lote_codigo === datos.lote ? { ...i, rechazo: motivo } : i)));
+                toast.error("Despacho rechazado", { description: motivo, duration: 10000 });
             } else {
                 console.error("Dispatch error", error);
-                toast.error("Error al procesar el despacho");
+                toast.error(datos?.error ?? "Error al procesar el despacho");
             }
         } finally {
             setProcessing(false);
         }
     };
+
+    const hayLotesRechazados = scannedItems.some(i => i.rechazo);
 
     const handleFinalize = () => submitDespacho(false);
     const handleConfirmIncomplete = () => submitDespacho(true);
@@ -297,11 +315,14 @@ export function DespachoDashboard() {
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setIsDespachoMode(false)}>Cancelar</Button>
-                        <Button className="bg-green-600 hover:bg-green-700" onClick={handleFinalize} disabled={processing}>
+                        <Button className="bg-green-600 hover:bg-green-700" onClick={handleFinalize} disabled={processing || hayLotesRechazados}>
                             {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <><PackageCheck className="w-4 h-4 mr-2" /> Confirmar Salida</>}
                         </Button>
                     </div>
                 </div>
+                {hayLotesRechazados && (
+                    <p className="text-sm text-destructive text-right">Quite los lotes marcados en rojo para continuar.</p>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Área de escaneo */}
@@ -341,7 +362,8 @@ export function DespachoDashboard() {
                                             <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground">Esperando escaneo...</TableCell></TableRow>
                                         ) : (
                                             scannedItems.map((item, idx) => (
-                                                <TableRow key={idx}>
+                                                <React.Fragment key={item.lote_codigo}>
+                                                <TableRow className={item.rechazo ? 'bg-destructive/10' : undefined}>
                                                     <TableCell className="font-mono text-xs">{item.lote_codigo}</TableCell>
                                                     <TableCell className="text-xs truncate max-w-[150px]">
                                                         {item.producto_nombre}
@@ -353,11 +375,20 @@ export function DespachoDashboard() {
                                                     </TableCell>
                                                     <TableCell className="text-right font-bold">{item.peso.toFixed(2)}</TableCell>
                                                     <TableCell>
-                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleRemoveItem(idx)}>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleRemoveItem(idx)} aria-label={`Quitar lote ${item.lote_codigo}`}>
                                                             <X className="w-3 h-3" />
                                                         </Button>
                                                     </TableCell>
                                                 </TableRow>
+                                                {item.rechazo && (
+                                                    <TableRow className="bg-destructive/10">
+                                                        <TableCell colSpan={4} role="alert" className="text-xs text-destructive whitespace-normal">
+                                                            <AlertTriangle className="inline w-3 h-3 mr-1" aria-hidden="true" />
+                                                            {item.rechazo}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                                </React.Fragment>
                                             ))
                                         ).reverse()}
                                     </TableBody>
