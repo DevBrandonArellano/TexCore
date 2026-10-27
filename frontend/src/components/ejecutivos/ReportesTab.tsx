@@ -7,8 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { TabsContent } from '../ui/tabs';
 import {
   BarChart3, DollarSign, TrendingDown, Factory, AlertTriangle, TrendingUp, Users, Activity,
-  Layers, RefreshCw, Download,
+  Layers,
 } from 'lucide-react';
+import { IconoCarga } from '../ui/icono-carga';
 import { KpiCard } from './KpiCard';
 import { fmt, toNum } from './utils';
 import type { Sede } from '../../lib/types';
@@ -144,11 +145,10 @@ function ReportesTabImpl({
                 Detalle completo de ventas del período: cliente, vendedor, producto, monto y estado de pago.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportVentas} disabled={!!descargando}
+                onClick={exportVentas} disabled={!!descargando} aria-busy={descargando === 'gerencial/ventas'}
                 data-testid="btn-export-ventas">
-                {descargando === 'gerencial/ventas'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'gerencial/ventas'} />
+                {descargando === 'gerencial/ventas' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
 
@@ -160,11 +160,10 @@ function ReportesTabImpl({
                 Ranking de clientes por monto comprado en el período. Útil para identificar cuentas clave.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportTopClientes} disabled={!!descargando}
+                onClick={exportTopClientes} disabled={!!descargando} aria-busy={descargando === 'gerencial/top-clientes'}
                 data-testid="btn-export-top-clientes">
-                {descargando === 'gerencial/top-clientes'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'gerencial/top-clientes'} />
+                {descargando === 'gerencial/top-clientes' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
 
@@ -176,11 +175,10 @@ function ReportesTabImpl({
                 Clientes con saldo pendiente, límite de crédito y antigüedad de cartera. Sin filtro de fecha.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportDeudores} disabled={!!descargando}
+                onClick={exportDeudores} disabled={!!descargando} aria-busy={descargando === 'gerencial/deudores'}
                 data-testid="btn-export-deudores">
-                {descargando === 'gerencial/deudores'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'gerencial/deudores'} />
+                {descargando === 'gerencial/deudores' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
           </div>
@@ -207,11 +205,10 @@ function ReportesTabImpl({
                 Detalle de OPs: producto, fórmula, peso requerido vs producido, estado, operario y máquina.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportOrdenes} disabled={!!descargando}
+                onClick={exportOrdenes} disabled={!!descargando} aria-busy={descargando === 'produccion/ordenes'}
                 data-testid="btn-export-ordenes">
-                {descargando === 'produccion/ordenes'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'produccion/ordenes'} />
+                {descargando === 'produccion/ordenes' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
 
@@ -223,11 +220,10 @@ function ReportesTabImpl({
                 Lotes producidos con peso bruto, tara, peso neto, duración por lote, turno y operario.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportLotes} disabled={!!descargando}
+                onClick={exportLotes} disabled={!!descargando} aria-busy={descargando === 'produccion/lotes'}
                 data-testid="btn-export-lotes">
-                {descargando === 'produccion/lotes'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'produccion/lotes'} />
+                {descargando === 'produccion/lotes' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
 
@@ -239,11 +235,10 @@ function ReportesTabImpl({
                 kg producidos por día en el rango seleccionado. Ideal para análisis de productividad.
               </p>
               <Button variant="outline" size="sm" className="w-full gap-1 mt-2"
-                onClick={exportTendencia} disabled={!!descargando}
+                onClick={exportTendencia} disabled={!!descargando} aria-busy={descargando === 'produccion/tendencia'}
                 data-testid="btn-export-tendencia">
-                {descargando === 'produccion/tendencia'
-                  ? <RefreshCw className="w-4 h-4 animate-spin" />
-                  : <Download className="w-4 h-4" />} Descargar
+                <IconoCarga cargando={descargando === 'produccion/tendencia'} />
+                {descargando === 'produccion/tendencia' ? 'Generando...' : 'Descargar'}
               </Button>
             </div>
           </div>

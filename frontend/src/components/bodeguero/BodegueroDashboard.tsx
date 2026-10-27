@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Download, Beaker, PackagePlus, Search, CheckCircle2 } from 'lucide-react';
+import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Beaker, PackagePlus, Search, CheckCircle2 } from 'lucide-react';
+import { IconoCarga } from '../ui/icono-carga';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Bodega, PayloadProducto, PayloadQuimico, Producto, Proveedor, Quimico } from '../../lib/types';
@@ -169,8 +170,9 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
         onClick={() => handleExport('stock-bajo')}
         disabled={exportLoading['stock-bajo'] || !bodegaId}
         title={bodegaId ? undefined : 'Selecciona una bodega para exportar'}
+        aria-busy={!!exportLoading['stock-bajo']}
       >
-        <Download className="w-4 h-4" />
+        <IconoCarga cargando={!!exportLoading['stock-bajo']} />
         {exportLoading['stock-bajo'] ? 'Generando...' : 'Exportar Excel'}
       </Button>
     </div>

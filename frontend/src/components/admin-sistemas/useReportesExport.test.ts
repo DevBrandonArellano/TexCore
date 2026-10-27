@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useReportesExport } from './useReportesExport';
+import { ErrorReporteAsync } from '../../lib/reporteAsync';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
@@ -15,7 +16,7 @@ vi.mock('../../lib/axios', () => ({
 }));
 
 const { mockToast } = vi.hoisted(() => ({
-  mockToast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  mockToast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), loading: vi.fn(() => 'aviso-reporte') },
 }));
 vi.mock('sonner', () => ({ toast: mockToast }));
 
@@ -31,6 +32,7 @@ describe('useReportesExport', () => {
     mockToast.success.mockReset();
     mockToast.error.mockReset();
     mockToast.warning.mockReset();
+    mockToast.loading.mockClear();
   });
 
   it('dado reporte que requiere bodega sin bodega seleccionada cuando exporta entonces no llama al backend', async () => {
@@ -50,7 +52,7 @@ describe('useReportesExport', () => {
       responseType: 'blob',
     });
     expect(mockDownloadBlob).toHaveBeenCalled();
-    expect(mockToast.success).toHaveBeenCalledWith('Reporte generado exitosamente.');
+    expect(mockToast.success).toHaveBeenCalledWith('Reporte generado exitosamente.', expect.objectContaining({ id: 'aviso-reporte' }));
     expect(mockToast.warning).not.toHaveBeenCalled();
   });
 
@@ -60,7 +62,7 @@ describe('useReportesExport', () => {
     await act(async () => { await result.current.handleExport('kardex'); });
 
     expect(mockDownloadBlob).toHaveBeenCalled();
-    expect(mockToast.warning).toHaveBeenCalledWith('El reporte no tiene datos para los filtros seleccionados.');
+    expect(mockToast.warning).toHaveBeenCalledWith('El reporte no tiene datos para los filtros seleccionados.', expect.objectContaining({ id: 'aviso-reporte' }));
     expect(mockToast.success).not.toHaveBeenCalled();
   });
 
@@ -68,21 +70,21 @@ describe('useReportesExport', () => {
     mockGet.mockRejectedValue({ response: { status: 404 } });
     const { result } = renderHook(() => useReportesExport('1'));
     await act(async () => { await result.current.handleExport('kardex'); });
-    expect(mockToast.error).toHaveBeenCalledWith('No se encontraron datos para los filtros seleccionados.');
+    expect(mockToast.error).toHaveBeenCalledWith('No se encontraron datos para los filtros seleccionados.', expect.objectContaining({ id: 'aviso-reporte' }));
   });
 
   it('dado error 403 cuando exporta entonces muestra mensaje de permisos', async () => {
     mockGet.mockRejectedValue({ response: { status: 403 } });
     const { result } = renderHook(() => useReportesExport('1'));
     await act(async () => { await result.current.handleExport('kardex'); });
-    expect(mockToast.error).toHaveBeenCalledWith('No tiene permisos para acceder a este reporte o bodega.');
+    expect(mockToast.error).toHaveBeenCalledWith('No tiene permisos para acceder a este reporte o bodega.', expect.objectContaining({ id: 'aviso-reporte' }));
   });
 
   it('dado error generico cuando exporta entonces muestra mensaje generico', async () => {
     mockGet.mockRejectedValue(new Error('network error'));
     const { result } = renderHook(() => useReportesExport('1'));
     await act(async () => { await result.current.handleExport('kardex'); });
-    expect(mockToast.error).toHaveBeenCalledWith('Error al generar el reporte. Intente de nuevo.');
+    expect(mockToast.error).toHaveBeenCalledWith('Error al generar el reporte. Intente de nuevo.', expect.objectContaining({ id: 'aviso-reporte' }));
   });
 
   it('dado reporte sin requerir bodega cuando exporta sin bodega seleccionada entonces llama al backend', async () => {
@@ -119,4 +121,29 @@ describe('useReportesExport', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
+  it('dado clic en exportar cuando el servidor aun no responde entonces ya muestra el aviso de carga', async () => {
+    let responder: (v: unknown) => void = () => {};
+    mockGet.mockReturnValue(new Promise((res) => { responder = res; }));
+    const { result } = renderHook(() => useReportesExport('1'));
+
+    let exportacion: Promise<void> = Promise.resolve();
+    act(() => { exportacion = result.current.handleExport('kardex'); });
+
+    expect(mockToast.loading).toHaveBeenCalledWith('Generando reporte…', expect.anything());
+    expect(result.current.loading.kardex).toBe(true);
+    expect(mockToast.success).not.toHaveBeenCalled();
+
+    await act(async () => { responder({ data: new Blob(['x']), headers: {} }); await exportacion; });
+    expect(mockToast.success).toHaveBeenCalledWith('Reporte generado exitosamente.', expect.objectContaining({ id: 'aviso-reporte' }));
+    expect(result.current.loading.kardex).toBe(false);
+  });
+
+  it('dado que la cola agota la espera cuando exporta entonces muestra el motivo de la cola en el mismo aviso', async () => {
+    mockGet.mockRejectedValueOnce(new ErrorReporteAsync('El reporte tardó demasiado. Intente de nuevo más tarde.'));
+    const { result } = renderHook(() => useReportesExport('1'));
+    await act(async () => { await result.current.handleExport('kardex'); });
+    expect(mockToast.error).toHaveBeenCalledWith(
+      'El reporte tardó demasiado. Intente de nuevo más tarde.', expect.objectContaining({ id: 'aviso-reporte' }),
+    );
+  });
 });

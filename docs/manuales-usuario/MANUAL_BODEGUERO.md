@@ -26,7 +26,7 @@ Contiene, a su vez, siete secciones:
 | **Transfer** | Mover stock de una bodega a otra de la misma sede: **Producto**, **Bodega Origen**, **Lote** (opcional si el producto no usa lotes), **Cantidad**, **Bodega Destino** y una **justificación obligatoria**; luego **Transferir**. La lista de lotes se carga al elegir producto y bodega de origen, y muestra solo los lotes con existencias de ese producto en esa bodega. |
 | **Transform** | Convertir un producto en otro (por ejemplo, un cambio de código tras tinturado): bodega, producto y lote de origen; bodega y **Nuevo Producto** de destino; **Código de Nuevo Lote** (si se deja vacío, se usa el lote de origen) y **Cantidad a Transformar**. Igual que en Transfer, los lotes de origen se cargan al elegir producto y bodega. Afecta el stock de dos bodegas y queda auditado. Si el nuevo producto queda en el **mismo lote**, Despacho lo vende al escanear ese lote cuando un pedido lo pide (vea la sección 8). |
 | **Kardex** | Historial de movimientos: filtrar por bodega, producto, tipo de operación (entradas / salidas) y rango de fechas, y pulsar **Consultar**. Con **bodega y producto** elegidos se muestra el kárdex en orden cronológico con la columna **Saldo**, calculada por el sistema desde el inicio del historial (es correcta en cualquier página). Sin alguno de los dos se listan los movimientos sin saldo. Los resultados se paginan de 20 en 20 e indican el total de movimientos; cambiar de página mantiene los filtros de la última consulta. **Exportar Excel** descarga el archivo completo generado en el servidor con esos mismos filtros (requiere haber consultado y elegido una bodega). Cada movimiento tiene tres acciones: **historial de cambios** (ícono de escudo), **editar** (lápiz; solo entradas de compra, con razón obligatoria) y **eliminar** (papelera; revierte su efecto en el stock y pide justificación). El botón **Registrar Merma** registra material dañado o perdido: producto, **Bodega de Origen**, cantidad y **Motivo de la Merma**. Debajo está **Stock a fecha de corte** (vea la sección 4.2). |
-| **Reportes** | Reportes en Excel generados en el servidor: kárdex de movimientos, snapshot de stock actual, antigüedad del stock (aging), productos con stock cero, análisis de movimientos y rotación, y catálogo maestro de productos. |
+| **Reportes** | Reportes en Excel generados en el servidor: kárdex de movimientos, snapshot de stock actual, antigüedad del stock (aging), productos con stock cero, análisis de movimientos y rotación, y catálogo maestro de productos. Mientras se genera un reporte, el botón gira y dice **Generando...**, y un aviso en pantalla indica el avance hasta que se descarga (vea la sección 4.4). |
 
 ### 4.1 Recibir materia prima (Recepción F0-001)
 
@@ -55,6 +55,16 @@ Solo se calcula sobre las bodegas que usted ve.
 
 La búsqueda recorre todo el stock de sus bodegas, no solo la página que está viendo.
 
+### 4.4 Mientras se genera un reporte
+
+Al pulsar el botón se ve de inmediato que el pedido se registró:
+- el ícono del botón gira y el texto cambia a **Generando...**;
+- en una esquina de la pantalla aparece el aviso **Generando reporte…** con «La descarga empezará automáticamente».
+
+Los reportes grandes se preparan en segundo plano. Si la espera pasa de 10 segundos, el aviso agrega «Es un reporte grande, puede tardar un poco más». Cuando el archivo está listo, el aviso cambia a **Descargando archivo…** y el Excel se descarga solo. El mismo aviso termina indicando si el reporte se descargó, si no tenía datos para los filtros elegidos o si hubo un error.
+
+No hace falta volver a pulsar el botón: mientras el reporte se genera, los demás botones de reportes quedan deshabilitados.
+
 ## 5. Pestaña Alertas — Stock Bajo
 
 Lista los productos cuyo stock actual está por debajo del mínimo configurado, con Código, Producto, Bodega, Stock Actual y Stock Mínimo.
@@ -62,7 +72,8 @@ Lista los productos cuyo stock actual está por debajo del mínimo configurado, 
 **Exportar a Excel:**
 1. Seleccione la **Bodega** a exportar en el desplegable.
 2. Haga clic en **Exportar Excel**.
-3. El archivo se descarga con el detalle de los productos en alerta de esa bodega — útil para remitirlo a compras o al jefe de sede.
+3. El botón muestra **Generando...** mientras se prepara el archivo.
+4. El archivo se descarga con el detalle de los productos en alerta de esa bodega — útil para remitirlo a compras o al jefe de sede.
 
 ## 6. Pestaña MRP
 
@@ -97,6 +108,8 @@ Usted calcula y consulta el MRP de **su sede**.
 **¿Cómo se sabe qué comprar?** En la pestaña **MRP**, la tabla **Sugerencias de compra**. Si acaba de entrar un pedido u orden nueva, pulse **Ejecutar MRP** para recalcular.
 
 **El MRP no sugiere nada aunque hay órdenes abiertas.** Revise las advertencias de la última ejecución: las corridas continuas no tienen peso requerido y no se calculan. Si el stock cubre lo que piden las órdenes y el mínimo, no hay nada que comprar.
+
+**Un reporte tarda en descargarse.** Los reportes grandes se preparan en segundo plano; el aviso de la pantalla indica en qué paso va y la descarga empieza sola. Si el aviso dice que tardó demasiado, debe intentarse con un rango de fechas más corto.
 
 **Se registró un movimiento por error.** En el **Kardex**, use eliminar (papelera) con la justificación: el sistema revierte su efecto en el stock. Si solo estaba mal la cantidad de una compra, edítela.
 

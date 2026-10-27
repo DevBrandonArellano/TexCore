@@ -52,7 +52,13 @@ Elija **Fecha inicio** y **Fecha fin** (aplican a todos los reportes con fecha) 
 5. **Lotes de producción**
 6. **Tendencia de producción**
 
-Mientras se genera una descarga, todos los botones de exportación quedan deshabilitados — se recomienda esperar a que termine antes de solicitar otro reporte.
+Al pulsar el botón se ve de inmediato que el pedido se registró:
+- el ícono del botón gira y el texto cambia a **Generando...**;
+- en una esquina de la pantalla aparece el aviso **Generando reporte…** con «La descarga empezará automáticamente».
+
+Los reportes grandes se preparan en segundo plano. Si la espera pasa de 10 segundos, el aviso agrega «Es un reporte grande, puede tardar un poco más». Cuando el archivo está listo, el aviso cambia a **Descargando archivo…** y el Excel se descarga solo. El mismo aviso termina indicando si el reporte se descargó, si no tenía datos para los filtros elegidos o si hubo un error.
+
+Mientras se genera un reporte, los demás botones de exportación quedan deshabilitados. Se reactivan solos al terminar.
 
 ## 5. Reglas que debe conocer
 
@@ -63,6 +69,8 @@ Mientras se genera una descarga, todos los botones de exportación quedan deshab
 
 **Se necesita corregir un dato que se ve incorrecto.** No es posible hacerlo desde este panel — debe reportarse al responsable operativo correspondiente (Vendedor, Bodeguero, Jefe de Área, etc.) o al Administrador de Sede/Sistemas.
 
-**El botón de exportar reportes no responde.** Es probable que ya haya una descarga en curso — debe esperarse a que termine; los botones se reactivan automáticamente.
+**El botón de exportar reportes no responde.** Probablemente ya hay un reporte generándose: el botón activo muestra **Generando...** y hay un aviso en pantalla. Debe esperarse a que termine; los botones se reactivan solos.
+
+**El aviso dice que el reporte tardó demasiado.** El reporte no terminó en 5 minutos. Debe intentarse de nuevo más tarde o con un rango de fechas más corto. Si se repite, debe avisarse al Administrador de Sistemas.
 
 **Se desea ver solo una sede.** Debe usarse el selector de sede en la cabecera del panel; puede dejarse vacío para volver a la vista global.

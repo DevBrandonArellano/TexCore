@@ -42,6 +42,9 @@ vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastErrorMock(...args),
     success: (...args: unknown[]) => toastSuccessMock(...args),
+    // Aviso de progreso de los exportes (lib/avisoReporte.ts).
+    loading: () => 'aviso-reporte',
+    warning: (...args: unknown[]) => toastSuccessMock(...args),
   }
 }));
 
@@ -214,7 +217,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
     });
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.', expect.objectContaining({ id: 'aviso-reporte' }));
     });
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
@@ -268,7 +271,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(
-        'No se encontraron datos para los filtros seleccionados.'
+        'No se encontraron datos para los filtros seleccionados.', expect.objectContaining({ id: 'aviso-reporte' })
       );
     });
   });
@@ -292,7 +295,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(
-        'Error al generar el reporte. Intente de nuevo.'
+        'Error al generar el reporte. Intente de nuevo.', expect.objectContaining({ id: 'aviso-reporte' })
       );
     });
   });
@@ -325,7 +328,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
     });
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.', expect.objectContaining({ id: 'aviso-reporte' }));
     });
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(catalogBlob);
@@ -349,7 +352,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(
-        'Error al generar el reporte. Intente de nuevo.'
+        'Error al generar el reporte. Intente de nuevo.', expect.objectContaining({ id: 'aviso-reporte' })
       );
     });
   });
@@ -372,7 +375,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
     await user.click(btnExportKardex);
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.', expect.objectContaining({ id: 'aviso-reporte' }));
     });
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
   });

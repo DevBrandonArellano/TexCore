@@ -106,4 +106,26 @@ describe('obtenerReporte', () => {
     expect(mockGet).toHaveBeenCalledTimes(4); // encolar + 3 consultas
   });
 
+  it('test_obtenerReporte_dado_alAvanzar_cuando_la_tarea_avanza_entonces_informa_la_espera_y_la_descarga', async () => {
+    mockGet
+      .mockResolvedValueOnce(encolado())
+      .mockResolvedValueOnce(estado({ estado: 'en_proceso' }))
+      .mockResolvedValueOnce(estado({ estado: 'listo' }))
+      .mockResolvedValueOnce(archivo);
+    const alAvanzar = vi.fn();
+
+    await obtenerReporte('/reporting/export/kardex', {}, { intervaloMs: 0, alAvanzar });
+
+    expect(alAvanzar.mock.calls.map(([a]) => a.fase)).toEqual(['en_cola', 'en_cola', 'descargando']);
+    expect(alAvanzar.mock.calls[0][0].segundos).toBeGreaterThanOrEqual(0);
+  });
+
+  it('test_obtenerReporte_dado_modo_sincrono_503_cuando_descarga_entonces_no_informa_espera_en_cola', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 503 } }).mockResolvedValueOnce(archivo);
+    const alAvanzar = vi.fn();
+
+    await obtenerReporte('/reporting/export/kardex', {}, { intervaloMs: 0, alAvanzar });
+
+    expect(alAvanzar).not.toHaveBeenCalled();
+  });
 });

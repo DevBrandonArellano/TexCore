@@ -306,7 +306,7 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Capas sin ciclos: ningún módulo de `services/` ni de `serializers/` importa de `gestion.views`; `gestion/params.py` es neutral; el reexport de `views/_common.py` sigue sirviendo (defecto 58) † | `gestion/tests/test_capas_sin_ciclos.py` | EP, estática | ✅ |
 | Frontend: panel con totales, resumen y detalle; rango por omisión de 30 días; atajos de mantenimiento y averías; cambio de fechas y de máquina; paro en curso y paro automático marcados; rango vacío; error de carga con reintento; impresión con los filtros vigentes y fallo del servicio; paginación † | `HistorialMantenimientoPanel.test.tsx`, `mantenimientoApi.test.ts` | EP, BVA | ✅ |
 
-### Exportes pesados por la cola Celery + Redis (27-oct-2026)
+### Exportes pesados por la cola Celery + Redis y retroalimentación de carga (27-oct-2026)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
@@ -317,6 +317,8 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Encolar con `?async=true` responde 202 con el token y la URL de estado, sin `task_id` suelto; con Redis inalcanzable, el broker y el result backend fallan en menos de 5 s (antes, 25,7 s medidos en el stack) † | `inventory/tests/test_reporting_proxy_extra.py`, `inventory/tests/test_reportes_async.py` | EP, BVA | ✅ |
 | `docker-compose.prod.yml`: `redis` fijado por digest, con clave obligatoria (`${REDIS_PASSWORD:?…}`), sin puertos y solo en `internal_net`; `celery_worker` con la imagen del backend, sin root y con healthcheck; los dos comparten broker, flag y volumen; el despliegue, el staging efímero y el rollback le asignan al worker la imagen del backend † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
 | Frontend `obtenerReporte`: encola, consulta el estado y descarga; si recibe 503, modo síncrono; un 403 se propaga; error de la tarea o espera agotada → `ErrorReporteAsync`; `alAvanzar` informa `en_cola` y `descargando`, solo en modo cola † | `lib/reporteAsync.test.ts` | EP, BVA, STT | ✅ |
+| Frontend: un solo toast desde el clic ("Generando reporte…"); a los 10 s, una sola vez, avisa que es un reporte grande; pasa a "Descargando archivo…" y termina en éxito, advertencia o error con el mismo `id` † | `lib/avisoReporte.test.ts`, `useReportesExport.test.ts` | STT, BVA | ✅ |
+| Frontend: el botón activo gira (`IconoCarga`), dice "Generando...", tiene `aria-busy` y deja los demás deshabilitados; el resto no gira † | `components/ui/icono-carga.test.tsx`, `EjecutivosDashboard.reportes.test.tsx`, `InventoryDashboard.reportes.test.tsx` | EP | ✅ |
 
 ### Casos de uso pendientes del backlog (7-oct-2026)
 

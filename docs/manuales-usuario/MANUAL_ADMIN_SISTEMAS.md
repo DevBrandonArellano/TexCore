@@ -98,4 +98,6 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 
 **El sistema no deja eliminar un proceso de producción.** Ya hay operaciones registradas con ese proceso; se conserva para no perder el historial. Puede renombrarse o dejar de usarse.
 
+**Un reporte de Inventario → Reportes tarda en descargarse.** Es normal en los reportes grandes, que se preparan en segundo plano. El botón muestra **Generando...** y el aviso de la pantalla indica el avance hasta que se descarga; vea [Mientras se genera un reporte](MANUAL_BODEGUERO.md#44-mientras-se-genera-un-reporte).
+
 **No se muestran datos en Producción/Inventario.** Debe confirmarse que haya una sede seleccionada en el menú lateral izquierdo.

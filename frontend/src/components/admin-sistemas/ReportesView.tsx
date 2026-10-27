@@ -6,7 +6,8 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { ProductSelect } from '../ui/product-select';
-import { History, Package, AlertCircle, PackageX, Download, Warehouse } from 'lucide-react';
+import { History, Package, AlertCircle, PackageX, Warehouse } from 'lucide-react';
+import { IconoCarga } from '../ui/icono-carga';
 import type { Producto, Bodega } from '../../lib/types';
 import { useReportesExport } from './useReportesExport';
 
@@ -81,8 +82,9 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
               className="mt-auto gap-2"
               onClick={() => handleExport('kardex', { producto_id: rkProducto, fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
               disabled={loading['kardex'] || !rkBodega}
+              aria-busy={!!loading['kardex']}
             >
-              <Download className="w-4 h-4" />
+              <IconoCarga cargando={!!loading['kardex']} className="w-4 h-4" />
               {loading['kardex'] ? 'Generando...' : 'Exportar Kardex'}
             </Button>
           </div>
@@ -108,8 +110,9 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
             className="w-full gap-2 border-green-200 hover:bg-green-50 dark:border-green-800"
             onClick={() => handleExport('stock-actual')}
             disabled={loading['stock-actual'] || !rkBodega}
+            aria-busy={!!loading['stock-actual']}
           >
-            <Download className="w-4 h-4" />
+            <IconoCarga cargando={!!loading['stock-actual']} className="w-4 h-4" />
             {loading['stock-actual'] ? 'Descargando...' : 'Descargar Stock Actual'}
           </Button>
         </CardContent>
@@ -147,8 +150,9 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
               variant="outline"
               onClick={() => handleExport('aging', { dias: agingDias })}
               disabled={loading['aging'] || !rkBodega}
+              aria-busy={!!loading['aging']}
             >
-              <Download className="w-4 h-4" />
+              <IconoCarga cargando={!!loading['aging']} className="w-4 h-4" />
               {loading['aging'] ? 'Analizando...' : 'Exportar Aging'}
             </Button>
           </div>
@@ -174,8 +178,9 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
             className="w-full gap-2 border-red-200 hover:bg-red-50 dark:border-red-800"
             onClick={() => handleExport('stock-cero')}
             disabled={loading['stock-cero'] || !rkBodega}
+            aria-busy={!!loading['stock-cero']}
           >
-            <Download className="w-4 h-4" />
+            <IconoCarga cargando={!!loading['stock-cero']} className="w-4 h-4" />
             {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
           </Button>
         </CardContent>
@@ -203,18 +208,20 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
                 variant="secondary"
                 onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
                 disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                aria-busy={!!loading['rotacion']}
               >
-                <Download className="w-3 h-3" />
-                Rotación
+                <IconoCarga cargando={!!loading['rotacion']} className="w-3 h-3" />
+                {loading['rotacion'] ? 'Generando...' : 'Rotación'}
               </Button>
               <Button
                 className="flex-1 gap-1"
                 variant="secondary"
                 onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
                 disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                aria-busy={!!loading['resumen-movimientos']}
               >
-                <Download className="w-3 h-3" />
-                Resumen
+                <IconoCarga cargando={!!loading['resumen-movimientos']} className="w-3 h-3" />
+                {loading['resumen-movimientos'] ? 'Generando...' : 'Resumen'}
               </Button>
             </div>
           </div>
@@ -228,8 +235,8 @@ function ReportesViewImpl({ bodegas, productos, sedeId }: ReportesViewProps) {
             <CardTitle className="text-base">Catálogo maestro de Productos</CardTitle>
             <CardDescription>Base de datos completa de productos y códigos.</CardDescription>
           </div>
-          <Button variant="ghost" onClick={() => handleExport('productos')} disabled={loading['productos']} className="gap-2">
-            <Download className="w-4 h-4" />
+          <Button variant="ghost" onClick={() => handleExport('productos')} disabled={loading['productos']} aria-busy={!!loading['productos']} className="gap-2">
+            <IconoCarga cargando={!!loading['productos']} />
             {loading['productos'] ? 'Exportando...' : 'Descargar Catálogo'}
           </Button>
         </CardHeader>

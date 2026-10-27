@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { downloadBlob } from '../../lib/downloadBlob';
-import { obtenerReporte } from '../../lib/reporteAsync';
+import { obtenerReporte, ErrorReporteAsync } from '../../lib/reporteAsync';
+import { iniciarAvisoReporte } from '../../lib/avisoReporte';
 
 import { estadoHttp } from '../../lib/apiError';
 
@@ -19,13 +20,15 @@ export function useReportesExport(rkBodega: string) {
     }
 
     setLoading(prev => ({ ...prev, [reportType]: true }));
+    // Aviso inmediato: el usuario sabe que el clic se registró aunque el reporte tarde.
+    const aviso = iniciarAvisoReporte();
     try {
       const needsBodega = REPORTES_QUE_REQUIEREN_BODEGA.includes(reportType);
       const queryParams = { ...params, ...(needsBodega && { bodega_id: rkBodega }) };
       const endpoint = `/reporting/export/${reportType}`;
 
       // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
-      const resp = await obtenerReporte(endpoint, queryParams);
+      const resp = await obtenerReporte(endpoint, queryParams, { alAvanzar: aviso.avance });
 
       const disposition = resp.headers['content-disposition'];
       let filename = `${reportType}_report.xlsx`;
@@ -35,17 +38,19 @@ export function useReportesExport(rkBodega: string) {
       }
       downloadBlob(resp.data, filename);
       if (resp.headers['x-report-empty'] === 'true') {
-        toast.warning('El reporte no tiene datos para los filtros seleccionados.');
+        aviso.advertencia('El reporte no tiene datos para los filtros seleccionados.');
       } else {
-        toast.success('Reporte generado exitosamente.');
+        aviso.exito('Reporte generado exitosamente.');
       }
     } catch (e) {
       if (estadoHttp(e) === 404) {
-        toast.error('No se encontraron datos para los filtros seleccionados.');
+        aviso.error('No se encontraron datos para los filtros seleccionados.');
       } else if (estadoHttp(e) === 403) {
-        toast.error('No tiene permisos para acceder a este reporte o bodega.');
+        aviso.error('No tiene permisos para acceder a este reporte o bodega.');
+      } else if (e instanceof ErrorReporteAsync) {
+        aviso.error(e.message);
       } else {
-        toast.error('Error al generar el reporte. Intente de nuevo.');
+        aviso.error('Error al generar el reporte. Intente de nuevo.');
       }
     } finally {
       setLoading(prev => ({ ...prev, [reportType]: false }));

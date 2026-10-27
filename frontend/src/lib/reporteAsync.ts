@@ -15,11 +15,20 @@ export interface ArchivoReporte {
   headers: Record<string, string | undefined>;
 }
 
+/** En qué paso va el reporte encolado, para mostrarle el progreso al usuario. */
+export interface AvanceReporte {
+  fase: 'en_cola' | 'descargando';
+  /** Segundos desde que se pidió el reporte. */
+  segundos: number;
+}
+
 export interface OpcionesReporteAsync {
   /** Pausa entre consultas de estado. */
   intervaloMs?: number;
   /** Consultas antes de rendirse (por defecto ~5 min con 1,5 s). */
   maxIntentos?: number;
+  /** Se llama en cada consulta de estado y al empezar la descarga (solo en modo cola). */
+  alAvanzar?: (avance: AvanceReporte) => void;
 }
 
 /** La tarea terminó con error o no terminó a tiempo. */
@@ -42,8 +51,11 @@ const comoArchivo = (resp: { data: unknown; headers: unknown }): ArchivoReporte 
 export async function obtenerReporte(
   ruta: string,
   params: Params,
-  { intervaloMs = 1500, maxIntentos = 200 }: OpcionesReporteAsync = {},
+  { intervaloMs = 1500, maxIntentos = 200, alAvanzar }: OpcionesReporteAsync = {},
 ): Promise<ArchivoReporte> {
+  const inicio = Date.now();
+  const avanzar = (fase: AvanceReporte['fase']) =>
+    alAvanzar?.({ fase, segundos: Math.floor((Date.now() - inicio) / 1000) });
   let encolado;
   try {
     encolado = await apiClient.get(ruta, { params: { ...params, async: 'true' }, responseType: 'blob' });
@@ -58,9 +70,11 @@ export async function obtenerReporte(
   const base = `/reporting/tareas/${encodeURIComponent(token)}/`;
 
   for (let intento = 0; intento < maxIntentos; intento++) {
+    avanzar('en_cola');
     await esperar(intervaloMs);
     const { data } = await apiClient.get(base);
     if (data.estado === 'listo') {
+      avanzar('descargando');
       return comoArchivo(await apiClient.get(`${base}descarga/`, { responseType: 'blob' }));
     }
     if (data.estado === 'error') {

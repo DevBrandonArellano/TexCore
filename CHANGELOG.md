@@ -68,6 +68,41 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Animación de carga en los exportes (sin commitear)
+
+Con la cola, un exporte puede tardar varios segundos. Antes, en Admin Sistemas y Bodeguero el ícono de descarga quedaba quieto, y en Ejecutivos el texto seguía diciendo "Descargar".
+
+**Botón** (`components/ui/icono-carga.tsx`):
+- El ícono pasa a un spinner que gira y el texto cambia a "Generando...".
+- Se marca `aria-busy` y los demás botones de la sección quedan deshabilitados.
+- Aplica a los 6 exportes de Ejecutivos, los 8 de Admin Sistemas (Rotación y Resumen no tenían ningún estado de carga) y el de stock bajo del Bodeguero.
+
+**Aviso de progreso** (`lib/avisoReporte.ts`): un solo toast que aparece al hacer clic, antes de que responda el servidor. Pasa por estos mensajes:
+1. "Generando reporte…" con "La descarga empezará automáticamente."
+2. Si la espera pasa de 10 s, agrega "Es un reporte grande, puede tardar un poco más."
+3. "Descargando archivo…"
+4. Éxito, advertencia o error, en el mismo toast, sin apilar avisos.
+
+`lib/reporteAsync.ts` informa la fase con `alAvanzar`. Si la cola agota la espera, el usuario ve el motivo real ("El reporte tardó demasiado…") en vez del error genérico.
+
+**Verificación:**
+- Frontend: 2000 tests OK, sin errores no manejados, ramas al 90,2 %, `tsc` y lint limpios.
+  - Pruebas nuevas: `avisoReporte.test.ts`, `icono-carga.test.tsx`, `alAvanzar` en `reporteAsync.test.ts`, el aviso inmediato y el error de la cola en `useReportesExport.test.ts`, y `aria-busy` y spinner solo en el botón activo en `EjecutivosDashboard.reportes.test.tsx`.
+  - Los mocks de `sonner` de 6 archivos de prueba suman `loading`.
+- nginx reconstruido y desplegado en `texcore-prod`.
+
+**Documentación:**
+- Manuales de usuario:
+  - `MANUAL_EJECUTIVO.md`: Reportes y dos preguntas frecuentes.
+  - `MANUAL_BODEGUERO.md`: nueva §4.4, *Mientras se genera un reporte*, más la exportación de alertas y una pregunta frecuente.
+  - `MANUAL_ADMIN_SISTEMAS.md`: pregunta frecuente con enlace a la §4.4 del Bodeguero.
+- `ESTANDARES_DESARROLLO.md`: regla *Acciones que tardan* (`IconoCarga`, texto en curso, `aria-busy`, un solo toast con `iniciarAvisoReporte`, y los mocks de `sonner` con `loading`).
+- `ARQUITECTURA_SISTEMA.md`: flujo de exporte con aviso en la §3.8 y referencia desde la §3.7.
+- `matriz_trazabilidad_pruebas.md`: sección del 27-oct (9 filas) e hito de cobertura (92,6 %, 1971 tests).
+- `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` no cambia: los exportes por la cola se agregan cuando se midan bajo carga.
+
+**Pendiente de la sesión:** la prueba de carga con Celery y Redis quedó en pausa. El certificado autofirmado de `nginx/certs` no trae `subjectAltName`, y Locust no acepta `https://localhost` sin desactivar la verificación TLS. El locustfile ya soporta los exportes por la cola (`LOADTEST_EXPORTES=async|sync`).
+
 ### 27 de Octubre de 2026 — Celery y Redis en producción para los exportes pesados (sin commitear)
 
 A pedido del usuario, la cola asíncrona pasa a producción con el flujo completo. Hasta hoy la tarea generaba el Excel y lo descartaba (solo devolvía `SUCCESS`), y no había forma de consultar el `task_id` ni de descargar el archivo.

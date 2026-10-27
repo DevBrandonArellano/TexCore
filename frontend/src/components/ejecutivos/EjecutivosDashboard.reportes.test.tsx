@@ -72,6 +72,9 @@ vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastErrorMock(...args),
     success: (...args: unknown[]) => toastSuccessMock(...args),
+    // Aviso de progreso de los exportes (lib/avisoReporte.ts).
+    loading: () => 'aviso-reporte',
+    warning: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -228,7 +231,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
         );
       });
       await waitFor(() => {
-        expect(toastSuccessMock).toHaveBeenCalledWith('Reporte descargado');
+        expect(toastSuccessMock).toHaveBeenCalledWith('Reporte descargado', expect.objectContaining({ id: 'aviso-reporte' }));
       });
     }
   );
@@ -246,7 +249,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     await user.click(screen.getByTestId('btn-export-ventas'));
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Error al descargar el reporte');
+      expect(toastErrorMock).toHaveBeenCalledWith('Error al descargar el reporte', expect.objectContaining({ id: 'aviso-reporte' }));
     });
   });
 
@@ -406,7 +409,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     await user.click(screen.getByTestId('btn-export-ventas'));
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Error al descargar el reporte');
+      expect(toastErrorMock).toHaveBeenCalledWith('Error al descargar el reporte', expect.objectContaining({ id: 'aviso-reporte' }));
     });
 
     // Tras el error, todos los botones deben estar habilitados de nuevo
@@ -440,6 +443,14 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     // Los demás botones también disabled (bloqueo global)
     expect(screen.getByTestId('btn-export-ventas')).toBeDisabled();
     expect(screen.getByTestId('btn-export-lotes')).toBeDisabled();
+
+    // Solo el activo gira, dice "Generando..." y queda ocupado para lectores de pantalla
+    const activo = screen.getByTestId('btn-export-tendencia');
+    expect(activo).toHaveAttribute('aria-busy', 'true');
+    expect(activo).toHaveTextContent('Generando...');
+    expect(activo.querySelector('[data-testid="icono-cargando"]')).not.toBeNull();
+    expect(screen.getByTestId('btn-export-ventas')).toHaveAttribute('aria-busy', 'false');
+    expect(screen.getByTestId('btn-export-ventas').querySelector('[data-testid="icono-cargando"]')).toBeNull();
 
     // Resolver y verificar que el botón activo vuelve a estar habilitado
     resolvePendiente!({ data: fakeBlob });

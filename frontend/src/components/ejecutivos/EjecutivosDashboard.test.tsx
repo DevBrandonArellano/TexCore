@@ -48,6 +48,8 @@ vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastErrorMock(...args),
     success: (...args: unknown[]) => toastSuccessMock(...args),
+    // Aviso de progreso de los exportes (lib/avisoReporte.ts).
+    loading: () => 'aviso-reporte',
   },
 }));
 

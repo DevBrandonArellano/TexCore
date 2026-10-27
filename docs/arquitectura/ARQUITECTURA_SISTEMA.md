@@ -513,7 +513,7 @@ Los dos composes levantan `redis` y `celery_worker`. En producción (`docker-com
 3. El worker consulta los datos con el ORM, le pide el archivo a `reporting_excel` y lo deja en el volumen compartido `prod_reportes_async` (`REPORTES_ASYNC_DIR`). Cada ejecución borra los archivos con más de 24 h.
 4. El frontend consulta `GET /api/reporting/tareas/<token>/` (`en_proceso` · `listo` · `error`) y descarga `GET /api/reporting/tareas/<token>/descarga/`. Un token ajeno, alterado o vencido responde 404; si la tarea no terminó, 409; si el archivo ya se limpió, 410.
 
-Usan la cola los exportes gerenciales (`useExportesGerenciales`) y los de Admin Sistemas (`useReportesExport`). Los del Vendedor, que son chicos, siguen siendo síncronos. Si Redis no responde, encolar devuelve 503 en menos de un segundo (reintentos del broker y del result backend acotados en `TexCore/settings.py`), y el frontend pide el mismo reporte en modo síncrono.
+Usan la cola los exportes gerenciales (`useExportesGerenciales`) y los de Admin Sistemas (`useReportesExport`). Los del Vendedor, que son chicos, siguen siendo síncronos. Mientras dura la espera, el usuario ve el avance en el botón y en un aviso (§3.8, *Exportes y retroalimentación de carga*). Si Redis no responde, encolar devuelve 503 en menos de un segundo (reintentos del broker y del result backend acotados en `TexCore/settings.py`), y el frontend pide el mismo reporte en modo síncrono.
 
 ### 3.8 Frontend (React SPA)
 
@@ -558,6 +558,18 @@ const mutation = useMutation({
   onSuccess: () => queryClient.invalidateQueries(['stock']),
 })
 ```
+
+**Exportes y retroalimentación de carga:** los exportes gerenciales (`useExportesGerenciales`) y los de inventario (`useReportesExport`, usado por Admin Sistemas y Bodeguero) siguen este flujo:
+
+```typescript
+const aviso = iniciarAvisoReporte()                // toast "Generando reporte…" al instante
+const resp = await obtenerReporte(ruta, params, {  // cola Celery; si responde 503, modo síncrono
+  alAvanzar: aviso.avance,                         // >10 s: "Es un reporte grande…"; luego "Descargando archivo…"
+})
+aviso.exito('Reporte generado exitosamente.')      // reemplaza el mismo toast (mismo id)
+```
+
+Mientras tanto, el botón muestra `IconoCarga` girando, el texto "Generando..." y `aria-busy`. La regla está en `ESTANDARES_DESARROLLO.md` (*Acciones que tardan*).
 
 **Autenticacion frontend:** Tokens almacenados en cookies `httpOnly` (`access_token`, `refresh_token`). El browser las envia automaticamente en cada request. `CookieJWTAuthentication` en Django las lee del header de Cookie, no del header `Authorization`. Esto previene acceso de JavaScript malicioso (XSS).
 

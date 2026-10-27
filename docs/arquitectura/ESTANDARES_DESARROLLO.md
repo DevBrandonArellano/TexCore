@@ -46,6 +46,21 @@ Ejemplos:
 - Tests: `NombreComponente.descripcion.test.tsx`
 - Hooks: `useNombreHook.ts`
 
+### Acciones que tardan: retroalimentación al usuario
+
+Todo botón cuya acción espera al servidor debe mostrar, desde el clic, que la acción está en curso:
+
+- **Ícono:** `IconoCarga` (`components/ui/icono-carga.tsx`) en lugar del ícono fijo. Gira mientras `cargando` es verdadero.
+- **Texto:** cambia a un verbo en curso, por ejemplo "Generando...".
+- **Accesibilidad:** `aria-busy` en el botón.
+- **Doble clic:** el botón queda deshabilitado mientras dura la acción.
+
+Los **exportes pesados** usan además:
+- `obtenerReporte` (`lib/reporteAsync.ts`) para pasar por la cola de Celery;
+- `iniciarAvisoReporte` (`lib/avisoReporte.ts`), conectado con `alAvanzar`. Es un solo toast que avanza de "Generando reporte…" a "Descargando archivo…" y termina en éxito, advertencia o error con el mismo `id`.
+
+No se abren toasts nuevos por cada paso. Los mocks de `sonner` en las pruebas deben incluir `loading`: sin él, Vitest registra un error no manejado y la corrida falla aunque pasen todos los tests.
+
 ### Commits (Conventional Commits)
 
 ```

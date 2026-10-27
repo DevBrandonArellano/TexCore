@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { obtenerReporte } from '../../lib/reporteAsync';
+import { obtenerReporte, ErrorReporteAsync } from '../../lib/reporteAsync';
+import { iniciarAvisoReporte } from '../../lib/avisoReporte';
 
 const descargarBlob = (blob: Blob, nombre: string) => {
   const url = window.URL.createObjectURL(blob);
@@ -27,13 +28,15 @@ export function useExportesGerenciales(filtroSedeId: string) {
     }
     if (descargando) return;
     setDescargando(ruta);
+    // Aviso inmediato: el usuario sabe que el clic se registró aunque el reporte tarde.
+    const aviso = iniciarAvisoReporte();
     try {
       // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
-      const res = await obtenerReporte(`/reporting/${ruta}`, { ...params, format: 'xlsx' });
+      const res = await obtenerReporte(`/reporting/${ruta}`, { ...params, format: 'xlsx' }, { alAvanzar: aviso.avance });
       descargarBlob(res.data as Blob, nombre);
-      toast.success('Reporte descargado');
-    } catch {
-      toast.error('Error al descargar el reporte');
+      aviso.exito('Reporte descargado');
+    } catch (e) {
+      aviso.error(e instanceof ErrorReporteAsync ? e.message : 'Error al descargar el reporte');
     } finally {
       setDescargando(null);
     }
