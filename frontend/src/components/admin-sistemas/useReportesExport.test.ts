@@ -46,7 +46,7 @@ describe('useReportesExport', () => {
     await act(async () => { await result.current.handleExport('kardex'); });
 
     expect(mockGet).toHaveBeenCalledWith('/reporting/export/kardex', {
-      params: { bodega_id: '1' },
+      params: { bodega_id: '1', async: 'true' },
       responseType: 'blob',
     });
     expect(mockDownloadBlob).toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('useReportesExport', () => {
     const { result } = renderHook(() => useReportesExport(''));
     await act(async () => { await result.current.handleExport('productos'); });
     expect(mockGet).toHaveBeenCalledWith('/reporting/export/productos', {
-      params: {},
+      params: { async: 'true' },
       responseType: 'blob',
     });
   });
@@ -107,7 +107,7 @@ describe('useReportesExport', () => {
     const { result } = renderHook(() => useReportesExport('7'));
     await act(async () => { await result.current.handleExport('stock-bajo'); });
     expect(mockGet).toHaveBeenCalledWith('/reporting/export/stock-bajo', {
-      params: { bodega_id: '7' },
+      params: { bodega_id: '7', async: 'true' },
       responseType: 'blob',
     });
   });
@@ -118,4 +118,5 @@ describe('useReportesExport', () => {
     expect(mockToast.error).toHaveBeenCalledWith('Debe seleccionar una bodega para este reporte.');
     expect(mockGet).not.toHaveBeenCalled();
   });
+
 });

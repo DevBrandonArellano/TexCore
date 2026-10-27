@@ -648,7 +648,7 @@ describe('InventoryDashboard', () => {
 
       await waitFor(() => {
         expect(mockGet).toHaveBeenCalledWith('/reporting/export/kardex', {
-          params: { bodega_id: '1' }, responseType: 'blob',
+          params: { bodega_id: '1', async: 'true' }, responseType: 'blob',
         });
       });
       expect(URL.createObjectURL).toHaveBeenCalled();

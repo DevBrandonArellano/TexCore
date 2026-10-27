@@ -1,18 +1,61 @@
 import logging
 import os
+import re
+import time
+import uuid
+from pathlib import Path
 
 import httpx
 from celery import shared_task
+from django.conf import settings
 
 from internal_api.authentication import JWTServiceAuthentication
 
 logger = logging.getLogger("gestion.tasks")
+
+_NOMBRE_EN_DISPOSITION = re.compile(r'filename="?([^";]+)"?')
+
+
+def _limpiar_vencidos(directorio: Path) -> None:
+    """Borra los archivos más viejos que REPORTES_ASYNC_TTL_SEGUNDOS (no hace falta Celery Beat)."""
+    limite = time.time() - settings.REPORTES_ASYNC_TTL_SEGUNDOS
+    for archivo in directorio.iterdir():
+        try:
+            if archivo.is_file() and archivo.stat().st_mtime < limite:
+                archivo.unlink()
+        except FileNotFoundError:  # otro worker lo borró primero
+            pass
+
+
+def _guardar_archivo(task_id: str, report_format: str, filename: str, response) -> dict:
+    """Escribe el archivo generado en el directorio compartido con el backend y describe la descarga."""
+    directorio = Path(settings.REPORTES_ASYNC_DIR)
+    directorio.mkdir(parents=True, exist_ok=True)
+    _limpiar_vencidos(directorio)
+
+    extension = "csv" if report_format == "csv" else "xlsx"
+    archivo = directorio / f"{task_id}.{extension}"
+    temporal = archivo.with_suffix(".tmp")
+    temporal.write_bytes(response.content)
+    temporal.replace(archivo)  # atómico: el backend nunca ve un archivo a medias
+
+    coincidencia = _NOMBRE_EN_DISPOSITION.search(response.headers.get("Content-Disposition", ""))
+    return {
+        "archivo": archivo.name,
+        "nombre": coincidencia.group(1) if coincidencia else f"{filename}.{extension}",
+        "content_type": response.headers.get("Content-Type", "application/octet-stream"),
+        "vacio": response.headers.get("X-Report-Empty") == "true",
+    }
 
 
 @shared_task(bind=True, max_retries=3)
 def async_export_report(self, report_path: str, params: dict, user_id: int, report_format: str = "xlsx"):
     """
     Tarea asíncrona para generar reportes pesados sin bloquear a Gunicorn.
+
+    El archivo queda en REPORTES_ASYNC_DIR con el id de la tarea como nombre; el
+    backend lo entrega en /api/reporting/tareas/<token>/descarga/
+    (inventory/reportes_async.py).
 
     Igual que el proxy síncrono (inventory/reporting_proxy.py, ver auditoría de
     performance 2026-08-31): consulta los datos EN PROCESO vía
@@ -53,8 +96,9 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
             response = client.post(f"{service_url}/generate", json=body, headers=headers)
 
             if response.status_code == 200:
+                descarga = _guardar_archivo(self.request.id or str(uuid.uuid4()), report_format, filename, response)
                 logger.info("Reporte %s generado exitosamente en background.", report_path)
-                return {"status": "SUCCESS", "report_path": report_path, "user_id": user_id}
+                return {"status": "SUCCESS", "report_path": report_path, "user_id": user_id, **descarga}
             logger.error(
                 "Fallo en generación de reporte %s: HTTP %s",
                 report_path,

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
-import { downloadBlob } from '../../lib/downloadBlob';
+import { downloadBlob } from '../../lib/downloadBlob';
+import { obtenerReporte } from '../../lib/reporteAsync';
+
 import { estadoHttp } from '../../lib/apiError';
 
 const REPORTES_QUE_REQUIEREN_BODEGA = [
@@ -23,10 +24,8 @@ export function useReportesExport(rkBodega: string) {
       const queryParams = { ...params, ...(needsBodega && { bodega_id: rkBodega }) };
       const endpoint = `/reporting/export/${reportType}`;
 
-      const resp = await apiClient.get(endpoint, {
-        params: queryParams,
-        responseType: 'blob',
-      });
+      // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
+      const resp = await obtenerReporte(endpoint, queryParams);
 
       const disposition = resp.headers['content-disposition'];
       let filename = `${reportType}_report.xlsx`;

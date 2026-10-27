@@ -407,9 +407,23 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
-# Exportación asíncrona de reportes (?async=true → Celery). Apagada por
-# defecto: producción no despliega Redis y, con el broker caído, .delay()
-# bloquea el worker de gunicorn 20-70 s por los reintentos de kombu y del
-# result backend. Solo se activa en entornos que sí levantan Redis
-# (infrastructure/docker/docker-compose.yml). Ver inventory/reporting_proxy.py.
+# Con el broker caído, kombu reintenta publicar durante 20-70 s y bloquea un worker
+# síncrono de gunicorn: se acota a un reintento y conexiones de pocos segundos para
+# que el proxy responda 503 enseguida (inventory/reporting_proxy.py).
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_BROKER_TRANSPORT_OPTIONS = {"socket_connect_timeout": 3, "socket_timeout": 5}
+CELERY_REDIS_SOCKET_CONNECT_TIMEOUT = 3
+CELERY_REDIS_SOCKET_TIMEOUT = 5
+CELERY_TASK_PUBLISH_RETRY_POLICY = {"max_retries": 1, "interval_start": 0, "interval_step": 0.5, "interval_max": 1}
+# El result backend de Redis trae su propia política (20 reintentos de ~1 s): sin esto,
+# encolar con Redis caído tardaba 25 s aunque el broker ya estuviera acotado.
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {"retry_policy": CELERY_TASK_PUBLISH_RETRY_POLICY}
+# Exportación asíncrona de reportes (?async=true → Celery). Apagada por defecto:
+# solo la activan los entornos que levantan Redis y celery_worker (los dos composes).
 REPORTES_ASYNC_HABILITADO = os.environ.get("REPORTES_ASYNC_HABILITADO", "false").lower() in ("1", "true", "yes")
+# Directorio compartido entre backend y celery_worker donde la tarea deja el archivo
+# generado; en producción es el volumen prod_reportes_async.
+REPORTES_ASYNC_DIR = os.environ.get("REPORTES_ASYNC_DIR", str(BASE_DIR / "reportes_async"))
+# Vida del archivo, del resultado en Redis y del token de descarga (24 h).
+REPORTES_ASYNC_TTL_SEGUNDOS = int(os.environ.get("REPORTES_ASYNC_TTL_SEGUNDOS", "86400"))
+CELERY_RESULT_EXPIRES = REPORTES_ASYNC_TTL_SEGUNDOS

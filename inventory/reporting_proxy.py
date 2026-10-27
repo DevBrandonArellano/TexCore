@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from gestion.models import Bodega
 from gestion.permissions import ve_todas_las_sedes
 from internal_api.authentication import JWTServiceAuthentication
+from inventory.reportes_async import firmar_tarea, url_de_estado
 from inventory.services.kardex_service import FiltroKardexInvalido
 
 logger = logging.getLogger(__name__)
@@ -148,10 +149,9 @@ def _params_reenviados(query_params, user, is_admin):
 
 
 def _encolar_exportacion(clean_path, params, report_format, user):
-    # En producción no se despliega Redis (las exportaciones síncronas miden p95 < 250 ms).
-    # Con el broker caído, .delay() tarda 20-70 s en fallar (reintentos de kombu y del
-    # result backend) y bloquea un worker síncrono de gunicorn: si el entorno no habilita
-    # la exportación asíncrona se responde 503 al instante, sin encolar.
+    # El token firmado ata la tarea al usuario: solo él consulta su estado y la descarga
+    # (inventory/reportes_async.py). Si el entorno no levanta Redis y celery_worker, el
+    # flag queda apagado y se responde 503 al instante, sin intentar encolar.
     if not getattr(settings, "REPORTES_ASYNC_HABILITADO", False):
         return JsonResponse(_RESPUESTA_ASYNC_NO_DISPONIBLE, status=503)
 
@@ -172,7 +172,15 @@ def _encolar_exportacion(clean_path, params, report_format, user):
             exc,
         )
         return JsonResponse(_RESPUESTA_ASYNC_NO_DISPONIBLE, status=503)
-    return JsonResponse({"detail": "Reporte encolado para generación en background.", "task_id": task.id}, status=202)
+    token = firmar_tarea(task.id, user.id)
+    return JsonResponse(
+        {
+            "detail": "Reporte encolado para generación en background.",
+            "token": token,
+            "estado_url": url_de_estado(token),
+        },
+        status=202,
+    )
 
 
 def _respuesta_de_error_del_servicio(response, report_path):

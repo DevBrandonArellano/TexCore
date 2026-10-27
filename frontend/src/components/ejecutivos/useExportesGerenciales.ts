@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import { obtenerReporte } from '../../lib/reporteAsync';
 
 const descargarBlob = (blob: Blob, nombre: string) => {
   const url = window.URL.createObjectURL(blob);
@@ -28,7 +28,8 @@ export function useExportesGerenciales(filtroSedeId: string) {
     if (descargando) return;
     setDescargando(ruta);
     try {
-      const res = await apiClient.get(`/reporting/${ruta}`, { params: { ...params, format: 'xlsx' }, responseType: 'blob' });
+      // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
+      const res = await obtenerReporte(`/reporting/${ruta}`, { ...params, format: 'xlsx' });
       descargarBlob(res.data as Blob, nombre);
       toast.success('Reporte descargado');
     } catch {

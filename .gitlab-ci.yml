@@ -568,7 +568,7 @@ rollback:produccion:
         '{rollback: {motivo: $motivo, sha: $sha, quien: $quien}}'
     - |
       set -eu
-      SERVICIOS="db:db backend:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel"
+      SERVICIOS="db:db backend:backend celery_worker:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel"
       if [ -n "$ROLLBACK_SHA" ]; then
         ETIQUETA="$ROLLBACK_SHA"
         echo "==> Rollback a ${ETIQUETA}: verificando firma y descargando"

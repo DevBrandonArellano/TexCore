@@ -79,6 +79,7 @@ Completa cada valor del archivo. Cada variable está comentada en el propio ejem
 | `SCANNING_SERVICE_SECRET` / `REPORTING_SERVICE_SECRET` | `python3 -c "import secrets; print(secrets.token_urlsafe(40))"`, uno distinto para cada servicio |
 | `DB_PASSWORD` | Contraseña fuerte para la cuenta `sa` de SQL Server |
 | `MSSQL_PID` | Edición licenciada por la organización (`Standard` o `Enterprise`) |
+| `REDIS_PASSWORD` | `openssl rand -hex 24` — solo hexadecimal, porque va dentro de la URL del broker de Celery |
 
 Además:
 - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `TRAZABILIDAD_BASE_URL` usan el dominio o la IP real del servidor, con `https://`. El primer valor de `ALLOWED_HOSTS` es el que usa el `HEALTHCHECK` del backend.
@@ -290,7 +291,7 @@ tc up -d --wait
 - [ ] Servidor dimensionado según la sección 2, con IP estática y firewall (22, 80, 443).
 - [ ] `.env.prod` completo con `chmod 600`; secretos guardados en el gestor de la organización.
 - [ ] Certificado en `nginx/certs/`.
-- [ ] `scripts/deploy_production.sh` terminado sin errores y los 6 contenedores en `healthy`.
+- [ ] `scripts/deploy_production.sh` terminado sin errores y los 8 contenedores en `healthy` (los 6 de la aplicación más `redis` y `celery_worker`).
 - [ ] Contraseña inicial de `admin` anotada y cambiada.
 - [ ] `http://` responde 301 y `https://<host>/api/health/` responde `ok`.
 - [ ] Primera sede, sus áreas y equivalencias de empaque creadas; usuarios por rol creados.

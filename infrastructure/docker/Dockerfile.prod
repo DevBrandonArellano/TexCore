@@ -52,7 +52,8 @@ COPY --from=builder /app/wheels /wheels
 COPY . .
 
 # Asigna la propiedad de todos los archivos de la aplicación
-RUN chown -R appuser:appuser /home/appuser/app /wheels
+# reportes_async: el volumen con nombre hereda este dueño al crearse (lo escribe celery_worker).
+RUN mkdir -p /home/appuser/app/reportes_async && chown -R appuser:appuser /home/appuser/app /wheels
 
 # Cambia al usuario sin privilegios de root
 USER appuser

@@ -499,13 +499,21 @@ El backend espera a que el healthcheck sea exitoso antes de arrancar (`condition
 
 ---
 
-### 3.7 Redis y Celery (solo desarrollo)
+### 3.7 Redis y Celery (exportes pesados)
 
-El compose de desarrollo (`infrastructure/docker/docker-compose.yml`) levanta `redis` (`redis:6-alpine`) y `celery_worker` (mismo código que el backend, `celery -A TexCore worker`). Con `REPORTES_ASYNC_HABILITADO=true`, los exportes de reportes con `?async=true` se encolan en `gestion/tasks.py` (`async_export_report`).
+Los dos composes levantan `redis` y `celery_worker`. En producción (`docker-compose.prod.yml`):
 
-El compose de **producción no incluye Redis ni Celery**: `REPORTES_ASYNC_HABILITADO` queda en `false` y la API responde 503 a `?async=true`. El frontend no usa el modo asíncrono: todos los exportes se generan al momento.
+- **`redis`** (`redis:8.10.3-alpine`, fijado por digest) es el broker de Celery y guarda los resultados durante 24 h. Solo está en `internal_net`, no publica puertos y exige `REDIS_PASSWORD`. Usa AOF para no perder trabajos encolados si se reinicia, y `noeviction` para no descartar mensajes de la cola.
+- **`celery_worker`** corre la misma imagen que el backend (`celery -A TexCore worker`, como `appuser`) y solo está en `internal_net`: alcanza `db`, `redis` y `reporting_excel`. Su healthcheck es `celery inspect ping`.
 
----
+**Flujo** (`REPORTES_ASYNC_HABILITADO=true`):
+
+1. El frontend pide el reporte con `?async=true` (`frontend/src/lib/reporteAsync.ts`).
+2. El proxy (`inventory/reporting_proxy.py`) encola `gestion.tasks.async_export_report` y responde 202 con un token firmado. El token lleva el id de la tarea y el del usuario (`inventory/reportes_async.py`).
+3. El worker consulta los datos con el ORM, le pide el archivo a `reporting_excel` y lo deja en el volumen compartido `prod_reportes_async` (`REPORTES_ASYNC_DIR`). Cada ejecución borra los archivos con más de 24 h.
+4. El frontend consulta `GET /api/reporting/tareas/<token>/` (`en_proceso` · `listo` · `error`) y descarga `GET /api/reporting/tareas/<token>/descarga/`. Un token ajeno, alterado o vencido responde 404; si la tarea no terminó, 409; si el archivo ya se limpió, 410.
+
+Usan la cola los exportes gerenciales (`useExportesGerenciales`) y los de Admin Sistemas (`useReportesExport`). Los del Vendedor, que son chicos, siguen siendo síncronos. Si Redis no responde, encolar devuelve 503 en menos de un segundo (reintentos del broker y del result backend acotados en `TexCore/settings.py`), y el frontend pide el mismo reporte en modo síncrono.
 
 ### 3.8 Frontend (React SPA)
 

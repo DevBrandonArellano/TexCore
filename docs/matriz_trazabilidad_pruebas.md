@@ -306,6 +306,18 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Capas sin ciclos: ningún módulo de `services/` ni de `serializers/` importa de `gestion.views`; `gestion/params.py` es neutral; el reexport de `views/_common.py` sigue sirviendo (defecto 58) † | `gestion/tests/test_capas_sin_ciclos.py` | EP, estática | ✅ |
 | Frontend: panel con totales, resumen y detalle; rango por omisión de 30 días; atajos de mantenimiento y averías; cambio de fechas y de máquina; paro en curso y paro automático marcados; rango vacío; error de carga con reintento; impresión con los filtros vigentes y fallo del servicio; paginación † | `HistorialMantenimientoPanel.test.tsx`, `mantenimientoApi.test.ts` | EP, BVA | ✅ |
 
+### Exportes pesados por la cola Celery + Redis (27-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `async_export_report`: guarda el archivo con el id de la tarea (escritura atómica), con extensión `xlsx` o `csv`, nombre de `Content-Disposition` y marca de reporte vacío; borra solo los archivos más viejos que el TTL de 24 h † | `gestion/tests/test_tasks.py` | EP, BVA | ✅ |
+| Token firmado de la tarea: el mismo usuario lo lee; otro usuario, un token alterado o uno vencido → `None` † | `inventory/tests/test_reportes_async.py` | EP, caja blanca | ✅ |
+| `GET /api/reporting/tareas/<token>/`: pendiente o reintentando → `en_proceso`; éxito → `listo` con la URL de descarga; resultado `FAILURE` o excepción → `error`; token ajeno → 404 sin consultar Celery; sin sesión → 401 † | `inventory/tests/test_reportes_async.py` | EP, STT | ✅ |
+| `GET .../descarga/`: lista → 200 con el archivo y las cabeceras; en proceso o con fallo → 409; archivo limpiado → 410; token inválido → 404; la ruta sale solo del id de la tarea, aunque el resultado guardado traiga otra † | `inventory/tests/test_reportes_async.py` | Tabla de decisión, EP | ✅ |
+| Encolar con `?async=true` responde 202 con el token y la URL de estado, sin `task_id` suelto; con Redis inalcanzable, el broker y el result backend fallan en menos de 5 s (antes, 25,7 s medidos en el stack) † | `inventory/tests/test_reporting_proxy_extra.py`, `inventory/tests/test_reportes_async.py` | EP, BVA | ✅ |
+| `docker-compose.prod.yml`: `redis` fijado por digest, con clave obligatoria (`${REDIS_PASSWORD:?…}`), sin puertos y solo en `internal_net`; `celery_worker` con la imagen del backend, sin root y con healthcheck; los dos comparten broker, flag y volumen; el despliegue, el staging efímero y el rollback le asignan al worker la imagen del backend † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Frontend `obtenerReporte`: encola, consulta el estado y descarga; si recibe 503, modo síncrono; un 403 se propaga; error de la tarea o espera agotada → `ErrorReporteAsync`; `alAvanzar` informa `en_cola` y `descargando`, solo en modo cola † | `lib/reporteAsync.test.ts` | EP, BVA, STT | ✅ |
+
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
 Cierre de los criterios abiertos en `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md`. Las marcadas con † fallan contra `HEAD`.
@@ -595,7 +607,8 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | Brechas del código nuevo y convención de nombres (2-oct-2026, SQLite local) | 91.3% | 1478 ✅ |
 | CI/CD Fase 2 y Ruff Etapas 1-3 (5-oct-2026, SQLite local) | 91.2% | 1490 ✅ |
 | Ruff Etapa 4: DJ001, DJ012 y C901 (5-oct-2026, SQLite local, igual que el CI con `.coveragerc`) | **91.8%** | **1530 ✅** |
-| Validación con topes de memoria del CI (26-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.5%** | **1944 ✅** |
+| Validación con topes de memoria del CI (26-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.5% | 1944 ✅ |
+| Exportes por la cola Celery + Redis (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.6%** | **1971 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).

@@ -93,8 +93,11 @@ class ReportingProxyViewExtraTestCase(TestCase):
         mock_post.assert_not_called()
 
     @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
     @patch("gestion.tasks.async_export_report.delay")
-    def test_get_dado_modo_async_cuando_get_entonces_202_y_no_llama_httpx(self, mock_delay):
+    def test_get_dado_modo_async_cuando_get_entonces_202_con_token_y_url_de_estado_sin_llamar_httpx(self, mock_delay):
+        from inventory.reportes_async import leer_tarea
+
         admin = User.objects.create_user(username="admin_qa3", password="x", is_superuser=True)
         self.client.force_authenticate(user=admin)
         mock_delay.return_value = MagicMock(id="task-123")
@@ -104,7 +107,10 @@ class ReportingProxyViewExtraTestCase(TestCase):
             mock_post.assert_not_called()
 
         self.assertEqual(resp.status_code, 202)
-        self.assertEqual(resp.json()["task_id"], "task-123")
+        cuerpo = resp.json()
+        self.assertEqual(leer_tarea(cuerpo["token"], admin.id), "task-123")
+        self.assertEqual(cuerpo["estado_url"], f"/api/reporting/tareas/{cuerpo['token']}/")
+        self.assertNotIn("task_id", cuerpo)
 
     @override_settings(REPORTES_ASYNC_HABILITADO=True)
     @patch("gestion.tasks.async_export_report.delay")

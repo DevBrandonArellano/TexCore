@@ -30,6 +30,8 @@ declare -A REFERENCIA
 while IFS='=' read -r servicio referencia; do
     [ -n "$servicio" ] && REFERENCIA[$servicio]="$referencia"
 done < "$IMAGENES"
+# celery_worker no tiene imagen propia: corre la del backend.
+REFERENCIA[celery_worker]="${REFERENCIA[backend]}"
 {
     echo "services:"
     for servicio in "${!REFERENCIA[@]}"; do
@@ -44,7 +46,7 @@ compose() { docker compose -p "$PROYECTO" -f "$COMPOSE_FILE" -f "$OVERRIDE" --en
 
 echo "[1/6] Respaldando como :backup las imágenes en ejecución (para rollback:produccion)..."
 # servicio del compose:nombre de su imagen
-for par in db:db backend:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel; do
+for par in db:db backend:backend celery_worker:backend nginx:nginx printing:printing_service scanning:scanning_service reporting_excel:reporting_excel; do
     servicio="${par%%:*}"; imagen="${par#*:}"
     actual=$(docker inspect --format '{{.Config.Image}}' "texcore-prod-${servicio}-1" 2>/dev/null || true)
     if [ -n "$actual" ]; then

@@ -68,6 +68,42 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Celery y Redis en producción para los exportes pesados (sin commitear)
+
+A pedido del usuario, la cola asíncrona pasa a producción con el flujo completo. Hasta hoy la tarea generaba el Excel y lo descartaba (solo devolvía `SUCCESS`), y no había forma de consultar el `task_id` ni de descargar el archivo.
+
+**Infraestructura (`docker-compose.prod.yml`):**
+- `redis` (8.10.3, fijado por digest): solo en `internal_net`, sin puertos, con `REDIS_PASSWORD`, AOF y `noeviction`.
+- `celery_worker`: la imagen del backend, como `appuser`, con healthcheck `celery inspect ping`.
+- Volumen compartido `prod_reportes_async`. `Dockerfile.prod` crea el directorio para que el volumen nazca con dueño `appuser`.
+- El worker no tiene imagen propia: `desplegar_release.sh`, `staging_efimero.sh` y `rollback:produccion` le asignan la del backend.
+- Variable nueva en `.env.prod.example`: `REDIS_PASSWORD`. El compose la usa como `${REDIS_PASSWORD:?…}`: si falta, el despliegue aborta, en vez de levantar Redis sin clave.
+
+**Backend:**
+- `gestion/tasks.py`: la tarea guarda el archivo (escritura atómica) y borra los que tienen más de 24 h.
+- `inventory/reportes_async.py`: token firmado (tarea + usuario) y dos vistas, `GET /api/reporting/tareas/<token>/` (estado) y `.../descarga/`. Respuestas: 404 si el token es ajeno o inválido, 409 si la tarea no terminó, 410 si el archivo se limpió.
+- `TexCore/settings.py`: reintentos acotados en el broker y en el result backend. Con Redis caído, encolar tardaba 25,7 s en devolver el 503 (medido en el stack) y bloqueaba un worker de gunicorn; ahora tarda 0,49 s.
+
+**Frontend:**
+- `frontend/src/lib/reporteAsync.ts`: encola, consulta el estado cada 1,5 s y descarga. Si recibe 503, pide el reporte en modo síncrono.
+- Lo usan `useExportesGerenciales` y `useReportesExport`. El Vendedor sigue siendo síncrono.
+
+**Verificación:**
+- Pruebas:
+  - Backend: 1971 tests OK sobre SQL Server, cobertura 92,6 %. Nuevas: `inventory/tests/test_reportes_async.py`, archivo y limpieza en `test_tasks.py`, `ColaAsincronaProduccionTest` y la prueba de tiempo con broker inalcanzable.
+  - Frontend: 1988 tests OK, ramas al 90,23 %, lint limpio.
+  - ruff y mypy limpios.
+  - detect-secrets: sin secretos nuevos (la línea base solo actualizó un número de línea).
+- Stack `texcore-prod` con `texcore-local/*:celery-1027`: 8/8 contenedores `healthy`.
+  - Flujo de punta a punta por HTTPS: 202, `listo`, y un Excel de 304 KB.
+  - Token alterado: 404. Sin sesión: 401.
+  - Redis sin clave: `NOAUTH`.
+  - Con Redis detenido: el modo asíncrono da 503 en 0,49 s y el síncrono sigue en 200; al volver Redis, el worker se reconecta solo.
+
+**Pendiente:**
+- Medir `celery_worker` y `redis` bajo carga; hoy usan los límites por defecto (`REQUISITOS_INFRAESTRUCTURA.md`).
+- Agregar `REDIS_PASSWORD` al `.env.prod` del servidor real antes del próximo despliegue.
+
 ### 27 de Octubre de 2026 — Parcheo de seguridad por la oleada de CVE de octubre (sin commitear)
 
 Del 14 al 21 de octubre salieron parches críticos para GitLab, Node.js, Redis, Next.js y PHP. TexCore no usa Next.js ni PHP (`next-themes` es solo una librería de temas). Todas las imágenes quedan fijadas por versión y digest, como pide `renovate.json`.

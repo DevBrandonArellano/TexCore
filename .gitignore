@@ -74,3 +74,6 @@ graphify-out/.graphify_detect.json
 graphify-out/.graphify_incremental.json
 graphify-out/.graphify_old.json
 graphify-out/.graphify_uncached*.txt
+
+# Archivos de las exportaciones asíncronas (gestion/tasks.py)
+reportes_async/

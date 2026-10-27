@@ -33,6 +33,12 @@ Maintainer, las despliega por digest desde el runner propio del servidor (sin SS
 rollback es otro job manual del mismo pipeline y usa el mismo runner. GitLab es la
 plataforma principal (ADR-014); GitHub Actions se retiró y GitHub queda como espejo.
 
+Cola asíncrona en producción (27-oct-2026): el compose de producción levanta `redis`
+(con contraseña, solo en la red interna y fijado por digest) y `celery_worker` (la misma
+imagen del backend). Las exportaciones pesadas se generan en el worker y se descargan
+del volumen compartido `prod_reportes_async`. El worker no tiene imagen propia: el
+despliegue, el staging efímero y el rollback le asignan la del backend.
+
 Las pruebas leen los archivos; el despliegue real se verifica con el stack en el equipo
 con Docker.
 
@@ -106,18 +112,21 @@ def _servicios_usados(script: Path) -> set[str]:
 
 def _variables_del_compose():
     texto = COMPOSE_PROD.read_text(encoding="utf-8")
-    obligatorias = set(re.findall(r"\$\{(\w+)\}", texto))
+    # `${VAR}` y `${VAR:?mensaje}` (esta última aborta el despliegue si falta).
+    obligatorias = set(re.findall(r"\$\{(\w+)(?:\}|:\?)", texto))
     opcionales = set(re.findall(r"\$\{(\w+):-", texto))
     return obligatorias, opcionales
 
 
 def _imagenes_del_compose():
-    """{servicio: nombre de imagen}, de `image: ${CI_REGISTRY_IMAGE}/<nombre>:${TAG}`."""
+    """{servicio: nombre de imagen}, de `image: ${CI_REGISTRY_IMAGE}/<nombre>:${TAG}`.
+
+    Solo las imágenes propias del release; las de terceros (redis) van fijadas por digest."""
     servicios = yaml.safe_load(COMPOSE_PROD.read_text(encoding="utf-8"))["services"]
     return {
         nombre: re.fullmatch(r"\$\{CI_REGISTRY_IMAGE\}/(\w+):\$\{TAG\}", cfg["image"]).group(1)
         for nombre, cfg in servicios.items()
-        if "image" in cfg
+        if cfg.get("image", "").startswith("${CI_REGISTRY_IMAGE}/")
     }
 
 
@@ -420,8 +429,8 @@ class ContenedoresEndurecidosTest(SimpleTestCase):
         self.assertTrue(config["dockerfile"]["pinDigests"] if "dockerfile" in config else config["pinDigests"])
 
 
-def _entorno_backend(compose: Path) -> dict:
-    entorno = yaml.safe_load(compose.read_text(encoding="utf-8"))["services"]["backend"].get("environment", [])
+def _entorno_backend(compose: Path, servicio: str = "backend") -> dict:
+    entorno = yaml.safe_load(compose.read_text(encoding="utf-8"))["services"][servicio].get("environment", [])
     if isinstance(entorno, dict):
         return {k: str(v) for k, v in entorno.items()}
     return dict(item.split("=", 1) for item in entorno)
@@ -524,3 +533,60 @@ class GobiernoTest(SimpleTestCase):
         for seccion in ("Reportar una vulnerabilidad", "Rotación de secretos", "Revisión trimestral"):
             with self.subTest(seccion=seccion):
                 self.assertIn(seccion, texto)
+
+
+def _servicio_prod(nombre: str) -> dict:
+    return yaml.safe_load(COMPOSE_PROD.read_text(encoding="utf-8"))["services"][nombre]
+
+
+class ColaAsincronaProduccionTest(SimpleTestCase):
+    def test_compose_produccion_dado_exportes_pesados_cuando_se_lee_entonces_levanta_redis_y_el_worker(self):
+        self.assertLessEqual({"redis", "celery_worker"}, _servicios_del_compose())
+
+    def test_redis_dado_produccion_cuando_se_lee_entonces_fijado_por_digest_con_clave_y_sin_puertos(self):
+        redis = _servicio_prod("redis")
+        self.assertRegex(redis["image"], r"^redis:8[\w.-]*@sha256:[0-9a-f]{64}$")
+        self.assertNotIn("ports", redis)  # solo la red interna lo alcanza
+        self.assertEqual(redis["networks"], ["internal_net"])
+        comando = redis["command"]
+        self.assertIn("--requirepass", " ".join(comando) if isinstance(comando, list) else comando)
+        self.assertIn("healthcheck", redis)
+
+    def test_worker_dado_produccion_cuando_se_lee_entonces_usa_la_imagen_del_backend_sin_root_ni_puertos(self):
+        worker = _servicio_prod("celery_worker")
+        self.assertEqual(worker["image"], _servicio_prod("backend")["image"])
+        self.assertEqual(worker["user"], "appuser")
+        self.assertNotIn("ports", worker)
+        self.assertIn("celery -A TexCore worker", worker["command"])
+        self.assertIn("healthcheck", worker)
+        self.assertEqual(worker["depends_on"]["redis"]["condition"], "service_healthy")
+
+    def test_backend_y_worker_dado_cola_cuando_se_lee_entonces_comparten_broker_flag_y_directorio(self):
+        backend = _entorno_backend(COMPOSE_PROD)
+        worker = _entorno_backend(COMPOSE_PROD, "celery_worker")
+        self.assertEqual(backend["REPORTES_ASYNC_HABILITADO"], "true")
+        for variable in ("CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "REPORTES_ASYNC_DIR"):
+            with self.subTest(variable=variable):
+                self.assertEqual(backend[variable], worker[variable])
+        self.assertRegex(backend["CELERY_BROKER_URL"], r"^redis://:\$\{REDIS_PASSWORD:\?[^}]*\}@redis:6379/0$")
+        montaje = f"prod_reportes_async:{backend['REPORTES_ASYNC_DIR']}"
+        self.assertIn(montaje, _servicio_prod("backend")["volumes"])
+        self.assertIn(montaje, _servicio_prod("celery_worker")["volumes"])
+
+    def test_imagen_backend_dado_volumen_nuevo_cuando_se_monta_entonces_el_directorio_es_de_appuser(self):
+        # Un volumen con nombre vacío copia el dueño del directorio de la imagen: si no existe,
+        # queda de root y el worker (appuser) no puede escribir los reportes.
+        texto = DOCKERFILES_PRODUCCION["backend"].read_text(encoding="utf-8")
+        self.assertRegex(texto, r"mkdir -p /home/appuser/app/reportes_async")
+
+    def test_despliegues_dado_worker_sin_imagen_propia_cuando_arman_el_override_entonces_le_dan_la_del_backend(self):
+        for script in (DESPLEGAR_RELEASE, STAGING_EFIMERO):
+            with self.subTest(script=script.name):
+                self.assertIn('REFERENCIA[celery_worker]="${REFERENCIA[backend]}"', script.read_text(encoding="utf-8"))
+        self.assertIn("celery_worker:backend", _script(_pipeline()["rollback:produccion"]))
+
+    def test_redis_dado_env_prod_sin_clave_cuando_despliega_entonces_aborta_en_vez_de_arrancar_sin_clave(self):
+        # Con `${REDIS_PASSWORD}` y la variable ausente, compose pone "" y Redis queda sin clave.
+        texto = COMPOSE_PROD.read_text(encoding="utf-8")
+        self.assertNotIn("${REDIS_PASSWORD}", texto)
+        self.assertIn("${REDIS_PASSWORD:?", texto)

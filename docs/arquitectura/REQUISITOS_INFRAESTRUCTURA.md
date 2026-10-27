@@ -33,6 +33,8 @@ Los recursos se fijan en el `.env.prod` del servidor (plantilla: `.env.prod.exam
 | `BACKEND_WORKERS` | 20 | 20 |
 | Resultado RNF-03 | ✅ p95 del escaneo de 89 ms, del panel de planta de 220 ms y del kárdex de 610 ms | ✅ p95 del escaneo de 200 ms, del panel de planta de 380 ms y del kárdex de 390 ms |
 
+**Cola de exportes pesados** (`redis` y `celery_worker`): por ahora usan los límites por defecto del compose, que **no se midieron bajo carga**. Los valores son `CELERY_CONCURRENCY=2`, `CELERY_CPUS=1`, `CELERY_MEMORY_LIMIT_MB=1024`, `REDIS_MAXMEMORY_MB=128` y `REDIS_MEMORY_LIMIT_MB=256`. Medido en reposo (27-oct): worker 158 MB, Redis 10 MB.
+
 **Picos medidos por contenedor** (CPU: 100 % equivale a un núcleo; RAM en uso):
 
 | Contenedor | 100 usuarios | 250 usuarios |

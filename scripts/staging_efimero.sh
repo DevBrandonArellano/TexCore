@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # TEXCORE — STAGING EFÍMERO
-# Levanta las 6 imágenes de un release con el compose de producción y un SQL Server
+# Levanta las 6 imágenes de un release (más redis y celery_worker) con el compose de producción y un SQL Server
 # desechable, prepara la base desde cero, siembra los usuarios demo por rol y corre las
 # pruebas de humo (scripts/smoke_test.py). Al terminar, borra contenedores, volúmenes y
 # secretos: no queda nada.
@@ -56,6 +56,7 @@ INTERNAL_JWT_PRIVATE_KEY=$(una_linea "$TMP/jwt.key")
 INTERNAL_JWT_PUBLIC_KEY=$(una_linea "$TMP/jwt.pub")
 SCANNING_SERVICE_SECRET=$(aleatorio 24)
 REPORTING_SERVICE_SECRET=$(aleatorio 24)
+REDIS_PASSWORD=$(aleatorio 24)
 DB_CPUS=2
 DB_MEMORY_LIMIT_MB=2048
 BACKEND_CPUS=2
@@ -69,6 +70,8 @@ declare -A REFERENCIA
 while IFS='=' read -r servicio referencia; do
     [ -n "$servicio" ] && REFERENCIA[$servicio]="$referencia"
 done < "$IMAGENES"
+# celery_worker no tiene imagen propia: corre la del backend.
+REFERENCIA[celery_worker]="${REFERENCIA[backend]}"
 {
     echo "services:"
     for servicio in "${!REFERENCIA[@]}"; do
@@ -86,7 +89,7 @@ compose up -d --wait db
 echo "[3/6] Preparando la base desde cero (todas las migraciones)..."
 compose run --rm --no-deps backend sh infrastructure/docker/preparar_bd.sh
 
-echo "[4/6] Levantando los 6 servicios..."
+echo "[4/6] Levantando los servicios..."
 compose up -d --wait --wait-timeout 900
 
 echo "[5/6] Sembrando maestros y usuarios demo por rol..."
