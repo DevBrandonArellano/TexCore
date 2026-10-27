@@ -83,7 +83,7 @@ Completa cada valor del archivo. Cada variable está comentada en el propio ejem
 
 Además:
 - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `TRAZABILIDAD_BASE_URL` usan el dominio o la IP real del servidor, con `https://`. El primer valor de `ALLOWED_HOSTS` es el que usa el `HEALTHCHECK` del backend.
-- Los recursos (`DB_CPUS`, `BACKEND_WORKERS`…) vienen con los valores medidos para 100 usuarios.
+- Los recursos (`DB_CPUS`, `BACKEND_WORKERS`, `CELERY_*`…) vienen con los valores medidos para el uso previsto: 50 personas conectadas y unas 10 trabajando a la vez, validado con 20. Para más usuarios, ver `REQUISITOS_INFRAESTRUCTURA.md` §3.2.
 
 Guarda las claves y contraseñas en el gestor de secretos de la organización. `.env.prod` está en `.gitignore`: nunca se versiona.
 

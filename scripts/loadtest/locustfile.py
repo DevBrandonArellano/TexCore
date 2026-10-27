@@ -66,6 +66,11 @@ ROLES = [
     "vendedor",
 ]
 PREFIJO_USUARIOS = os.environ.get("LOADTEST_PREFIJO_USUARIOS", "user_")
+# Exportes del ejecutivo: por la cola Celery + Redis (como el frontend desde el 27-oct) o
+# síncronos (LOADTEST_EXPORTES=sync), para comparar los dos modos con la misma carga.
+EXPORTES_ASINCRONOS = os.environ.get("LOADTEST_EXPORTES", "async") != "sync"
+_INTERVALO_CONSULTA_SEGUNDOS = 1.5
+_CONSULTAS_MAXIMAS = 200
 ROLE_USERS = {rol: f"{PREFIJO_USUARIOS}{rol}" for rol in ROLES}
 DEMO_PASSWORD = "password123"
 
@@ -212,6 +217,12 @@ class _UsuarioRolBase(HttpUser):
         self.client.verify = _VERIFICAR_TLS
         for name, value in cookies.items():
             self.client.cookies.set(name, value)
+        # Igual que el navegador: por HTTPS, Django exige un Referer del mismo origen en las
+        # escrituras (el sitio envía Referrer-Policy: strict-origin-when-cross-origin), y
+        # CookieJWTAuthentication exige el token CSRF, que axios copia de la cookie csrftoken.
+        self.client.headers["Referer"] = f"{self.host}/"
+        if "csrftoken" in cookies:
+            self.client.headers["X-CSRFToken"] = cookies["csrftoken"]
 
 
 # ---------------------------------------------------------------------------
@@ -541,10 +552,55 @@ class EjecutivoUser(_UsuarioRolBase):
                 "produccion/tendencia",
             ]
         )
+        if EXPORTES_ASINCRONOS:
+            self._exportar_por_la_cola(ruta)
+            return
         self.client.get(
             f"/api/reporting/{ruta}",
             params={"format": "xlsx"},
             name=f"/api/reporting/{ruta} (export)",
+        )
+
+    def _exportar_por_la_cola(self, ruta):
+        """Igual que frontend/src/lib/reporteAsync.ts: encola, consulta el estado cada
+        1,5 s y descarga. Además registra el tiempo total que espera el usuario."""
+        inicio = time.perf_counter()
+        with self.client.get(
+            f"/api/reporting/{ruta}",
+            params={"format": "xlsx", "async": "true"},
+            name=f"/api/reporting/{ruta} (encolar)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code != 202:
+                resp.failure(f"se esperaba 202 al encolar, llegó {resp.status_code}")
+                return
+            token = resp.json()["token"]
+
+        base = f"/api/reporting/tareas/{token}/"
+        estado = "en_proceso"
+        for _ in range(_CONSULTAS_MAXIMAS):
+            time.sleep(_INTERVALO_CONSULTA_SEGUNDOS)
+            with self.client.get(base, name="/api/reporting/tareas/[token]/ (estado)", catch_response=True) as resp:
+                estado = resp.json().get("estado") if resp.ok else "error"
+            if estado != "en_proceso":
+                break
+
+        error = None
+        largo = 0
+        if estado == "listo":
+            resp = self.client.get(f"{base}descarga/", name="/api/reporting/tareas/[token]/descarga/")
+            largo = len(resp.content)
+            if not resp.ok:
+                error = RuntimeError(f"descarga {resp.status_code}")
+        else:
+            error = RuntimeError(f"la tarea terminó en '{estado}'")
+        events.request.fire(
+            request_type="COLA",
+            name=f"{ruta} (export asíncrono, total)",
+            response_time=(time.perf_counter() - inicio) * 1000,
+            response_length=largo,
+            exception=error,
+            context={},
         )
 
 

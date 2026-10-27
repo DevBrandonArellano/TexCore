@@ -13,7 +13,7 @@ services:
     # Límites de recursos ajustables por servidor — ver DB_CPUS/
     # DB_MEMORY_LIMIT_MB en .env (no editar estos valores aquí).
     cpus: ${DB_CPUS:-2}
-    mem_limit: ${DB_MEMORY_LIMIT_MB:-4096}m
+    mem_limit: ${DB_MEMORY_LIMIT_MB:-2048}m
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
@@ -23,7 +23,7 @@ services:
       # Debe coincidir con mem_limit de arriba — si SQL Server cree que
       # tiene más RAM de la que Docker le da, queda "atorado" (ver
       # auditoría de performance 2026-08-31).
-      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
+      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-2048}
     restart: always
     expose:
       - "1433"
@@ -54,13 +54,13 @@ services:
     # crece la RSS del contenedor sin techo — al afinar BACKEND_WORKERS al
     # mínimo viable (auditoría de performance 2026-08-31) hace falta este
     # límite para no reventar la RAM real del servidor.
-    cpus: ${BACKEND_CPUS:-2}
-    mem_limit: ${BACKEND_MEMORY_LIMIT_MB:-2048}m
+    cpus: ${BACKEND_CPUS:-1}
+    mem_limit: ${BACKEND_MEMORY_LIMIT_MB:-1024}m
     # Sobreescribe el CMD fijo de Dockerfile.prod (gunicorn --workers 3) con
     # uno parametrizado. La regla (2 x CPU) + 1 se queda corta: el tráfico espera
     # sobre todo a SQL Server. Valores medidos (20 workers con 3 CPU) en
     # docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md.
-    command: gunicorn --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
+    command: gunicorn --workers ${BACKEND_WORKERS:-4} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     environment:
       - SECRET_KEY=${SECRET_KEY}
       # RS-19: cifrado de datos personales en reposo. Si se pierden, los datos
@@ -117,10 +117,10 @@ services:
     command:
       - sh
       - -c
-      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --save "" --maxmemory ${REDIS_MAXMEMORY_MB:-128}mb --maxmemory-policy noeviction
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --save "" --maxmemory ${REDIS_MAXMEMORY_MB:-64}mb --maxmemory-policy noeviction
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Falta REDIS_PASSWORD en .env.prod}
-    mem_limit: ${REDIS_MEMORY_LIMIT_MB:-256}m
+    mem_limit: ${REDIS_MEMORY_LIMIT_MB:-128}m
     volumes:
       - prod_redis_data:/data
     healthcheck:
@@ -139,7 +139,7 @@ services:
     user: appuser
     command: celery -A TexCore worker -l INFO --concurrency ${CELERY_CONCURRENCY:-2} --max-tasks-per-child 50
     cpus: ${CELERY_CPUS:-1}
-    mem_limit: ${CELERY_MEMORY_LIMIT_MB:-1024}m
+    mem_limit: ${CELERY_MEMORY_LIMIT_MB:-512}m
     # El HEALTHCHECK de la imagen consulta gunicorn, que el worker no corre.
     healthcheck:
       test: ["CMD-SHELL", "celery -A TexCore inspect ping -d celery@$$HOSTNAME --timeout 10 | grep -q pong"]

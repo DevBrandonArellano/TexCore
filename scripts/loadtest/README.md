@@ -44,8 +44,8 @@ export TAG=stress-test
 docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env build
 docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env up -d
 ```
-`docker-compose.prod.yml` no incluye `frontend`/`celery_worker`/`redis`
-(no hacen falta para probar la API vía Locust) y usa un volumen de BD propio
+`docker-compose.prod.yml` incluye `celery_worker` y `redis` (exportes pesados
+por la cola, desde el 27-oct-2026; requiere `REDIS_PASSWORD` en `.env`) y usa un volumen de BD propio
 (`texcore-prod_mssql_data`, project name `-p texcore-prod`) — no comparte
 datos con el stack de desarrollo. Sembrar con `docker exec
 texcore-prod-backend-1 python manage.py stress_test_data ...` /
@@ -124,6 +124,23 @@ pip install locust
    `internal_api/views/reporting_views.py` e índices). Repetir el mismo
    comando después de aplicar los fixes, con `--csv=scripts/loadtest/resultado_post_fix`,
    y comparar.
+
+## Uso previsto: 10 usuarios simultáneos (27-oct-2026)
+
+Uso previsto: 50 personas conectadas y unas 10 trabajando a la vez. Se valida con 10 y con 20 usuarios contra la empresa 1 de `simular_operacion`, por HTTPS:
+
+```bash
+LOADTEST_PREFIJO_USUARIOS=e1_ LOADTEST_CA_BUNDLE=nginx/certs/nginx-selfsigned.crt \
+  locust -f scripts/loadtest/locustfile.py --host=https://localhost \
+  --users 10 --spawn-rate 10 --run-time 6m --headless --csv-full-history \
+  --csv=scripts/loadtest/resultados/dim_C_10_<fecha>
+```
+
+- **Exportes del ejecutivo:** por defecto van por la cola (`LOADTEST_EXPORTES=async`), igual que el frontend. Encolan, consultan el estado cada 1,5 s y descargan; la fila `COLA … (export asíncrono, total)` mide la espera completa del usuario. Con `LOADTEST_EXPORTES=sync` se repite el modo anterior, para comparar.
+- **Certificado:** debe traer `subjectAltName` para el host que se prueba, porque Python no acepta solo el `CN`. El de `nginx/certs` lo trae para `localhost`, `127.0.0.1` y `192.168.1.55`.
+- **CSRF:** cada usuario virtual envía `Referer` del mismo origen y `X-CSRFToken` (de la cookie `csrftoken` del login), como el navegador. Sin eso, por HTTPS, toda escritura recibe 403 «CSRF Failed: Referer checking failed».
+
+Resultados y dimensionamiento: `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` §3.1.
 
 ## Cómo leer los resultados
 

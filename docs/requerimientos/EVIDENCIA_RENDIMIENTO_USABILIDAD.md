@@ -1,6 +1,6 @@
 # Evidencia de rendimiento y usabilidad — TexCore
 
-> **Versión medida:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026
+> **Versión medida:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha de medición:** 8-oct-2026 (100 y 250 usuarios) y 27-oct-2026 (uso previsto, §3.5, con exportes por Celery y Redis)
 > **Vigencia:** revisada contra la versión actual de `MES` (migraciones hasta `gestion/0009`, 14-oct-2026). Lo añadido desde la medición no toca las rutas medidas; el §5 incluye el tiempo de la migración `0009`.
 > **Propósito:** respaldar el paso a producción, contrastando el sistema con los requisitos de la tesis.
 > **Requisitos contrastados:** RNF-03 (Tabla 8), RNF-05 (Tabla 10) y la DoD del Sprint 7 (Tabla 14).
@@ -17,8 +17,8 @@
 
 | Elemento | Detalle |
 |---|---|
-| Despliegue | `infrastructure/docker/docker-compose.prod.yml`, la configuración de producción: Nginx, Django/DRF con Gunicorn (20 workers), scanning_service, printing_service, reporting_excel y SQL Server 2022, cada uno en su contenedor |
-| Recursos | Backend 3 CPU / 3 GB. Base de datos 3 CPU / 3 GB (escenario de 100 usuarios) o 6 CPU / 6 GB (escenario de 250) |
+| Despliegue | `infrastructure/docker/docker-compose.prod.yml`, la configuración de producción: Nginx, Django/DRF con Gunicorn, `celery_worker` y Redis (§3.5), scanning_service, printing_service, reporting_excel y SQL Server 2022, cada uno en su contenedor |
+| Recursos | Uso previsto (§3.5): base de datos 2 CPU / 2 GB, backend 1 CPU / 1 GB con 4 workers, `celery_worker` 1 CPU / 0,5 GB con 2 procesos, y Redis. Escenarios de 100 y 250 usuarios: backend 3 CPU / 3 GB y base de datos 3 CPU / 3 GB o 6 CPU / 6 GB |
 | Base de datos | SQL Server 2022 con 3 años de operación simulada de 4 empresas (1000 t/año cada una): 25 222 lotes, ~290 000 movimientos de inventario y ~1 000 000 de registros de auditoría |
 | Generador de carga | Locust 2.46.6, `scripts/loadtest/locustfile.py`. Usuarios virtuales repartidos entre los **11 roles** del sistema, cada uno ejecutando solo las acciones que su rol permite: lectura, registro de lotes, transferencias, pedidos, escaneo y despacho |
 | Perfil de carga | Arranque de 10 usuarios/s y 6 minutos por corrida |
@@ -55,16 +55,35 @@ Para el escenario de 250 usuarios, que Locust genera desde **una sola IP**, se e
 ### 3.3 Integridad del inventario bajo concurrencia
 
 Al terminar todas las corridas se verificó sobre la base completa:
-- **stock = kárdex** en 51 994 combinaciones de bodega, producto y lote, sin descuadres;
+- **stock = kárdex** en 52 123 combinaciones de bodega, producto y lote, sin descuadres;
 - **0 saldos negativos** en stock y en movimientos.
 
 Las operaciones concurrentes de despacho y transferencia no generan inconsistencias.
 
 ### 3.4 Exportación de reportes
 
-La tesis no fija un umbral para las exportaciones a Excel (`reporting_excel`):
-- con 100 usuarios, p50 de 2,4 s y máximo de 5,5 s (reporte de lotes de producción);
-- con 250 usuarios, la exportación de lotes llega a un p50 de 11 s, porque el servicio corre en un solo proceso.
+La tesis no fija un umbral para las exportaciones a Excel. Los exportes pesados se generan en la cola (`celery_worker` + Redis) y el usuario los descarga al terminar:
+- con el uso previsto (§3.5), cada exporte tarda, de que se pide a que se descarga, **1,5 s de p50 y 3,0 s como máximo**, con 0 exportes fallidos;
+- en modo síncrono, con 100 usuarios, el p50 era de 2,4 s y el máximo de 5,5 s; con 250, la exportación de lotes llegaba a un p50 de 11 s, porque `reporting_excel` corre en un solo proceso.
+
+### 3.5 Uso previsto: 10 usuarios simultáneos (base de datos 2 CPU / 2 GB)
+
+Uso previsto: 50 personas conectadas, de las cuales unas 10 trabajan a la vez. Se validó también con 20, el doble.
+
+| Criterio | 10 usuarios | 20 usuarios | Resultado |
+|---|---|---|---|
+| Escaneo QR en bodega < 2500 ms | p95 **37 ms** · máx. **219 ms** (63) | p95 **32 ms** · máx. **54 ms** (91) | ✅ **Cumple** |
+| Panel del Jefe de Planta < 3 s | p95 **62 ms** · máx. **76 ms** (41) | p95 **99 ms** · máx. **258 ms** (84) | ✅ **Cumple** |
+| Kárdex por bodega < 3 s | p95 **68 ms** · máx. **68 ms** (19) | p95 **91 ms** · máx. **182 ms** (36) | ✅ **Cumple** |
+| Consulta más lenta de inventario o producción < 3 s | máx. **284 ms** | máx. **565 ms** | ✅ **Cumple** |
+
+Entre paréntesis, la cantidad de peticiones.
+
+**Resultado global:**
+- 10 usuarios: 1 347 peticiones, **0,45 % de error**, p50 de 25 ms y p95 de 170 ms.
+- 20 usuarios: 2 571 peticiones, **0,62 % de error**, p50 de 26 ms y p95 de 190 ms.
+- Todos los errores son rechazos correctos del negocio: dos despachadores toman el mismo lote y el sistema rechaza el segundo despacho.
+- Con 20 usuarios, el uso máximo simultáneo fue de **2,8 núcleos y 2,7 GB**. La base de datos usó el 48 % de su CPU y el backend, el 40 %.
 
 ## 4. RNF-05 — Usabilidad para el usuario operativo
 
@@ -80,6 +99,7 @@ La tesis no fija un umbral para las exportaciones a Excel (`reporting_excel`):
 
 | Concurrencia esperada | Base de datos | Backend | Resultado medido |
 |---|---|---|---|
+| **Uso previsto: 10 simultáneos (50 conectados)** | **2 CPU / 2 GB** (`DB_CPUS=2`, `DB_MEMORY_LIMIT_MB=2048`) | **1 CPU / 1 GB, 4 workers**; `celery_worker` 1 CPU / 0,5 GB con 2 procesos | Cumple RNF-03 también con el doble de usuarios. Máquina virtual de 4 vCPU y 8 GB |
 | Hasta 100 usuarios | 3 CPU / 3 GB (`DB_CPUS=3`, `DB_MEMORY_LIMIT_MB=3072`) | 3 CPU / 3 GB, 20 workers | Cumple RNF-03 con margen de 4 a 5 veces |
 | Hasta 250 usuarios | 6 CPU / 6 GB | 3 CPU / 3 GB, 20 workers (al 100 % de su CPU); se recomiendan 4 a 6 CPU | Cumple RNF-03 |
 
@@ -94,5 +114,6 @@ La memoria de SQL Server queda reservada con `MSSQL_MEMORY_LIMIT_MB` igual al `m
 
 | Escenario | Archivos (`scripts/loadtest/resultados/`) |
 |---|---|
+| Uso previsto, 10 y 20 usuarios, BD 2 CPU | `dim_C_10_2026-10-27_*` y `dim_C_20_2026-10-27_*`: `_stats.csv`, `_failures.csv`, `_stats_history.csv`, `_docker_stats.csv` y `_worker_tareas.txt` |
 | 100 usuarios, BD 3 CPU | `final_100_2026-10-08_stats.csv`, `_failures.csv`, `_stats_history.csv`, `_docker_stats.csv` |
 | 250 usuarios, BD 6 CPU | `db6cpu_250_2026-10-08_stats.csv`, `_failures.csv`, `_stats_history.csv`, `_docker_stats.csv` |

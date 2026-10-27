@@ -68,6 +68,36 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 - `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldos de la base previos a las migraciones, en el volumen `texcore-prod_mssql_data`: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak` y `/var/opt/mssql/backup/texcore_db_pre_gestion0009_2026-10-14.bak`.
 
+### 27 de Octubre de 2026 — Dimensionamiento para el uso previsto: 50 conectados, 10 simultáneos (sin commitear)
+
+El usuario estima 50 personas conectadas, de las cuales unas 10 trabajan a la vez, y pidió optimizar el sistema con un margen prudente. Los 40 inactivos casi no generan carga: solo el panel del Ejecutivo se refresca solo, una vez por minuto. Se midió con Locust (empresa `e1_`, 3 años de datos, HTTPS, exportes por la cola) con 10 usuarios y con 20, el doble como margen.
+
+| Configuración | BD | Backend | Worker | 20 usuarios |
+|---|---|---|---|---|
+| A | 2 CPU / 2 GB | 1,5 / 1,5 GB, 6 workers | 1 proceso, 0,5 CPU | Cumple; backend al 38 %, sobredimensionado |
+| B | 2 / 2 GB | 1 / 1 GB, 4 workers | 1 proceso, 0,5 CPU | Cumple, pero un exporte esperó en fila hasta 6 s (worker al tope de su CPU) |
+| **C (elegida)** | **2 / 2 GB** | **1 / 1 GB, 4 workers** | **2 procesos, 1 CPU, 512 MB** | **Cumple; exportes de vuelta a 3 s como máximo** |
+
+**Resultado de C:**
+- 0 errores reales: el 0,45 % y el 0,62 % son rechazos de negocio por lotes despachados a la vez.
+- La consulta más lenta tarda 284 ms con 10 usuarios y 565 ms con 20.
+- El escaneo llega como máximo a 219 ms y 54 ms.
+- Pico total con 20 usuarios: 2,8 núcleos y 2,7 GB.
+- La BD no se achicó: 2 GB es el mínimo de SQL Server 2022 y con 20 usuarios ya usa el 48 % de su CPU.
+- Integridad después de todas las corridas: stock = kárdex en 52 123 combinaciones, 0 saldos negativos.
+- **Máquina virtual recomendada: 4 vCPU y 8 GB.**
+
+**Cambios:**
+- `.env.prod.example` trae los valores de C, con las referencias para 100 y 250 usuarios en un comentario.
+- Los valores por defecto de `docker-compose.prod.yml` se alinean con C.
+- `REQUISITOS_INFRAESTRUCTURA.md` (nuevo §3.1 y fila de VM), `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` (nuevo §3.5, más §3.3, §3.4 y §5), `GUIA_DESPLIEGUE.md` y `scripts/loadtest/README.md`.
+
+**Correcciones necesarias para medir:**
+- `locustfile.py`: los usuarios virtuales no enviaban `Referer` ni `X-CSRFToken`, y por HTTPS toda escritura daba 403 «CSRF Failed». No es un defecto del sistema: el navegador envía las dos cabeceras (`Referrer-Policy: strict-origin-when-cross-origin`).
+- `nginx/certs`: el certificado autofirmado se regeneró con `subjectAltName` (`localhost`, `127.0.0.1`, `192.168.1.55`). El anterior quedó en `../respaldos-certs-nginx/`.
+
+**Pendiente:** el `.env` de este equipo queda con la configuración C. El servidor real necesita los mismos valores en su `.env.prod`.
+
 ### 27 de Octubre de 2026 — Animación de carga en los exportes (sin commitear)
 
 Con la cola, un exporte puede tardar varios segundos. Antes, en Admin Sistemas y Bodeguero el ícono de descarga quedaba quieto, y en Ejecutivos el texto seguía diciendo "Descargar".

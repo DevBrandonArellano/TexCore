@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/inventory/process-despacho/,CatchResponseError('HTTP 400: El lote EN-N-LN ya no tiene stock disponible.'),6,2026-10-27T18:14:42Z,2026-10-27T18:16:42Z
