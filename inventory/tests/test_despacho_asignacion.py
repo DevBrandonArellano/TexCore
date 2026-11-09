@@ -58,18 +58,19 @@ class LoteYFilasTests(TestCase):
         self.orden = OrdenProduccionFactory()
         self.lote = LoteProduccionFactory(orden_produccion=self.orden)
         self.principal = StockBodegaFactory(lote=self.lote, producto=self.orden.producto_salida)
+        self.lotes = {self.lote.codigo_lote: self.lote}
 
     def test_lote_dado_codigo_inexistente_cuando_valida_entonces_lote_no_valido(self):
         with self.assertRaisesMessage(serializers.ValidationError, "Lote NO-EXISTE no válido."):
-            Vista._lote_y_filas("NO-EXISTE", {}, set())
+            Vista._lote_y_filas("NO-EXISTE", {}, {}, set())
 
     def test_lote_dado_lote_sin_fila_de_stock_cuando_valida_entonces_sin_stock_disponible(self):
         with self.assertRaisesMessage(serializers.ValidationError, "ya no tiene stock disponible"):
-            Vista._lote_y_filas(self.lote.codigo_lote, {}, set())
+            Vista._lote_y_filas(self.lote.codigo_lote, self.lotes, {}, set())
 
     def test_lote_dado_lote_con_stock_cuando_valida_entonces_retira_sus_filas_y_devuelve_la_principal(self):
         mapa = {self.lote.id: [self.principal]}
-        lote, filas = Vista._lote_y_filas(self.lote.codigo_lote, mapa, set())
+        lote, filas = Vista._lote_y_filas(self.lote.codigo_lote, self.lotes, mapa, set())
         self.assertEqual((lote, filas), (self.lote, [self.principal]))
         self.assertEqual(mapa, {})
 
@@ -77,17 +78,19 @@ class LoteYFilasTests(TestCase):
         pedido = StockBodegaFactory(lote=self.lote)
         no_pedido = StockBodegaFactory(lote=self.lote)
         mapa = {self.lote.id: [pedido, no_pedido, self.principal]}
-        _, filas = Vista._lote_y_filas(self.lote.codigo_lote, mapa, {pedido.producto_id})
+        _, filas = Vista._lote_y_filas(self.lote.codigo_lote, self.lotes, mapa, {pedido.producto_id})
         self.assertEqual(filas, [self.principal, pedido])
 
     def test_lote_dado_lote_sin_orden_y_producto_no_pedido_cuando_valida_entonces_sin_stock_de_lo_pedido(self):
         lote = LoteProduccionFactory(orden_produccion=None)
         stock = StockBodegaFactory(lote=lote)
         with self.assertRaisesMessage(serializers.ValidationError, "no tiene stock de los productos de los pedidos"):
-            Vista._lote_y_filas(lote.codigo_lote, {lote.id: [stock]}, set())
+            Vista._lote_y_filas(lote.codigo_lote, {lote.codigo_lote: lote}, {lote.id: [stock]}, set())
 
     def test_lote_dado_lote_sin_orden_con_producto_pedido_cuando_valida_entonces_lo_despacha(self):
         lote = LoteProduccionFactory(orden_produccion=None)
         stock = StockBodegaFactory(lote=lote)
-        _, filas = Vista._lote_y_filas(lote.codigo_lote, {lote.id: [stock]}, {stock.producto_id})
+        _, filas = Vista._lote_y_filas(
+            lote.codigo_lote, {lote.codigo_lote: lote}, {lote.id: [stock]}, {stock.producto_id}
+        )
         self.assertEqual(filas, [stock])

@@ -161,7 +161,7 @@ class LoteYaDespachadoTestCase(TestCase):
         )
 
         with self.assertRaises(LoteRechazado) as rechazo:
-            Vista._lote_y_filas("LOTE-QA-1", {}, set(), ids_bodegas=None)
+            Vista._lote_y_filas("LOTE-QA-1", {"LOTE-QA-1": self.lote}, {}, set(), ids_bodegas=None)
 
         self.assertEqual(rechazo.exception.codigo, "lote_ya_despachado")
         self.assertIn("ya fue despachado por Ana Pérez", str(rechazo.exception.detail[0]))
