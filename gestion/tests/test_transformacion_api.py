@@ -2,6 +2,7 @@
 Tests de API de transformaciones de producto (endpoints de OrdenProduccionViewSet).
 
 Técnicas ISTQB:
+- Partición de equivalencia (EP): rol autorizado / no autorizado / anónimo; área propia / ajena.
 - Caja negra: códigos de respuesta de la API (201, 400, 401/403, 200).
 - Tabla de decisión RBAC: rol × acción.
 - Aislamiento multi-sede: un jefe de otra área/sede no puede registrar.

@@ -8,6 +8,8 @@ justificación obligatoria, reversión de stock vía MovimientoReversionService,
 solo entonces se borra.
 
 Técnicas ISTQB:
+- Partición de equivalencia (EP): justificación vacía / con texto; movimiento libre / ligado a un
+  despacho; rol con permiso / sin permiso (vendedor).
 - Caja blanca: justificación vacía -> 400 (antes de tocar el servicio).
 - Caja blanca: movimiento ligado a un despacho -> 400 (guarda del servicio,
   ValueError capturado).

@@ -11,7 +11,6 @@ al monto anterior (anterior al abono). Operación atómica con auditoría comple
 
 import logging
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from gestion.models import Cliente
@@ -63,8 +62,6 @@ class PagoReversionService:
 
         # Obtenemos el cliente a través del manager para asegurar que saldo_calculado esté disponible
         cliente = Cliente.objects.get(pk=pago.cliente_id)
-        if not cliente:
-            raise ValidationError("Pago no tiene cliente asociado")
 
         pago_id = pago.id  # conserva el id antes de que delete() ponga pk en None
         monto = pago.monto

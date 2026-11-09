@@ -258,3 +258,76 @@ class ConsumoMezclaServiceRevertirMultiplesBodegas(TestCase):
         # (en este setUp, la creada primero: bodega_a — la incorrecta).
         self.assertEqual(stock_b.cantidad, Decimal("50.00"))
         self.assertEqual(stock_a.cantidad, Decimal("100.00"))
+
+
+class ConsumoMezclaRamasLegadoTest(TestCase):
+    """Rechazo sin stock y reversión de filas antiguas, sin bodega ni producto guardados (EP, BVA)."""
+
+    def setUp(self):
+        self.user = CustomUserFactory()
+        self.op = OrdenProduccionFactory(peso_neto_requerido=Decimal("20.00"))
+        self.producto = ProductoFactory()
+        self.bodega_a, self.bodega_b = BodegaFactory(), BodegaFactory()
+        self.lote_origen = LoteProduccionFactory(peso_neto_producido=Decimal("100.000"))
+        self.lote_output = LoteProduccionFactory(orden_produccion=self.op)
+
+    def _stock(self, bodega, cantidad):
+        return StockBodegaFactory(
+            bodega=bodega, producto=self.producto, lote=self.lote_origen, cantidad=Decimal(cantidad)
+        )
+
+    def _consumo_legado(self, cantidad="20.000"):
+        return ConsumoLoteDetalle.objects.create(
+            lote_produccion=self.lote_output, lote_origen=self.lote_origen, cantidad_consumida=Decimal(cantidad)
+        )
+
+    def _revertir(self):
+        from gestion.services.consumo_mezcla import ConsumoMezclaService
+
+        ConsumoMezclaService.revertir(self.lote_output, self.user, "Reversión de prueba")
+
+    def test_consumir_dado_lote_sin_stock_en_la_bodega_cuando_consume_entonces_rechaza_sin_descontar(self):
+        from gestion.services.consumo_mezcla import ConsumoMezclaService
+
+        stock = self._stock(self.bodega_a, "50.00")
+        consumo = {
+            "lote_origen_id": self.lote_origen.id,
+            "cantidad_kg": Decimal("20.000"),
+            "bodega_id": self.bodega_b.id,
+            "producto_id": self.producto.id,
+        }
+        with self.assertRaisesMessage(ValidationError, f"bodega id={self.bodega_b.id}"):
+            ConsumoMezclaService.consumir(self.op, self.lote_output, [consumo], self.user)
+        stock.refresh_from_db()
+        self.assertEqual(stock.cantidad, Decimal("50.00"))
+
+    def test_revertir_dado_fila_antigua_con_una_bodega_cuando_revierte_entonces_restaura_ese_stock(self):
+        stock = self._stock(self.bodega_a, "30.00")
+        self._consumo_legado()
+
+        self._revertir()
+
+        stock.refresh_from_db()
+        self.assertEqual(stock.cantidad, Decimal("50.00"))
+        self.assertFalse(ConsumoLoteDetalle.objects.filter(lote_produccion=self.lote_output).exists())
+        self.assertTrue(
+            MovimientoInventario.objects.filter(tipo_movimiento="DEVOLUCION", lote=self.lote_origen).exists()
+        )
+
+    def test_revertir_dado_fila_antigua_con_dos_bodegas_cuando_revierte_entonces_restaura_la_primera(self):
+        primera, segunda = self._stock(self.bodega_a, "30.00"), self._stock(self.bodega_b, "10.00")
+        self._consumo_legado()
+
+        self._revertir()
+
+        primera.refresh_from_db()
+        segunda.refresh_from_db()
+        self.assertEqual((primera.cantidad, segunda.cantidad), (Decimal("50.00"), Decimal("10.00")))
+
+    def test_revertir_dado_fila_antigua_sin_stock_cuando_revierte_entonces_la_omite_y_borra_el_consumo(self):
+        self._consumo_legado()
+
+        self._revertir()
+
+        self.assertFalse(ConsumoLoteDetalle.objects.filter(lote_produccion=self.lote_output).exists())
+        self.assertFalse(MovimientoInventario.objects.filter(tipo_movimiento="DEVOLUCION").exists())

@@ -1,3 +1,12 @@
+"""
+Listados de pedidos y clientes: consultas constantes (sin N+1) y filtros (ISO/IEC 25010, eficiencia).
+
+Técnicas ISTQB aplicadas (CTFL v4.0):
+- Caja blanca (CB): número de consultas constante al crecer los pedidos.
+- Partición de equivalencia (EP): filtro por vendedor_id / vendedor_username / sede_id presente o
+  ausente; `limit` válido / inválido.
+"""
+
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
