@@ -92,13 +92,13 @@ class GenealogiaService:
                     }
                 )
 
-            # 2. Comprobar consumos de materia prima mediante tabla through histórica si existe
-            consumos_mp = (
-                curr_lote.consumos_materias_primas.all() if hasattr(curr_lote, "consumos_materias_primas") else []
+            # 2. Materia prima consumida por la vía oficial (ConsumoMateriaPrima, F0-001)
+            consumos_mp = curr_lote.consumos_materia_prima.select_related(
+                "materia_prima_lote__proveedor", "materia_prima_lote__producto"
             )
             for consumo_mp in consumos_mp:
-                mp = consumo_mp.materia_prima
-                if mp is not None and mp.id not in mps_vistas:
+                mp = consumo_mp.materia_prima_lote
+                if mp.id not in mps_vistas:
                     mps_vistas.add(mp.id)
                     materias_primas_origen.append(
                         {
@@ -180,7 +180,7 @@ class GenealogiaService:
             }
             derivados = list(
                 LoteProduccion.objects.filter(
-                    Q(materia_prima_lote=lote_ref) | Q(consumos_materias_primas__materia_prima=lote_ref)
+                    Q(materia_prima_lote=lote_ref) | Q(consumos_materia_prima__materia_prima_lote=lote_ref)
                 ).distinct()
             )
             lotes_inicio.extend(derivados)
