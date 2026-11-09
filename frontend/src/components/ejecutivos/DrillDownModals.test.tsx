@@ -1,6 +1,15 @@
+/**
+ * Modales de detalle (drill-down) del panel ejecutivo.
+ *
+ * Técnicas ISTQB aplicadas (CTFL v4.0):
+ * - Partición de equivalencia (EP): pedidos de varios estados / vendedores / clientes; pedido con y
+ *   sin campos opcionales; bodega con stock / sin stock; modal abierto / cerrado.
+ * - Caja blanca (CB): el modal cerrado no consulta el stock al servidor.
+ */
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { vi, beforeEach } from 'vitest';
+import { vi, beforeEach } from 'vitest';
+
 import { PedidoVenta } from '../../lib/types';
 
 const listarStockMock = vi.fn();
@@ -13,7 +22,8 @@ vi.mock('../../lib/api/inventarioApi', () => ({
 beforeEach(() => {
   listarStockMock.mockReset();
 });
-import { ClienteComprasModal, ClienteDeudorModal, DeudorExtendido, PedidosEstadoModal, ProductoHistorialModal, StockBodegaModal, VentasVendedorModal } from './DrillDownModals';
+import { ClienteComprasModal, ClienteDeudorModal, DeudorExtendido, PedidosEstadoModal, ProductoHistorialModal, StockBodegaModal, VentasVendedorModal } from './DrillDownModals';
+
 import { parcial } from '../../testing/parcial';
 import { type ProduccionProductoItem } from './types';
 

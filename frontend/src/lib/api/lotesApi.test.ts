@@ -60,6 +60,11 @@ describe('lotesApi', () => {
     expect(mockGet).toHaveBeenCalledWith('/consumo-lote-detalle/', { params: { lote_produccion: 3, page_size: 500 } });
   });
 
+  it('consumos dado respuesta sin paginar cuando consulta entonces devuelve la lista tal cual', async () => {
+    mockGet.mockResolvedValueOnce({ data: [{ id: 2 }] });
+    await expect(lotesApi.consumos(3)).resolves.toEqual([{ id: 2 }]);
+  });
+
   it('costo dado lote cuando consulta entonces usa la acción obtener-costo', async () => {
     await lotesApi.costo(3);
     expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/3/obtener-costo/');

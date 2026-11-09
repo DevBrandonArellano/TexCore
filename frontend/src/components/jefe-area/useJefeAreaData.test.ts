@@ -3,7 +3,8 @@
  * - Partición de equivalencia (EP): profile nulo / respuestas planas (array) / respuestas paginadas
  *   ({results}) / fallo del OEE de una maquina / error de red al cargar el dashboard.
  * - Análisis de valores límite (BVA): productos sin stock minimo.
- * - Caja blanca (CB): ramas de error — error de red al cargar el dashboard.
+ * - Caja blanca (CB): ramas de error — error de red al cargar el dashboard; el panel se cierra
+ *   antes de cada respuesta (no actualiza el estado ni avisa).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -154,4 +155,34 @@ describe('useJefeAreaData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.alertas).toHaveLength(0);
   });
+
+  /** El GET de `url` queda pendiente hasta llamar al resolvedor devuelto. */
+  function retenerUrl(url: string, respuesta: () => Promise<unknown>) {
+    let soltar: () => void = () => {};
+    const pendiente = new Promise<void>((r) => { soltar = r; });
+    mockRespuestasPlanas();
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((u: string) => (u.includes(url) ? pendiente.then(respuesta) : base(u)));
+    return () => soltar();
+  }
+
+  it('dado el panel cerrado antes de las respuestas cuando llegan entonces no actualiza el estado', async () => {
+    const soltar = retenerUrl('/kpi-area/', () => Promise.resolve({ data: KPI }));
+    const { result, unmount } = renderHook(() => useJefeAreaData(PROFILE));
+    unmount();
+    soltar();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current.kpis).toBeNull();
+    expect(mockGet.mock.calls.some(([u]) => String(u).includes('/oee/'))).toBe(false);
+  });
+
+  it('dado el panel cerrado antes de un error cuando falla entonces no avisa', async () => {
+    const soltar = retenerUrl('/kpi-area/', () => Promise.reject(new Error('red')));
+    const { unmount } = renderHook(() => useJefeAreaData(PROFILE));
+    unmount();
+    soltar();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
 });
+

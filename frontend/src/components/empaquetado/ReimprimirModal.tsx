@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { printLabel } from '../../lib/printing';
+import { printLabel } from '../../lib/printing';
+
 import { mensajeDeLaApi } from '../../lib/apiError';
 
 const MENSAJE_POR_RESULTADO: Record<string, string> = {
@@ -55,11 +56,8 @@ export function ReimprimirModal({ open, onOpenChange, loteId, codigoLote, onReim
     };
 
     const handleConfirmar = async () => {
+        // Sin motivo el botón está deshabilitado: aquí solo falta comprobar el lote.
         if (!loteId) return;
-        if (!motivo) {
-            toast.error('Selecciona un motivo para reimprimir la etiqueta.');
-            return;
-        }
         setIsSubmitting(true);
         try {
             const res = await apiClient.post<{
