@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from gestion.permissions import ve_todas_las_sedes
 from gestion.serializers import CustomUserSerializer
+from inventory.permissions import bodegas_visibles
 
 
 def get_user_role(user):
@@ -73,4 +74,10 @@ class VerificarSesionView(APIView):
         resp = Response(status=204)
         resp["X-Texcore-Sede-Id"] = str(user.sede_id or "")
         resp["X-Texcore-Ve-Todas"] = "1" if ve_todas_las_sedes(user) else "0"
+        # Bodegas que opera (las mismas que acotan el despacho): «*» = todas, vacío = ninguna.
+        # El escáner no ofrece stock ni revela despachos de una bodega que el despacho rechazaría.
+        visibles = bodegas_visibles(user)
+        resp["X-Texcore-Bodegas"] = (
+            "*" if visibles is None else ",".join(str(i) for i in sorted(visibles.values_list("id", flat=True)))
+        )
         return resp

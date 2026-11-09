@@ -231,6 +231,18 @@ class TestValidateEndpoint_SesionVerificada:
         )
         self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=None, ve_todas=True))
 
+    def test_validate_dado_cabecera_de_bodegas_cuando_post_entonces_alcance_con_esas_bodegas(self):
+        TestClient(app, headers={**SESION, "X-Texcore-Bodegas": "4,5"}).post("/validate", json={"code": "L"})
+        self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=3, ve_todas=False, bodegas=(4, 5)))
+
+    def test_validate_dado_bodegas_todas_cuando_post_entonces_alcance_sin_filtro_de_bodegas(self):
+        TestClient(app, headers={**SESION, "X-Texcore-Bodegas": "*"}).post("/validate", json={"code": "L"})
+        self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=3, ve_todas=False, bodegas=None))
+
+    def test_validate_dado_bodegas_vacias_cuando_post_entonces_alcance_sin_bodegas(self):
+        TestClient(app, headers={**SESION, "X-Texcore-Bodegas": ""}).post("/validate", json={"code": "L"})
+        self.svc.validate.assert_called_once_with("L", AlcanceSede(sede_id=3, ve_todas=False, bodegas=()))
+
     def test_validate_dado_sede_no_numerica_cuando_post_entonces_alcance_sin_sede(self):
         TestClient(app, headers={"X-Texcore-Sede-Id": "abc", "X-Texcore-Ve-Todas": "0"}).post(
             "/validate", json={"code": "L"}

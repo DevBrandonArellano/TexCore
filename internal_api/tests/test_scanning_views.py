@@ -137,6 +137,59 @@ class TestValidateLoteView(_LoteConStockMixin, TestCase):
             f"(despacho #{historial.id}).",
         )
 
+    def _despachado_desde_la_bodega(self):
+        from decimal import Decimal
+
+        from inventory.models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario
+
+        despachador = CustomUser.objects.create_user(username="juan_b2", password="x", sede=self.sede)
+        historial = HistorialDespacho.objects.create(usuario=despachador, total_bultos=1, total_peso=95)
+        movimiento = MovimientoInventario.objects.create(
+            tipo_movimiento="VENTA",
+            producto=self.producto,
+            lote=self.lote,
+            bodega_origen=self.bodega,
+            cantidad=Decimal("95"),
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, lote=self.lote, producto=self.producto, peso=95, movimiento_venta=movimiento
+        )
+        self.stock.cantidad = 0
+        self.stock._justificacion_auditoria = "Test lote despachado"
+        self.stock.save()
+
+    # EP: despachado desde una bodega que el usuario opera → motivo con quién y cuándo
+    def test_validate_lote_dado_despacho_desde_bodega_propia_cuando_valida_entonces_motivo(self):
+        self._despachado_desde_la_bodega()
+        resp = self.client.get(f"/api/internal/v1/lotes/LOT-2026-001/validate/?bodegas={self.bodega.id}")
+        self.assertIn("juan_b2", resp.data["motivo_sin_stock"])
+
+    # OWASP A01: despachado desde una bodega que el usuario no opera → no se revela quién
+    def test_validate_lote_dado_despacho_desde_bodega_ajena_cuando_valida_entonces_sin_motivo(self):
+        self._despachado_desde_la_bodega()
+        otra = Bodega.objects.create(nombre="Bodega A1", sede=self.sede)
+        resp = self.client.get(f"/api/internal/v1/lotes/LOT-2026-001/validate/?bodegas={otra.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["motivo_sin_stock"])
+
+    # EP: stock en una bodega que el usuario no opera → el escáner no lo ofrece (el despacho lo rechazaría)
+    def test_validate_lote_dado_stock_en_bodega_ajena_cuando_valida_entonces_sin_stock(self):
+        otra = Bodega.objects.create(nombre="Bodega A1", sede=self.sede)
+        resp = self.client.get(f"/api/internal/v1/lotes/LOT-2026-001/validate/?bodegas={otra.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["peso_kg"])
+        self.assertEqual(resp.data["productos"], [])
+
+    # EP: lista vacía (usuario sin bodegas asignadas) → no ve stock
+    def test_validate_lote_dado_lista_de_bodegas_vacia_cuando_valida_entonces_sin_stock(self):
+        resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/?bodegas=")
+        self.assertIsNone(resp.data["peso_kg"])
+
+    # Validación de entrada: ids no numéricos → 400
+    def test_validate_lote_dado_bodegas_no_numericas_cuando_valida_entonces_400(self):
+        resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/?bodegas=1,abc")
+        self.assertEqual(resp.status_code, 400)
+
     # EP: sin token → 401
     def test_validate_lote_dado_sin_token_cuando_valida_entonces_retorna_403(self):
         self.client.credentials()

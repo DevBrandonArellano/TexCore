@@ -74,3 +74,17 @@ class RedireccionHttpDockerfileTest(SimpleTestCase):
         self.assertIn("NGINX_ENVSUBST_FILTER=^NGINX_", self.dockerfile)
         self.assertIn("NGINX_REDIRIGIR_HTTP=0", self.dockerfile)
         self.assertIn("COPY nginx/nginx.conf /etc/nginx/templates/texcore.conf.template", self.dockerfile)
+
+
+class EscaneoBodegasPlantillaTest(SimpleTestCase):
+    """El escáner acota el lote a las bodegas del usuario (OWASP API1): nginx toma la cabecera
+    de la verificación de sesión y la reenvía al scanning_service en los dos server."""
+
+    def test_plantilla_dado_location_de_escaneo_cuando_se_lee_entonces_reenvia_las_bodegas(self):
+        bloques = re.findall(
+            r"location = /api/scanning/validate \{(.*?)\n    \}", PLANTILLA.read_text(encoding="utf-8"), re.S
+        )
+        self.assertEqual(len(bloques), 2)
+        for bloque in bloques:
+            self.assertIn("auth_request_set $texcore_bodegas $upstream_http_x_texcore_bodegas;", bloque)
+            self.assertIn("proxy_set_header X-Texcore-Bodegas $texcore_bodegas;", bloque)
