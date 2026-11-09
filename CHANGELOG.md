@@ -1,5 +1,73 @@
 # Changelog
 
+## Noviembre 2026
+
+### 9 de Noviembre de 2026 — TDD verificable en todo el programa (sin commitear)
+
+A pedido del usuario: validar contra la tesis (p. 78, TDD; DoD ≥ 75 %) que el desarrollo usa TDD y completar lo que faltaba.
+
+**Diagnóstico:**
+- Desde septiembre de 2026, 51 de 56 commits con código de producción traen sus pruebas. Los 5 restantes son refactors de limpieza y una actualización de librerías.
+- Antes no era así: de octubre de 2025 a febrero de 2026, entre 0 y 21 %. Ese código se cubrió después.
+- El CI no exigía la práctica.
+
+**Gate TDD:**
+- `scripts/auditar_tdd.py` y el job `lint:tdd`, con historial completo y requisito de `build:imagenes`.
+- Por componente (backend, frontend y cada microservicio): si cambia código de producción, cambian sus pruebas.
+- Excepción `Sin-pruebas: <motivo>` en un commit, impresa en el log del pipeline.
+- 13 pruebas propias, entre ellas las que verifican el `.gitlab-ci.yml`.
+
+**Cobertura por archivo:** pruebas de caracterización para todo archivo bajo el 75 %. En el backend eran `mes_views.py` (73,6 %) y siete servicios entre 75 y 85 %; en el frontend, 12 componentes. Cada prueba nueva se validó con mutaciones: se cambia una condición o un límite y se exige que falle. Se detectaron todas, salvo un mutante equivalente, cuya prueba se eliminó porque no podía fallar.
+
+**Defectos encontrados al escribir las pruebas (TDD, prueba primero en rojo):**
+1. **Trazabilidad hacia atrás:** omitía la materia prima consumida por `ConsumoMateriaPrima` (F0-001). El servicio usaba `consumos_materias_primas` y `materia_prima`, que no existen, y un `hasattr` lo ocultaba. Hacia adelante, desde un lote de materia prima, lanzaba `FieldError`.
+2. **Plan desde alertas:** un producto inexistente respondía 500; ahora es un error de validación.
+3. **`test_pago_reversion`:** la prueba del fallo intermedio ejercitaba el caso exitoso; ahora provoca el fallo.
+
+**Limpieza:**
+- Se retiró la ruta interna `/api/internal/v1/planta/pulso-diario/`, que no tenía consumidor (prueba de 404).
+- Se eliminó código muerto en `pago_reversion.py` y `ReimprimirModal.tsx`.
+- 6 archivos de prueba declaran ahora las técnicas que aplican de verdad.
+
+**Verificación:**
+- Backend: 2125 tests OK sobre SQL Server, 95,0 % (antes 92,5 %), ningún archivo bajo el 80 %.
+- Frontend: 2056 tests OK, 95,99 / 91,12 / 94,48 / 97,00 %, ningún archivo bajo el 75 %. `tsc`, el typecheck de las pruebas y ESLint limpios.
+- Microservicios: 74 / 123 / 76 tests OK.
+- ruff, mypy, yamllint, gate ISTQB (0 hallazgos), gate TDD y detect-secrets limpios.
+
+**Documentación:** `CORRECCIONES_TESIS.md` §6 (texto para la p. 78), `ESTANDARES_DESARROLLO.md` (regla 9), `ARQUITECTURA_SISTEMA.md` (diagrama del pipeline y tabla de rutas internas) y la matriz de trazabilidad.
+
+**Pendiente de decisión:**
+- `DescargaQuimicoOP.fase` nunca se llena, porque el snapshot de la receta no guarda el id de la fase.
+- `TransformacionService._resolver_operario` registra al usuario actual si el operario no existe.
+
+
+### 9 de Noviembre de 2026 — Correcciones de la revisión de código de los cambios del 27-oct (sin commitear)
+
+A pedido del usuario: revisión de `b8a66b2..HEAD` y corrección con TDD de sus 10 hallazgos, cada uno con su prueba en rojo antes del cambio.
+
+**Corrección:**
+1. **Día de la planta:** `TIME_ZONE` pasa a ser `ZONA_HORARIA_PLANTA` (la base sigue en UTC con `USE_TZ=True`). Entre las 19:00 y la medianoche, el despacho guardaba la fecha de mañana, la producción del día del operario no contaba la tarde y el pulso del jefe de planta buscaba las órdenes de mañana. Las 11 llamadas a `timezone.now().date()` pasan a `timezone.localdate()`, y una prueba estática impide que vuelvan. El costeo y el kárdex toman el día de un instante en hora de la planta. `gestion/hora_planta.py` usa la zona activa de Django.
+2. **Despacho:** un lote escaneado dos veces se despacha una sola vez. Antes se rechazaba culpando al propio usuario de un despacho que el rollback deshacía.
+3. **Escáner acotado a las bodegas del usuario (OWASP A01):** `verificar-sesion` envía `X-Texcore-Bodegas`, nginx la reenvía y `scanning_service` la pasa a la internal_api. El escáner ya no ofrece stock que el despacho rechazaría ni revela quién despachó desde una bodega ajena.
+4. **Exportes en cola:** un 4xx de reporting_excel falla sin reintentar y el usuario ve su motivo. Antes ocupaba un proceso del worker unos 4 minutos.
+5. **Sondeo del frontend:** tolera fallos transitorios sueltos (502, 503, 504 o red) y se rinde a los tres seguidos.
+6. **Filtros inválidos en la cola:** responden 400 con el motivo antes de encolar (`validar_reporte`, `kardex_service.validar_filtros`). El frontend lee ese motivo del Blob.
+7. **Zona mal escrita:** detiene el arranque de Django y de printing_service, en vez de romper cada PDF.
+8. **Reportes livianos** (catálogos, stock cero y bajo, deudores): se piden en modo síncrono, sin esperar la cola.
+9. **«Generado» de la hoja de dosificación y del historial de mantenimiento:** viaja en ISO y lo formatea la plantilla. Antes se formateaba dos veces y dejaba un warning por PDF.
+10. **Despacho:** lotes y stock se leen una sola vez para las validaciones previas y la transacción. Al hacerlo apareció un defecto: el cálculo de incompletos contaba stock de bodegas que el usuario no opera, así que el despacho quedaba parcial sin pedir confirmación. Ahora cuenta solo el de sus bodegas.
+
+**Verificación:**
+- Backend: 2017 tests OK sobre SQL Server (`scripts/run_backend_tests.sh`), cobertura del 92,5 %.
+- `scanning_service`: 74 tests OK. `printing_service`: 123 tests OK, 98,9 %.
+- Frontend: 2012 tests OK; 95,40 / 90,17 / 93,72 / 96,50 % (statements / branches / functions / lines); `tsc` limpio.
+- ruff, `ruff format` y mypy limpios.
+- `.secrets.baseline` actualizada: ya estaba desfasada por líneas movidas en `.env.prod.example` y `scripts/loadtest/locustfile.py`.
+- Documentación: `ESTANDARES_DESARROLLO.md` (regla de fechas), `MICROSERVICIO_IMPRESION.md`, `ARQUITECTURA_SISTEMA.md` y la matriz de trazabilidad.
+
+**Al desplegar:** reconstruir nginx, backend, `scanning_service` y printing. La cabecera de bodegas necesita las tres primeras capas a la vez. Sin la cabecera, el escáner vuelve a acotar solo por sede, como antes.
+
 ## Octubre 2026
 
 ### Para continuar — Hoja de ruta (actualizada el 20-oct-2026)

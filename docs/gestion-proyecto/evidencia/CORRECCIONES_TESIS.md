@@ -1,6 +1,6 @@
 # Correcciones al texto de la tesis
 
-> **Fecha:** 12-oct-2026, ampliada el 14-oct-2026, el 19-oct-2026 y el 20-oct-2026 · **Rama:** `MES`
+> **Fecha:** 12-oct-2026, ampliada el 14-oct-2026, el 19-oct-2026, el 20-oct-2026 y el 9-nov-2026 · **Rama:** `MES`
 > **Documentos revisados:**
 > - `docs/Anteproyecto_Capstone_Final_Version.pdf` (8-jul): las páginas citadas son las impresas;
 > - el documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`), con el capítulo 7, las Tablas 46 y 47 y la Figura 49.
@@ -17,6 +17,7 @@ Afirmaciones que no coinciden con el sistema entregado. El contraste completo, c
 | §5.3, p. 68–69 | «flake8» y «bandit» | Ruff (ADR-015), con mypy, Semgrep y detect-secrets. «GitLab CI» y «GitLab Container Registry» **se cumplen** (ADR-014) | Reemplazar solo flake8 y bandit: usar el texto de §5 de este documento |
 | §5.3, p. 69 | Umbral de cobertura del 75 % | El gate del backend es del 90 % (92,5 % medido el 20-oct) | Mantener el 75 % como mínimo comprometido y mencionar el gate real, o subir la cifra |
 | p. 78 (marco de seguridad) | «cumpla formalmente con los principios de privacidad desde el diseño, respetando a cabalidad las normativas vigentes en la LOPDP» junto con los principios de la ISO/IEC 27001 | **Resuelto el 19-oct-2026** (**RS-19** cerrado): además del control de acceso por rol, la trazabilidad inmutable con justificación, el cifrado en tránsito y los respaldos, los datos de identificación (`Cliente.ruc_cedula` y `CustomUser.date_of_birth`) se guardan cifrados con Fernet | La afirmación ya se sostiene, pero conviene precisar el alcance en lugar de dejarla genérica: **usar el texto de §3 de este documento**, que nombra las tres capas y dice qué campos se cifran. Contraste en `docs/requerimientos/AUDITORIA_CALIDAD.md` §I.5 |
+| p. 78 (estrategias de calidad) | «El aseguramiento de la fiabilidad del software se estructura sobre [...] el Desarrollo Guiado por Pruebas (TDD)» | TDD es la práctica del desarrollo y el pipeline lo exige: el gate `lint:tdd` rechaza un merge request que cambia el código de producción de un componente sin cambiar sus pruebas, y cada defecto se corrige con su prueba primero en rojo. El código de los primeros sprints se cubrió después con pruebas de caracterización, validadas con mutaciones | Precisar cómo se aplica y se verifica: **usar el texto de §6 de este documento** |
 | RNF-01, Tabla 6, p. 19 | «Datos sensibles encriptados» | Cifrado en tránsito obligatorio (HTTPS con HSTS; el puerto 80 redirige), contraseñas con hash y, desde el 19-oct-2026, **cifrado selectivo en reposo de los datos de identificación**. La base no tiene TDE (cifrado de todo el archivo de datos), que sigue sujeto a la edición licenciada (**RS-18**) | Precisar el alcance: «datos cifrados en tránsito, datos personales de identificación cifrados en reposo y credenciales con hash». TDE queda como medida complementaria del plan de despliegue, no como lo que cubre este RNF |
 
 ## 2. Documento corregido (6-oct)
@@ -156,3 +157,35 @@ vulnerabilidades con bandit, y escaneo de secretos expuestos mediante detect-sec
 > regresión: todo lo que flake8 rechazaba Ruff lo sigue rechazando, y cada regla nueva entró
 > con cero violaciones. El objetivo de la fase —que ningún cambio con defectos de estilo,
 > seguridad o secretos expuestos llegue a la rama principal— se mantiene y queda ampliado.
+
+## 6. Texto propuesto para la tesis — TDD (p. 78)
+
+> **Añadido el 9-nov-2026.** La tesis nombra TDD como pilar de la calidad, pero no dice cómo
+> se aplica ni cómo se verifica. El historial del repositorio muestra que el código de los
+> primeros sprints se escribió antes que sus pruebas: la afirmación se sostiene si se precisa
+> así.
+
+### 6.1 Párrafo para pegar
+
+Después de «Siguiendo las directrices de Beck (2003), [...]»:
+
+> El desarrollo aplica TDD de forma verificable. Cada defecto se corrige escribiendo primero
+> la prueba que lo reproduce, que debe fallar antes del cambio y pasar después. El pipeline
+> lo exige en cada *merge request*: un gate rechaza el cambio si modifica el código de
+> producción de un componente —núcleo Django, frontend o cualquiera de los tres
+> microservicios— sin modificar también sus pruebas; un *refactor* sin cambio de
+> comportamiento se declara de forma explícita y queda registrado en el pipeline. El código
+> desarrollado en los primeros sprints, anterior a esta práctica, se cubrió con pruebas de
+> caracterización cuya capacidad de detectar errores se comprobó con mutaciones del código.
+
+### 6.2 Precisiones por si el tribunal pregunta
+
+- **Gate:** job `lint:tdd` del `.gitlab-ci.yml` (`scripts/auditar_tdd.py`), bloqueante para la
+  construcción de imágenes. Sus pruebas están en `gestion/tests/test_auditoria_tdd_script.py`.
+- **Excepción:** la línea `Sin-pruebas: <motivo>` en un commit, impresa en el log del pipeline.
+- **Mutaciones:** se cambia una condición o un límite del código y se exige que alguna prueba
+  falle; las pruebas de caracterización detectaron todas las mutaciones aplicadas.
+- **El orden prueba → código no se ve en git**, porque la prueba y el código se integran en
+  el mismo commit. La evidencia es el gate y la prueba en rojo que el CHANGELOG registra para
+  cada defecto.
+

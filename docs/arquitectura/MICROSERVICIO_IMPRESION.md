@@ -99,7 +99,7 @@ class ZplOutputStrategy:   ...  # Jinja2 texto plano
 
 ### Fechas en hora de la planta
 
-Django envía las fechas en UTC. `DocumentService.formatear_fecha` las muestra como `dd/mm/aaaa HH:MM` en la zona de `ZONA_HORARIA_PLANTA` (`config.py`, por defecto `America/Guayaquil`):
+Django envía las fechas en ISO con su zona. `DocumentService.formatear_fecha` las muestra como `dd/mm/aaaa HH:MM` en la zona de `ZONA_HORARIA_PLANTA` (`config.py`, por defecto `America/Guayaquil`). La zona se valida al cargar `config.py`: si está mal escrita, el servicio no arranca.
 
 | Entrada | Salida |
 |---|---|
