@@ -5,13 +5,25 @@ Elimina dependencias de cwd (fragilidad operacional).
 
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _SRC_DIR = Path(__file__).parent
 
 TEMPLATES_DIR = str(_SRC_DIR / "templates")
 
-# Las fechas llegan en UTC; los documentos se leen con el reloj de la planta.
+
+def cargar_zona(nombre: str) -> ZoneInfo:
+    """La zona de la planta, validada al arrancar: una mal escrita detiene el servicio en
+    lugar de romper cada PDF (ZoneInfoNotFoundError es un KeyError, no un ValueError)."""
+    try:
+        return ZoneInfo(nombre)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise RuntimeError(f"ZONA_HORARIA_PLANTA inválida: {nombre!r}") from exc
+
+
+# Las fechas llegan en UTC o con su desfase; los documentos se leen con el reloj de la planta.
 ZONA_HORARIA_PLANTA = os.environ.get("ZONA_HORARIA_PLANTA", "America/Guayaquil")
+ZONA_PLANTA = cargar_zona(ZONA_HORARIA_PLANTA)
 
 REQUIRED_TEMPLATES = [
     "nota_venta.html",

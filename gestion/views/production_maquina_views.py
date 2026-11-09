@@ -239,7 +239,7 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
     def _fechas_para_imprimir(resumen, detalle):
         """El PDF lleva las fechas en dd/mm/aaaa y hora local, sin microsegundos ni zona: un
         documento para planta no se lee en ISO. Lo que viaja a printing_service ya va formateado,
-        en hora de la planta (gestion/hora_planta.py): TIME_ZONE es UTC."""
+        en hora de la planta (gestion/hora_planta.py)."""
 
         def texto(valor, con_hora=True):
             if not valor:
@@ -268,7 +268,7 @@ class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             "empresa_nombre": sede.nombre if sede else "TexCore",
             "sede_nombre": sede.nombre if sede else "Todas las sedes",
             "area_nombre": request.user.area.nombre if request.user.area else "Todas las áreas",
-            "generado_en": texto_fecha_hora(timezone.now()),
+            "generado_en": timezone.now().isoformat(),
             "impreso_por": request.user.username,
             "filtros": filtros.como_texto(),
             "resumen": resumen_pdf,

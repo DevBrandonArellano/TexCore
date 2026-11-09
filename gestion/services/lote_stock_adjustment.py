@@ -148,7 +148,7 @@ class LoteStockAdjustmentService:
             orden.estado = "en_proceso"
         elif total_producido >= requerido and orden.estado == "en_proceso":
             orden.estado = "finalizada"
-            orden.fecha_fin_planificada = timezone.now().date()
+            orden.fecha_fin_planificada = timezone.localdate()
         orden.save()
 
     @staticmethod

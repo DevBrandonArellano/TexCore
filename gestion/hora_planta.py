@@ -1,26 +1,23 @@
 """
 Hora de la planta para los textos que arma el backend: PDF y mensajes al usuario.
 
-TIME_ZONE es UTC (así se guarda y se calcula todo), pero quien lee un documento o un mensaje
-usa el reloj de la planta. ZONA_HORARIA_PLANTA (settings, por defecto America/Guayaquil)
-fija esa zona. El frontend convierte las fechas por su cuenta y printing_service convierte las
-que recibe en ISO (filtro `fecha_hora`); esto cubre lo que el backend ya manda formateado.
+TIME_ZONE es la zona de la planta (ZONA_HORARIA_PLANTA, por defecto America/Guayaquil) y la
+base guarda en UTC (USE_TZ=True). Estos helpers formatean en la zona activa de Django; el
+frontend y printing_service (filtro `fecha_hora`) convierten por su cuenta las fechas ISO.
 """
 
 from datetime import date, datetime
-from zoneinfo import ZoneInfo
 
-from django.conf import settings
 from django.utils import timezone
 
 
 def en_hora_planta(instante: datetime) -> datetime:
-    return instante.astimezone(ZoneInfo(settings.ZONA_HORARIA_PLANTA))
+    return timezone.localtime(instante)
 
 
 def fecha_hoy_planta() -> date:
-    """El día de hoy en la planta: entre las 19:00 y la medianoche de Ecuador, en UTC ya es mañana."""
-    return en_hora_planta(timezone.now()).date()
+    """El día de hoy en la planta (entre las 19:00 y la medianoche de Ecuador, en UTC ya es mañana)."""
+    return timezone.localdate()
 
 
 def texto_fecha_hora(instante: datetime | None) -> str:

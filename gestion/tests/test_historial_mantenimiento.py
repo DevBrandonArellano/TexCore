@@ -285,6 +285,16 @@ class HistorialMantenimientoTest(TestCase):
         self.assertEqual(mock_pdf.call_args[0][0]["detalle"][0]["inicio"], esperado)
 
     @patch("gestion.views.production_maquina_views.PrintingService.generate_historial_mantenimiento_pdf")
+    def test_imprimir_dado_hora_utc_cuando_arma_el_pdf_entonces_generado_en_iso_con_zona(self, mock_pdf):
+        """«Generado» lo formatea la plantilla (filtro `fecha_hora`); ya formateado, el filtro no
+        lo parseaba y dejaba un warning por cada PDF (hallazgo 9-nov-2026)."""
+        mock_pdf.return_value = b"%PDF-1.4"
+        ahora = datetime(2026, 10, 27, 18, 23, tzinfo=UTC)
+        with patch("gestion.views.production_maquina_views.timezone.now", return_value=ahora):
+            self.client.post(IMPRIMIR, {}, format="json")
+        self.assertEqual(mock_pdf.call_args[0][0]["generado_en"], "2026-10-27T18:23:00+00:00")
+
+    @patch("gestion.views.production_maquina_views.PrintingService.generate_historial_mantenimiento_pdf")
     def test_imprimir_dado_servicio_caido_cuando_post_entonces_503(self, mock_pdf):
         mock_pdf.return_value = None
 
@@ -400,7 +410,9 @@ class HistorialRangoPorOmisionTest(TestCase):
 
     def test_historial_dado_paro_que_termina_el_primer_dia_del_rango_cuando_consulta_entonces_aparece(self):
         desde = timezone.localdate() - timedelta(days=5)
-        inicio = datetime.combine(desde - timedelta(days=1), datetime.min.time(), tzinfo=UTC) + timedelta(hours=22)
+        # 22:00 del día anterior a 02:00 del primer día, en hora de la planta.
+        planta = timezone.get_current_timezone()
+        inicio = datetime.combine(desde - timedelta(days=1), datetime.min.time(), tzinfo=planta) + timedelta(hours=22)
         ParoMaquinaFactory(maquina=self.maquina, inicio=inicio, fin=inicio + timedelta(hours=4), categoria="AVERIA")
 
         respuesta = self.client.get(HISTORIAL, {"fecha_desde": desde.isoformat()})

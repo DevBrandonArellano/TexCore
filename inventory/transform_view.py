@@ -207,13 +207,13 @@ def _registrar_trazabilidad_mes(user, entrada, cantidad, stock_origen, lote_orig
             autenticado = user if user.is_authenticated else None
 
             corrida, _ = CorridaProduccion.objects.get_or_create(
-                codigo=f"CORR-TRANSF-{sede.id}-{timezone.now().date().strftime('%Y%m%d')}",
+                codigo=f"CORR-TRANSF-{sede.id}-{timezone.localdate().strftime('%Y%m%d')}",
                 defaults={
                     "sede": sede,
                     "area": area,
                     "modalidad": "CONTINUA",
                     "turno": "General",
-                    "fecha_jornada": timezone.now().date(),
+                    "fecha_jornada": timezone.localdate(),
                     "hora_inicio": timezone.now(),
                     "supervisor": autenticado,
                     "estado": "en_proceso",

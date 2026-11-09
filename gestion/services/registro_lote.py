@@ -335,7 +335,7 @@ class RegistroLoteService:
                 "detalle_plan": orden.detalle_plan,
                 "pedido_venta": orden.pedido_venta,
                 "turno": lote_data.get("turno") or "General",
-                "fecha_jornada": timezone.now().date(),
+                "fecha_jornada": timezone.localdate(),
                 "hora_inicio": timezone.now(),
                 "supervisor": user if getattr(user, "is_authenticated", False) else None,
             },

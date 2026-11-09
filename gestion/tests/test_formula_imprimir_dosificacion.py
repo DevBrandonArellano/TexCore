@@ -165,13 +165,15 @@ class ImprimirDosificacionFormulaTestCase(TestCase):
         self.assertEqual(resp.content, b"%PDF-hoja")
         self.assertIn("dosificacion_AZ-001.pdf", resp["Content-Disposition"])
 
-    # TIME_ZONE es UTC: el «Generado» de la hoja va en hora de la planta (UTC-5).
-    def test_imprimir_dado_hora_utc_cuando_arma_el_pdf_entonces_generado_en_hora_de_la_planta(self):
+    # «Generado» viaja en ISO con su zona y lo formatea la plantilla (filtro `fecha_hora`, que lo
+    # pasa a hora de la planta). Antes iba ya formateado y el filtro lo volvía a parsear: un
+    # warning por cada hoja impresa (hallazgo 9-nov-2026).
+    def test_imprimir_dado_hora_utc_cuando_arma_el_pdf_entonces_generado_en_iso_con_zona(self):
         from datetime import UTC, datetime
 
         with patch("gestion.views.formula_views.timezone.now", return_value=datetime(2026, 10, 27, 18, 23, tzinfo=UTC)):
             _, generar = self._imprimir()
-        self.assertEqual(generar.call_args[0][0]["generado_en"], "27/10/2026 13:23")
+        self.assertEqual(generar.call_args[0][0]["generado_en"], "2026-10-27T18:23:00+00:00")
 
 
 class TextoDosisTestCase(TestCase):
