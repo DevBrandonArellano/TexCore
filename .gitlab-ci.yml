@@ -149,6 +149,17 @@ lint:istqb:
     # Convención de nombres ISTQB y técnicas declaradas en cada archivo de prueba (§5.3, p. 78).
     - python scripts/auditar_convencion_pruebas.py
 
+lint:tdd:
+  stage: lint
+  rules: *reglas_ci
+  variables:
+    # El gate compara contra el commit base del MR: necesita el historial completo.
+    GIT_DEPTH: "0"
+  script:
+    # TDD (Beck, 2003; tesis p. 77): el código de producción de cada componente no cambia sin sus
+    # pruebas. Excepción declarada en un commit: «Sin-pruebas: <motivo>».
+    - python scripts/auditar_tdd.py
+
 lint:permisos:
   stage: lint
   rules: *reglas_ci
@@ -349,6 +360,7 @@ build:imagenes:
   needs:
     - lint:backend
     - lint:istqb
+    - lint:tdd
     - lint:permisos
     - sast:semgrep
     - test:backend
