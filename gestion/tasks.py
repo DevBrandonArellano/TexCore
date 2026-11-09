@@ -48,6 +48,14 @@ def _guardar_archivo(task_id: str, report_format: str, filename: str, response) 
     }
 
 
+def _motivo_del_servicio(response) -> str:
+    try:
+        detalle = response.json().get("detail")
+    except (ValueError, AttributeError):
+        detalle = None
+    return detalle if isinstance(detalle, str) and detalle else "El servicio de reportes rechazó la solicitud."
+
+
 @shared_task(bind=True, max_retries=3)
 def async_export_report(self, report_path: str, params: dict, user_id: int, report_format: str = "xlsx"):
     """
@@ -72,8 +80,13 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
         report_path,
         user_id,
     )
+    from inventory.services.kardex_service import FiltroKardexInvalido
+
     try:
         rows, filename = resolve_report(report_path.lstrip("/"), params)
+    except FiltroKardexInvalido as exc:
+        # El proxy ya lo valida antes de encolar; si igual llega, el usuario ve el motivo.
+        return {"status": "FAILURE", "report_path": report_path, "user_id": user_id, "detail": str(exc)}
     except Exception as exc:
         logger.exception("Error consultando datos para el reporte asíncrono %s: %s", report_path, exc)
         return {"status": "FAILURE", "report_path": report_path, "user_id": user_id}
@@ -104,6 +117,15 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
                 report_path,
                 response.status_code,
             )
+            if 400 <= response.status_code < 500:
+                # Rechazo definitivo (payload inválido, demasiadas filas): reintentar no lo
+                # arregla y ocupaba un proceso del worker varios minutos. El motivo llega al usuario.
+                return {
+                    "status": "FAILURE",
+                    "report_path": report_path,
+                    "user_id": user_id,
+                    "detail": _motivo_del_servicio(response),
+                }
             self.retry(countdown=60)
     except httpx.RequestError as exc:
         logger.exception("Error de conexión asíncrona con reporting_excel: %s", exc)

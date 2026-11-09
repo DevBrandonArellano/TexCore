@@ -73,6 +73,37 @@ class AsyncExportReportTestCase(TestCase):
     @patch("internal_api.services.report_dispatch.resolve_report")
     @patch("gestion.tasks.httpx.Client")
     @patch("gestion.tasks.JWTServiceAuthentication.generate_token", return_value="fake-token")
+    def test_export_dado_rechazo_4xx_del_servicio_cuando_ejecuta_entonces_falla_sin_reintentar_y_con_el_motivo(
+        self,
+        mock_token,
+        mock_client_cls,
+        mock_resolve,
+    ):
+        # Hallazgo 9-nov-2026: un 4xx no se arregla reintentando; ocupaba el worker ~4 minutos.
+        mock_resolve.return_value = ([], "kardex_test")
+        mock_client = MagicMock()
+        mock_client.post.return_value = httpx.Response(413, json={"detail": "Demasiadas filas para Excel."})
+        mock_client_cls.return_value.__enter__.return_value = mock_client
+
+        with patch.object(async_export_report, "retry") as mock_retry:
+            resultado = async_export_report.run(report_path="export/kardex", params={"bodega_id": 1}, user_id=1)
+
+        mock_retry.assert_not_called()
+        self.assertEqual(resultado["status"], "FAILURE")
+        self.assertEqual(resultado["detail"], "Demasiadas filas para Excel.")
+
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_export_dado_filtro_invalido_cuando_ejecuta_entonces_falla_con_el_motivo(self, mock_resolve):
+        from inventory.services.kardex_service import FiltroKardexInvalido
+
+        mock_resolve.side_effect = FiltroKardexInvalido("fecha_inicio debe tener formato YYYY-MM-DD.")
+        resultado = async_export_report.run(report_path="export/kardex", params={"bodega_id": 1}, user_id=1)
+        self.assertEqual(resultado["status"], "FAILURE")
+        self.assertEqual(resultado["detail"], "fecha_inicio debe tener formato YYYY-MM-DD.")
+
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    @patch("gestion.tasks.httpx.Client")
+    @patch("gestion.tasks.JWTServiceAuthentication.generate_token", return_value="fake-token")
     def test_export_dado_error_de_conexion_cuando_ejecuta_entonces_reintenta_con_excepcion(
         self,
         mock_token,

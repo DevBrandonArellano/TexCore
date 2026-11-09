@@ -94,6 +94,13 @@ class EstadoReporteAsyncTestCase(TestCase):
         self.assertEqual(self._estado().json()["estado"], "error")
 
     @patch("inventory.reportes_async.AsyncResult")
+    def test_estado_dado_tarea_que_fallo_con_motivo_cuando_consulta_entonces_error_con_ese_motivo(self, mock_async):
+        mock_async.return_value = _tarea("SUCCESS", {"status": "FAILURE", "detail": "Demasiadas filas para Excel."})
+        cuerpo = self._estado().json()
+        self.assertEqual(cuerpo["estado"], "error")
+        self.assertEqual(cuerpo["detail"], "Demasiadas filas para Excel.")
+
+    @patch("inventory.reportes_async.AsyncResult")
     def test_estado_dado_tarea_con_excepcion_cuando_consulta_entonces_error(self, mock_async):
         mock_async.return_value = _tarea("FAILURE", RuntimeError("reintentos agotados"))
         self.assertEqual(self._estado().json()["estado"], "error")

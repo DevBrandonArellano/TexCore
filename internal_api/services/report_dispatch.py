@@ -123,3 +123,20 @@ def resolve_report(report_path: str, params: dict) -> tuple[list, str]:
             return resultado
 
     raise ValueError(f"Ruta de reporte no soportada: '{report_path}'")
+
+
+def validar_reporte(report_path: str, params: dict) -> None:
+    """Lo que resolve_report rechazaría, sin consultar datos: la exportación en cola lo
+    comprueba antes de encolar para responder 400 con el motivo al instante.
+    Lanza FiltroKardexInvalido (filtro mal formado) o ValueError (ruta sin mapeo)."""
+    if report_path == "export/kardex":
+        from inventory.services.kardex_service import validar_filtros
+
+        validar_filtros(params.get("fecha_inicio"), params.get("fecha_fin"), params.get("tipo") or None)
+        return
+    if report_path in _REPORTES:
+        return
+    parts = report_path.split("/")
+    if len(parts) == 3 and parts[0] == "vendedores" and parts[2] in ("ventas", "top-clientes", "deudores"):
+        return
+    raise ValueError(f"Ruta de reporte no soportada: '{report_path}'")

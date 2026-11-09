@@ -237,6 +237,23 @@ def _generar_archivo(clean_path, report_path, report_format, rows, filename):
         return JsonResponse({"detail": "Error interno del servidor"}, status=500)
 
 
+def _resolver_o_error(funcion, clean_path, params, report_path, user):
+    """(resultado, None) o (None, respuesta de error) de `funcion(clean_path, params)`.
+    La comparten el modo síncrono (resolve_report) y la cola (validar_reporte), para que los
+    dos respondan el mismo 400 con el motivo."""
+    try:
+        return funcion(clean_path, params), None
+    except FiltroKardexInvalido as exc:
+        # Filtro mal formado (p. ej. fecha inválida): el motivo real, no "ruta no permitida".
+        return None, JsonResponse({"detail": str(exc)}, status=400)
+    except ValueError:
+        logger.warning("Ruta de reporte sin mapeo de datos: '%s' por usuario %s", report_path, user.username)
+        return None, JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
+    except Exception:
+        logger.exception("Error consultando datos para el reporte '%s'", report_path)
+        return None, JsonResponse({"detail": "Error interno del servidor"}, status=500)
+
+
 class ReportingProxyView(APIView):
     permission_classes = [IsAuthenticated]
     content_negotiation_class = _ProxyContentNegotiation
@@ -274,6 +291,12 @@ class ReportingProxyView(APIView):
         params, report_format = _params_reenviados(request.query_params, user, is_admin)
 
         if request.query_params.get("async", "false").lower() == "true":
+            from internal_api.services.report_dispatch import validar_reporte
+
+            # Mismos 400 que el modo síncrono, al instante y sin ocupar el worker.
+            _, error = _resolver_o_error(validar_reporte, clean_path, params, report_path, user)
+            if error is not None:
+                return error
             return _encolar_exportacion(clean_path, params, report_format, user)
 
         # Consultar los datos EN PROCESO (sin red) en vez de reenviar la
@@ -285,16 +308,8 @@ class ReportingProxyView(APIView):
         # solo recibe los datos ya resueltos y los formatea a Excel/CSV.
         from internal_api.services.report_dispatch import resolve_report
 
-        try:
-            rows, filename = resolve_report(clean_path, params)
-        except FiltroKardexInvalido as exc:
-            # Filtro mal formado (p. ej. fecha inválida): el motivo real, no "ruta no permitida".
-            return JsonResponse({"detail": str(exc)}, status=400)
-        except ValueError:
-            logger.warning("Ruta de reporte sin mapeo de datos: '%s' por usuario %s", report_path, user.username)
-            return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
-        except Exception:
-            logger.exception("Error consultando datos para el reporte '%s'", report_path)
-            return JsonResponse({"detail": "Error interno del servidor"}, status=500)
-
+        datos, error = _resolver_o_error(resolve_report, clean_path, params, report_path, user)
+        if error is not None:
+            return error
+        rows, filename = datos
         return _generar_archivo(clean_path, report_path, report_format, rows, filename)

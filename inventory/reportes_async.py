@@ -51,13 +51,13 @@ def url_de_estado(token: str) -> str:
 
 
 def _resultado(task_id: str) -> tuple[str, dict | None]:
-    """("listo", resultado) | ("error", None) | ("en_proceso", None)."""
+    """("listo", resultado) | ("error", resultado o None) | ("en_proceso", None)."""
     tarea = AsyncResult(task_id)
     if tarea.state == "SUCCESS":
         resultado = tarea.result if isinstance(tarea.result, dict) else {}
         if resultado.get("status") == "SUCCESS" and resultado.get("archivo"):
             return "listo", resultado
-        return "error", None
+        return "error", resultado
     if tarea.state in ("FAILURE", "REVOKED"):
         return "error", None
     return "en_proceso", None  # PENDING, RECEIVED, STARTED, RETRY
@@ -93,7 +93,10 @@ class EstadoReporteAsyncView(APIView):
                 }
             )
         if estado == "error":
-            return JsonResponse({"estado": "error", "detail": "No se pudo generar el reporte. Intente de nuevo."})
+            motivo = (resultado or {}).get("detail")
+            return JsonResponse(
+                {"estado": "error", "detail": motivo or "No se pudo generar el reporte. Intente de nuevo."}
+            )
         return JsonResponse(_EN_PROCESO)
 
 

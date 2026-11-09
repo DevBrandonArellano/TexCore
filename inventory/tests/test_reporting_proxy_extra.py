@@ -114,6 +114,28 @@ class ReportingProxyViewExtraTestCase(TestCase):
 
     @override_settings(REPORTES_ASYNC_HABILITADO=True)
     @patch("gestion.tasks.async_export_report.delay")
+    def test_get_dado_modo_async_y_fecha_invalida_cuando_get_entonces_400_con_el_motivo_sin_encolar(self, mock_delay):
+        # Hallazgo 9-nov-2026: en la cola el error salía minutos después como «No se pudo
+        # generar el reporte», sin la causa, y ocupaba un proceso del worker.
+        self.client.force_authenticate(user=self.usuario_misma_sede)
+        resp = self.client.get(
+            f"/api/reporting/export/kardex?bodega_id={self.bodega.id}&fecha_inicio=2026-13-45&async=true"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fecha_inicio", resp.json()["detail"])
+        mock_delay.assert_not_called()
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @patch("gestion.tasks.async_export_report.delay")
+    def test_get_dado_modo_async_y_tipo_invalido_cuando_get_entonces_400_sin_encolar(self, mock_delay):
+        self.client.force_authenticate(user=self.usuario_misma_sede)
+        resp = self.client.get(f"/api/reporting/export/kardex?bodega_id={self.bodega.id}&tipo=otro&async=true")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("tipo", resp.json()["detail"])
+        mock_delay.assert_not_called()
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @patch("gestion.tasks.async_export_report.delay")
     def test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle(self, mock_delay):
         # Segunda defensa: el flag está activo pero el broker se cae en tiempo
         # de ejecución — encolar debe degradar a 503 claro, no a 500.

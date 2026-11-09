@@ -31,7 +31,7 @@ export function useExportesGerenciales(filtroSedeId: string) {
     // Aviso inmediato: el usuario sabe que el clic se registró aunque el reporte tarde.
     const aviso = iniciarAvisoReporte();
     try {
-      // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
+      // Los pesados van a la cola (Celery) y se descargan al terminar; los livianos, directo.
       const res = await obtenerReporte(`/reporting/${ruta}`, { ...params, format: 'xlsx' }, { alAvanzar: aviso.avance });
       descargarBlob(res.data as Blob, nombre);
       aviso.exito('Reporte descargado');
