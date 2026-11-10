@@ -44,7 +44,7 @@ def _a_fecha(valor, campo):
     if valor in (None, ""):
         return None
     if isinstance(valor, datetime):
-        return valor.date()
+        return timezone.localdate(valor) if timezone.is_aware(valor) else valor.date()
     if isinstance(valor, date):
         return valor
     try:
@@ -60,6 +60,18 @@ def _a_fecha(valor, campo):
 
 def _inicio_del_dia(dia):
     return timezone.make_aware(datetime.combine(dia, time.min))
+
+
+def validar_filtros(fecha_inicio=None, fecha_fin=None, tipo=None):
+    """(fecha_inicio, fecha_fin, tipo) ya interpretados; FiltroKardexInvalido si alguno está mal.
+    Sin consultar la base: la exportación en cola lo usa para rechazar antes de encolar."""
+    if tipo not in (None, "", "all") and tipo not in TIPOS_VALIDOS:
+        raise FiltroKardexInvalido("tipo debe ser 'entrada' o 'salida'.")
+    return (
+        _a_fecha(fecha_inicio, "fecha_inicio"),
+        _a_fecha(fecha_fin, "fecha_fin"),
+        tipo if tipo in TIPOS_VALIDOS else None,
+    )
 
 
 class KardexService:
@@ -82,14 +94,10 @@ class KardexService:
     ):
         self.bodega_id = int(bodega_id)
         self.producto_id = int(producto_id) if producto_id not in (None, "", "0", 0) else None
-        self.fecha_inicio = _a_fecha(fecha_inicio, "fecha_inicio")
-        self.fecha_fin = _a_fecha(fecha_fin, "fecha_fin")
+        self.fecha_inicio, self.fecha_fin, self.tipo = validar_filtros(fecha_inicio, fecha_fin, tipo)
         self.proveedor_id = proveedor_id or None
         self.lote_id = lote_id or None
         self.lote_codigo = lote_codigo or None
-        if tipo not in (None, "", "all") and tipo not in TIPOS_VALIDOS:
-            raise FiltroKardexInvalido("tipo debe ser 'entrada' o 'salida'.")
-        self.tipo = tipo if tipo in TIPOS_VALIDOS else None
 
     # --- piezas de la consulta ---
     def _es_entrada(self):

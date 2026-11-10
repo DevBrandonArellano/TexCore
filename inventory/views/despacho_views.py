@@ -455,11 +455,12 @@ class ProcessDespachoAPIView(APIView):
     permission_classes = [IsDespachoWriter]
 
     @staticmethod
-    def _calcular_incompletos(pedidos_ids: list, lotes_codes: list) -> dict:
+    def _calcular_incompletos(pedidos_ids: list, stock_escaneado: list) -> dict:
         """
         Compara lo que AÚN falta de los pedidos (requerido menos lo ya
         despachado en intentos previos no revertidos) contra el stock de los
-        lotes escaneados en este intento. No lanza excepciones — los errores
+        lotes escaneados en este intento, solo el de las bodegas que opera el
+        usuario: es el que el despacho se lleva. No lanza excepciones — los errores
         de lote inválido se capturan en la transacción. Retorna {} si todo lo
         pendiente queda cubierto.
         """
@@ -486,8 +487,7 @@ class ProcessDespachoAPIView(APIView):
 
         # Cada fila vendible de los lotes cubre lo pedido de SU producto (un lote puede
         # traer productos agregados a mano además del de su OP).
-        lotes = LoteProduccion.objects.filter(codigo_lote__in=lotes_codes)
-        for stock in stock_vendible_del_lote(StockBodega.objects.filter(cantidad__gt=0), lotes):
+        for stock in stock_escaneado:
             if stock.producto_id in reqs:
                 reqs[stock.producto_id]["escaneado"] += stock.cantidad
 
@@ -518,11 +518,10 @@ class ProcessDespachoAPIView(APIView):
         return pendiente
 
     @staticmethod
-    def _stock_bloqueado_por_lote(lotes_codes, ids_bodegas):
+    def _stock_bloqueado_por_lote(lotes, ids_bodegas):
         """Todas las filas de stock en una sola consulta y en orden fijo (lote, id):
         despachos y reversiones concurrentes que comparten lotes las adquieren en el
         mismo orden y no se interbloquean (SQL Server 1205)."""
-        lotes = LoteProduccion.objects.filter(codigo_lote__in=lotes_codes)
         stocks = stock_vendible_del_lote(
             StockBodega.objects.select_for_update().filter(cantidad__gt=0),
             lotes,
@@ -566,32 +565,41 @@ class ProcessDespachoAPIView(APIView):
         return None
 
     @staticmethod
-    def _rechazar_lotes_sin_stock(lotes_codes, ids_bodegas):
+    def _lotes_y_stock_escaneados(lotes_codes, ids_bodegas):
+        """Lotes escaneados por código y su stock vendible en las bodegas del usuario, leídos
+        una vez (sin bloqueo) para las validaciones previas y la transacción."""
+        lotes = {
+            lote.codigo_lote: lote
+            for lote in LoteProduccion.objects.select_related("orden_produccion").filter(codigo_lote__in=lotes_codes)
+        }
+        stock = stock_vendible_del_lote(StockBodega.objects.filter(cantidad__gt=0), list(lotes.values()))
+        if ids_bodegas is not None:
+            stock = stock.filter(bodega_id__in=ids_bodegas)
+        return lotes, list(stock)
+
+    @staticmethod
+    def _rechazar_lotes_sin_stock(lotes_codes, lotes, stock_escaneado, ids_bodegas):
         """Antes de calcular si el despacho queda incompleto: un lote escaneado que ya no
         tiene stock (otro despachador se lo llevó) se rechaza con su motivo. Sin esto, el
         despachador veía «despacho incompleto» en vez de saber qué pasó con el lote.
         Lectura sin bloqueo: la carrera exacta la sigue cubriendo `_lote_y_filas`."""
-        lotes = {lote.codigo_lote: lote for lote in LoteProduccion.objects.filter(codigo_lote__in=lotes_codes)}
-        stock = stock_vendible_del_lote(StockBodega.objects.filter(cantidad__gt=0), lotes.values())
-        if ids_bodegas is not None:
-            stock = stock.filter(bodega_id__in=ids_bodegas)
-        con_stock = set(stock.values_list("lote_id", flat=True))
+        con_stock = {fila.lote_id for fila in stock_escaneado}
         for code in lotes_codes:
             lote = lotes.get(code)  # un código inexistente lo rechaza la transacción
             if lote is not None and lote.id not in con_stock:
                 raise LoteRechazado.sin_stock(lote, code, ids_bodegas)
 
     @staticmethod
-    def _lote_y_filas(code, stock_por_lote, productos_pedidos, ids_bodegas=None):
+    def _lote_y_filas(code, lotes, stock_por_lote, productos_pedidos, ids_bodegas=None):
         """Lote escaneado y las filas de stock que se despachan (se retiran del mapa).
 
         Sale la fila del producto del lote (el de su OP) y las de otros productos del lote
         que pidan los pedidos; un producto agregado a mano que nadie pidió se queda en stock.
+        `lotes` son los escaneados por código (`_lotes_y_stock_escaneados`).
         """
-        try:
-            lote = LoteProduccion.objects.select_related("orden_produccion").get(codigo_lote=code)
-        except LoteProduccion.DoesNotExist:
-            raise serializers.ValidationError(f"Lote {code} no válido.") from None
+        lote = lotes.get(code)
+        if lote is None:
+            raise serializers.ValidationError(f"Lote {code} no válido.")
         filas = stock_por_lote.pop(lote.id, [])
         if not filas:
             # Si otro despachador se lo llevó, el motivo dice quién y cuándo (dos personas
@@ -619,12 +627,12 @@ class ProcessDespachoAPIView(APIView):
             if nuevo_estado != pedido.estado:
                 pedido.estado = nuevo_estado
                 if nuevo_estado in ("despachado", "despachado_parcial"):
-                    pedido.fecha_despacho = timezone.now().date()
+                    pedido.fecha_despacho = timezone.localdate()
                 pedido.save()
                 actualizados += 1
         return actualizados
 
-    def _procesar(self, request, pedidos_ids, lotes_codes, observaciones, items_incompletos, ids_bodegas):
+    def _procesar(self, request, pedidos_ids, lotes_codes, lotes, observaciones, items_incompletos, ids_bodegas):
         with transaction.atomic():
             historial = HistorialDespacho.objects.create(
                 usuario=request.user,
@@ -635,7 +643,7 @@ class ProcessDespachoAPIView(APIView):
             )
             pedidos_obj = {p.id: p for p in PedidoVenta.objects.filter(id__in=pedidos_ids).prefetch_related("detalles")}
             pendiente = self._pendiente_por_pedido_producto(pedidos_obj)
-            stock_por_lote = self._stock_bloqueado_por_lote(lotes_codes, ids_bodegas)
+            stock_por_lote = self._stock_bloqueado_por_lote(list(lotes.values()), ids_bodegas)
 
             total_peso_despachado = Decimal("0.00")
             total_peso_por_pedido: dict = {p_id: Decimal("0.00") for p_id in pedidos_ids}
@@ -649,7 +657,7 @@ class ProcessDespachoAPIView(APIView):
             productos_pedidos = {producto_id for (_pedido_id, producto_id) in pendiente}
 
             for code in lotes_codes:
-                lote, filas = self._lote_y_filas(code, stock_por_lote, productos_pedidos, ids_bodegas)
+                lote, filas = self._lote_y_filas(code, lotes, stock_por_lote, productos_pedidos, ids_bodegas)
                 for stock in filas:
                     producto = productos[stock.producto_id]
                     cantidad_a_despachar = stock.cantidad
@@ -720,6 +728,9 @@ class ProcessDespachoAPIView(APIView):
 
         if not pedidos_ids or not lotes_codes:
             return Response({"error": "Faltan pedidos o lotes para procesar"}, status=400)
+        # Un lote escaneado dos veces se despacha una vez: la segunda copia encontraba el
+        # detalle que la primera acababa de crear y se rechazaba como «ya despachado».
+        lotes_codes = list(dict.fromkeys(lotes_codes))
 
         try:
             pedidos_ids = [int(p) for p in pedidos_ids]
@@ -735,8 +746,9 @@ class ProcessDespachoAPIView(APIView):
         visibles = bodegas_visibles(request.user)
         ids_bodegas = None if visibles is None else list(visibles.values_list("id", flat=True))
 
+        lotes, stock_escaneado = self._lotes_y_stock_escaneados(lotes_codes, ids_bodegas)
         try:
-            self._rechazar_lotes_sin_stock(lotes_codes, ids_bodegas)
+            self._rechazar_lotes_sin_stock(lotes_codes, lotes, stock_escaneado, ids_bodegas)
         except LoteRechazado as e:
             logger.warning(
                 "Despacho rechazado: %s", e.codigo, extra={"sd": {"entity": "HistorialDespacho", "lote": e.lote}}
@@ -745,7 +757,7 @@ class ProcessDespachoAPIView(APIView):
 
         # Calcular items no despachados ANTES de la transacción para poder
         # devolver 409 sin efectos secundarios.
-        items_incompletos = self._calcular_incompletos(pedidos_ids, lotes_codes)
+        items_incompletos = self._calcular_incompletos(pedidos_ids, stock_escaneado)
         if items_incompletos and not confirmar_incompleto:
             logger.warning(
                 "Despacho incompleto rechazado — esperando confirmación del usuario",
@@ -767,6 +779,7 @@ class ProcessDespachoAPIView(APIView):
                         request,
                         pedidos_ids,
                         lotes_codes,
+                        lotes,
                         observaciones,
                         items_incompletos,
                         ids_bodegas,

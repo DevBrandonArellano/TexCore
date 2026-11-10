@@ -173,7 +173,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         elif op and op.pedido_venta:
             pedido = op.pedido_venta
 
-        fecha_jornada = data.get("fecha_jornada") or timezone.now().date()
+        fecha_jornada = data.get("fecha_jornada") or timezone.localdate()
         codigo = data.get("codigo", "").strip()
         if not codigo:
             consecutivo = (

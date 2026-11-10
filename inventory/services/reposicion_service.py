@@ -278,7 +278,9 @@ class ReposicionService:
         )
 
         for item in productos_deficit:
-            prod = Producto.objects.get(pk=item["producto_id"])
+            prod = Producto.objects.filter(pk=item["producto_id"]).first()
+            if prod is None:
+                raise ValidationError(f"El producto #{item['producto_id']} no existe.")
             deficit = Decimal(str(item.get("deficit", item.get("cantidad_planificada", 0))))
             if deficit <= Decimal("0.0000"):
                 continue

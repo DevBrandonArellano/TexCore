@@ -251,7 +251,7 @@ class Command(BaseCommand):
                 movimiento_venta=mov,
             )
         pedido.estado = "despachado"
-        pedido.fecha_despacho = timezone.now().date()
+        pedido.fecha_despacho = timezone.localdate()
         pedido._justificacion_auditoria = "Despacho de pedido (seed)"
         pedido.save()
         return historial
@@ -566,7 +566,7 @@ class Command(BaseCommand):
 
     def _recepcion_materia_prima(self):
         self.actuar_como(self.users["bodeguero"])
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         bodega_mp = self.bodegas["Bodega Materia Prima"]
         hilo = self.productos["HILO-ALG-CRUDO"]
         self.mp_lotes = []
@@ -853,7 +853,7 @@ class Command(BaseCommand):
 
     def _ventas_despacho_cobranza(self):
         self.actuar_como(self.users["vendedor"])
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
         hilo_rojo = self.productos["HILO-ALG-ROJO"]
         bodega_pt = self.bodegas["Bodega Producto Terminado"]
 

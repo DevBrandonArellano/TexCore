@@ -3,6 +3,7 @@
  * - Partición de equivalencia (EP): procesos en el catálogo / nombre vacío / nombre y descripción / un proceso
  *   / un proceso en uso.
  * - Análisis de valores límite (BVA): nombre vacío.
+ * - EP: catálogo vacío / error al listar; proceso sin descripción; eliminación exitosa; error al guardar.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -89,4 +90,53 @@ describe('ManageProcesos', () => {
     await waitFor(() => expect(mockToast.error).toHaveBeenCalled());
     expect(String(mockToast.error.mock.calls[0])).toContain('en uso');
   });
+
+  it('dado catálogo vacío cuando carga entonces muestra el aviso de vacío', async () => {
+    mockApi.listar.mockResolvedValue([]);
+    render(<ManageProcesos />);
+    expect(await screen.findByText('No hay procesos en el catálogo.')).toBeInTheDocument();
+  });
+
+  it('dado error al listar cuando carga entonces muestra el error sin el aviso de vacío', async () => {
+    mockApi.listar.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+    render(<ManageProcesos />);
+    await waitFor(() => expect(document.querySelector('.text-destructive')).not.toBeNull());
+    expect(screen.queryByText('No hay procesos en el catálogo.')).not.toBeInTheDocument();
+  });
+
+  it('dado proceso sin descripción cuando lista entonces muestra un guion', async () => {
+    mockApi.listar.mockResolvedValue([{ id: 3, name: 'Secado', description: '' }]);
+    render(<ManageProcesos />);
+    expect(await screen.findByText('Secado')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('dado un proceso cuando se confirma la eliminación entonces lo elimina y recarga', async () => {
+    const u = user();
+    mockApi.eliminar.mockResolvedValueOnce(undefined);
+    render(<ManageProcesos />);
+    await screen.findByText('Tejido');
+    await u.click(screen.getByRole('button', { name: 'Eliminar Tejido' }));
+    const dialogo = await screen.findByRole('alertdialog');
+    await u.click(within(dialogo).getByRole('button', { name: 'Eliminar' }));
+    await waitFor(() => expect(mockToast.success).toHaveBeenCalledWith('Proceso eliminado.'));
+    expect(mockApi.listar).toHaveBeenCalledTimes(2);
+  });
+
+  it('dado error del servidor cuando guarda entonces lo muestra y deja el formulario abierto', async () => {
+    const u = user();
+    mockApi.crear.mockRejectedValueOnce({ response: { status: 400, data: { name: ['Ya existe un proceso con ese nombre.'] } } });
+    render(<ManageProcesos />);
+    await screen.findByText('Tejido');
+    await u.click(screen.getByRole('button', { name: /Nuevo proceso/ }));
+    await u.type(screen.getByLabelText('Nombre'), 'Tejido');
+    await u.type(screen.getByLabelText('Descripción'), 'Duplicado');
+    await u.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockToast.error).toHaveBeenCalled());
+    expect(mockApi.crear).toHaveBeenCalledWith({ name: 'Tejido', description: 'Duplicado' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
 });
+

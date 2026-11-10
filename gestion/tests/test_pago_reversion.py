@@ -17,8 +17,10 @@ Técnicas ISTQB aplicadas (CTFL v4.0):
 """
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group
+from django.db import DatabaseError
 from django.test import TestCase, TransactionTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -219,12 +221,17 @@ class PagoReversionTestCase(TransactionTestCase):
 
         pago_id = pago.id
 
-        # Reversión debería tener éxito
-        resultado = PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="Test transaccional")
+        # Hasta el 9-nov-2026 esta prueba ejercitaba el caso exitoso: el fallo no se provocaba
+        # y la rama de error (registro y relanzamiento) quedaba sin probar.
+        with (
+            patch.object(PagoCliente, "delete", side_effect=DatabaseError("conexión perdida")),
+            self.assertLogs("gestion.services.pago_reversion", level="ERROR") as registro,
+            self.assertRaises(DatabaseError),
+        ):
+            PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="Test transaccional")
 
-        # Pago debe estar eliminado
-        self.assertFalse(PagoCliente.objects.filter(id=pago_id).exists())
-        self.assertEqual(resultado["pago_id"], pago_id)
+        self.assertTrue(PagoCliente.objects.filter(id=pago_id).exists())
+        self.assertIn(f"Pago {pago_id}", registro.output[0])
 
 
 class PagoReversionAPITestCase(TestCase):

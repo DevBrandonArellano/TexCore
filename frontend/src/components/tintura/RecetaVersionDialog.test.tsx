@@ -51,4 +51,41 @@ describe('RecetaVersionDialog', () => {
     render(<RecetaVersionDialog formulaId={4} numero={2} onClose={vi.fn()} />);
     expect(await screen.findByText('No se pudo cargar la receta de esta versión.')).toBeInTheDocument();
   });
+
+  it('dado versión con observaciones, g/L y datos faltantes cuando se abre entonces usa los respaldos', async () => {
+    mockVersion.mockResolvedValue({
+      ...VERSION,
+      observaciones: 'Ajuste de tono',
+      snapshot: {
+        ...VERSION.snapshot,
+        fases: [{
+          ...VERSION.snapshot.fases[0], temperatura: null, tiempo: null,
+          detalles: [
+            { producto_id: 2, producto_codigo: 'AUX-1', producto_descripcion: '', tipo_calculo: 'gr_l',
+              concentracion_gr_l: null, porcentaje: null, orden_adicion: 1 },
+            { producto_id: 3, producto_codigo: '', producto_descripcion: '', tipo_calculo: 'pct',
+              concentracion_gr_l: null, porcentaje: null, orden_adicion: 2 },
+          ],
+        }],
+      },
+    });
+    render(<RecetaVersionDialog formulaId={4} numero={2} onClose={vi.fn()} />);
+    expect(await screen.findByText('Ajuste de tono')).toBeInTheDocument();
+    expect(screen.getByText('AUX-1')).toBeInTheDocument();
+    expect(screen.getByText('0 g/L')).toBeInTheDocument();
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText("—°C / —'")).toBeInTheDocument();
+  });
+
+  it('dado versión sin fases mientras carga cuando se abre entonces muestra la carga y luego el aviso', async () => {
+    let resolver: (v: unknown) => void = () => {};
+    mockVersion.mockReturnValue(new Promise((r) => { resolver = r; }));
+    render(<RecetaVersionDialog formulaId={4} numero={3} onClose={vi.fn()} />);
+    expect(screen.getByText('Cargando receta...')).toBeInTheDocument();
+    expect(screen.getByText('Receta congelada de esta versión.')).toBeInTheDocument();
+    resolver({ ...VERSION, motivo: 'Primera', snapshot: { ...VERSION.snapshot, fases: [] } });
+    expect(await screen.findByText('Esta versión no tiene fases.')).toBeInTheDocument();
+    expect(screen.getByText('Primera')).toBeInTheDocument();
+  });
 });
+

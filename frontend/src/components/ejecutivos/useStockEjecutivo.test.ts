@@ -35,4 +35,23 @@ describe('useStockEjecutivo', () => {
     ]);
     expect(result.current.stockPorBodega[0].name.length).toBeLessThanOrEqual(17);
   });
+
+  it('dado búsqueda cuando filtra alertas entonces busca por código o nombre y ordena el top por faltante', () => {
+    const { result } = renderHook(() => useStockEjecutivo());
+    act(() => {
+      result.current.setAlertas([
+        { producto: 'Hilo azul', producto_codigo: 'H-AZ', bodega: 'B1', stock_actual: '1', stock_minimo: '5', faltante: 4 },
+        { producto: 'Hilo rojo largo de prueba', producto_codigo: '', bodega: 'B1', stock_actual: '0', stock_minimo: '9', faltante: 9 },
+        { producto: 'Tela', producto_codigo: 'T-1', bodega: 'B2', stock_actual: '0', stock_minimo: '1' },
+      ]);
+      result.current.setBusquedaAlertas('  HILO ');
+    });
+    expect(result.current.alertasFiltradas.map(a => a.producto)).toEqual(['Hilo azul', 'Hilo rojo largo de prueba']);
+    expect(result.current.topAlertas.map(a => a.faltante)).toEqual([9, 4]);
+    expect(result.current.topAlertas[0].name.length).toBeLessThanOrEqual(16);
+
+    act(() => result.current.setBusquedaAlertas('t-1'));
+    expect(result.current.topAlertas).toEqual([{ name: 'T-1', faltante: 0 }]);
+  });
 });
+

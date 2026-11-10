@@ -2,11 +2,13 @@
  * Técnicas ISTQB aplicadas (CTFL v4.0):
  * - Partición de equivalencia (EP): carga inicial / sin ordenes / error al cargar / ordenes sin etapas
  *   configuradas / orden con etapas configuradas para su area.
- * - Caja blanca (CB): ramas de error — error al cargar.
+ * - Caja blanca (CB): ramas de error — error al cargar; el componente se desmonta antes de la respuesta.
+ * - EP: respuestas sin paginar; estados finalizada / desconocido; orden sin lotes; dos etapas ordenadas.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { act } from 'react';
 import { FlujoProduccion } from './FlujoProduccion';
 
 const mockGet = vi.fn();
@@ -114,4 +116,40 @@ describe('FlujoProduccion', () => {
     await waitFor(() => expect(screen.getByText('OP-0001')).toBeInTheDocument());
     expect(screen.queryByText('OP-0011')).not.toBeInTheDocument();
   });
+
+  it('dado respuestas sin paginar y orden finalizada sin lotes cuando carga entonces las muestra', async () => {
+    mockGet.mockImplementation((url: string) => Promise.resolve({
+      data: url === '/ordenes-produccion/' ? [{ ...ORDEN_SIN_ETAPAS, estado: 'finalizada', lotes: undefined }] : [],
+    }));
+    render(<FlujoProduccion />);
+    await waitFor(() => expect(screen.getByText('FINALIZADA')).toBeInTheDocument());
+    expect(screen.getByText('0 / 100 kg')).toBeInTheDocument();
+  });
+
+  it('dado estado desconocido cuando carga entonces lo muestra sin icono de estado', async () => {
+    mockFetch([{ ...ORDEN_SIN_ETAPAS, estado: 'cancelada' }]);
+    render(<FlujoProduccion />);
+    const badge = await screen.findByText('CANCELADA');
+    expect(badge.querySelector('svg')).toBeNull();
+  });
+
+  it('dado dos etapas desordenadas del area cuando carga entonces las ordena y une con una flecha', async () => {
+    const segunda = { ...ETAPA, id: 6, orden: 2, nombre: 'Paletizado' };
+    mockFetch([ORDEN_CON_ETAPAS], [segunda, ETAPA]);
+    render(<FlujoProduccion />);
+    const primera = await screen.findByText('1. Empacado');
+    const posterior = screen.getByText('2. Paletizado');
+    expect(primera.compareDocumentPosition(posterior) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelectorAll('.lucide-arrow-down')).toHaveLength(1);
+  });
+
+  it('dado desmontaje antes de la respuesta cuando llega o falla entonces no avisa ni actualiza', async () => {
+    let fallar: (e: Error) => void = () => {};
+    mockGet.mockReturnValue(new Promise((_r, rej) => { fallar = rej; }));
+    const { unmount } = render(<FlujoProduccion />);
+    unmount();
+    await act(async () => { fallar(new Error('red')); });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
 });
+

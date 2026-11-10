@@ -25,6 +25,7 @@ def get_validation_service(req: Request) -> LoteValidationService:
 def get_alcance_sede(
     x_texcore_ve_todas: Annotated[str | None, Header()] = None,
     x_texcore_sede_id: Annotated[str | None, Header()] = None,
+    x_texcore_bodegas: Annotated[str | None, Header()] = None,
 ) -> AlcanceSede:
     """
     Sede del usuario que escanea, tal como la deja nginx tras verificar la sesión con
@@ -35,7 +36,14 @@ def get_alcance_sede(
     if x_texcore_ve_todas not in ("0", "1"):
         raise HTTPException(status_code=401, detail="Sesión no verificada.")
     sede_id = int(x_texcore_sede_id) if (x_texcore_sede_id or "").isdigit() else None
-    return AlcanceSede(sede_id=sede_id, ve_todas=x_texcore_ve_todas == "1")
+    return AlcanceSede(sede_id=sede_id, ve_todas=x_texcore_ve_todas == "1", bodegas=_bodegas(x_texcore_bodegas))
+
+
+def _bodegas(cabecera: str | None) -> tuple[int, ...] | None:
+    """«*» o sin cabecera = sin filtro de bodegas; «4,5» = esas; vacío = ninguna."""
+    if cabecera is None or cabecera.strip() == "*":
+        return None
+    return tuple(int(b) for b in cabecera.split(",") if b.strip().isdigit())
 
 
 @router.post(

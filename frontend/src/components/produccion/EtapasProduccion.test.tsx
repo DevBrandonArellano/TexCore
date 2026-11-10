@@ -2,11 +2,14 @@
  * Técnicas ISTQB aplicadas (CTFL v4.0):
  * - Partición de equivalencia (EP): carga inicial / sin etapas / error al cargar / etapas existentes / crear
  *   nueva etapa.
- * - Caja blanca (CB): ramas de error — error al cargar / guardar con error.
+ * - Caja blanca (CB): ramas de error — error al cargar / guardar con error / eliminar con error;
+ *   desmontaje antes de la respuesta.
+ * - EP: respuestas sin paginar; editar y guardar (PATCH); etapa sin ids ni tiempo; dos etapas.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { act } from 'react';
 import userEvent from '@testing-library/user-event';
 import { EtapasProduccion } from './EtapasProduccion';
 
@@ -212,4 +215,64 @@ describe('EtapasProduccion', () => {
 
     expect(screen.queryByText('Nueva Etapa de Producción')).not.toBeInTheDocument();
   });
+
+  it('dado editar y guardar una etapa cuando confirma entonces envia PATCH con orden y tiempo nuevos', async () => {
+    mockFetchOk([ETAPA_1]);
+    mockPatch.mockResolvedValueOnce({});
+    render(<EtapasProduccion areaId={5} />);
+    await waitFor(() => expect(screen.getByText('Teñido')).toBeInTheDocument());
+    await userEvent.click(screen.getAllByRole('button')[1]);
+
+    const orden = screen.getByLabelText('Orden Secuencial');
+    await userEvent.clear(orden);
+    await userEvent.type(orden, '3');
+    const tiempo = document.getElementById('tiempo') as HTMLInputElement;
+    await userEvent.clear(tiempo);
+    await userEvent.type(tiempo, '45');
+    await userEvent.click(screen.getByRole('button', { name: /Actualizar/ }));
+
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/etapas-produccion/10/', expect.objectContaining({
+      orden: 3, tiempo_procesamiento_minutos: 45, maquina: 1, bodega_entrada: 2, bodega_salida: 3,
+    })));
+    expect(toastSuccessMock).toHaveBeenCalledWith('Etapa actualizada correctamente');
+  });
+
+  it('dado etapa sin ids ni tiempo cuando la edita entonces deja esos campos vacios', async () => {
+    mockFetchOk([{ ...ETAPA_1, maquina: { nombre: 'M' }, bodega_entrada: { nombre: 'E' }, bodega_salida: { nombre: 'S' }, tiempo_procesamiento_minutos: null }]);
+    render(<EtapasProduccion areaId={5} />);
+    await waitFor(() => expect(screen.getByText('Teñido')).toBeInTheDocument());
+    await userEvent.click(screen.getAllByRole('button')[1]);
+    expect((document.getElementById('tiempo') as HTMLInputElement).value).toBe('');
+  });
+
+  it('dado eliminar con error cuando falla la API entonces avisa', async () => {
+    mockFetchOk([ETAPA_1]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mockDelete.mockRejectedValueOnce(new Error('409'));
+    render(<EtapasProduccion areaId={5} />);
+    await waitFor(() => expect(screen.getByText('Teñido')).toBeInTheDocument());
+    const botones = screen.getAllByRole('button');
+    await userEvent.click(botones[botones.length - 1]);
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la etapa'));
+  });
+
+  it('dado respuestas sin paginar con dos etapas cuando carga entonces las une con una flecha', async () => {
+    const segunda = { ...ETAPA_1, id: 11, orden: 2, nombre: 'Secado' };
+    mockGet.mockImplementation((url: string) => Promise.resolve({
+      data: url.startsWith('/etapas-produccion/') ? [ETAPA_1, segunda] : url.startsWith('/maquinas/') ? [MAQUINA] : [BODEGA_ENTRADA],
+    }));
+    render(<EtapasProduccion areaId={5} />);
+    await waitFor(() => expect(screen.getByText('Secado')).toBeInTheDocument());
+    expect(document.querySelectorAll('.lucide-chevron-right')).toHaveLength(1);
+  });
+
+  it('dado desmontaje antes de la respuesta cuando llega o falla entonces no avisa', async () => {
+    let fallar: (e: Error) => void = () => {};
+    mockGet.mockReturnValue(new Promise((_r, rej) => { fallar = rej; }));
+    const { unmount } = render(<EtapasProduccion areaId={5} />);
+    unmount();
+    await act(async () => { fallar(new Error('red')); });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
 });
+

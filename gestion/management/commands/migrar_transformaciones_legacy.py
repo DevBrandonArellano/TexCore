@@ -129,7 +129,7 @@ class Command(BaseCommand):
                             "pedido_venta": op.pedido_venta,
                             "turno": "General",
                             "fecha_jornada": (
-                                transf.fecha_inicio.date() if transf.fecha_inicio else timezone.now().date()
+                                transf.fecha_inicio.date() if transf.fecha_inicio else timezone.localdate()
                             ),
                             "hora_inicio": transf.fecha_inicio or timezone.now(),
                             "hora_fin": transf.fecha_fin,

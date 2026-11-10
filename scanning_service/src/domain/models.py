@@ -20,6 +20,8 @@ class AlcanceSede:
 
     sede_id: int | None
     ve_todas: bool
+    # Bodegas que opera (las mismas que acotan el despacho); None = todas las de su alcance.
+    bodegas: tuple[int, ...] | None = None
 
 
 @dataclass

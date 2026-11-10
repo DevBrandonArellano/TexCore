@@ -352,7 +352,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
             # ISO 27001 - Validación de Cartera Vencida (bloqueo estricto)
             cartera_vencida = PedidoVenta.objects.filter(
-                cliente=cliente, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()
+                cliente=cliente, esta_pagado=False, fecha_vencimiento__lt=timezone.localdate()
             ).exists()
 
             if cartera_vencida:
@@ -403,7 +403,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         cliente = validated_data.get("cliente")
         # Calcular fecha vencimiento
         plazo = cliente.plazo_credito_dias if cliente else 0
-        validated_data["fecha_vencimiento"] = timezone.now().date() + timedelta(days=plazo)
+        validated_data["fecha_vencimiento"] = timezone.localdate() + timedelta(days=plazo)
 
         if "valor_retencion" not in validated_data:
             validated_data["valor_retencion"] = self.initial_data.get("valor_retencion", 0)

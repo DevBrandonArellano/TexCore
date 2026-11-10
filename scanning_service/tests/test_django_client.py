@@ -202,3 +202,25 @@ class TestDjangoApiClientAlcanceSede:
         client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
         client.get_lote_by_codigo("LOT-001", TODAS)
         assert "sede_id" not in ruta.calls.last.request.url.params
+
+
+class TestDjangoApiClientAlcanceBodegas:
+    """El escáner acota el stock y el motivo a las bodegas que opera el usuario, como el despacho."""
+
+    def test_get_lote_dado_bodegas_del_usuario_cuando_valida_entonces_las_envia(self, mock_token_manager, respx_mock):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        ruta = respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(404, json={"detail": "x"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+        client.get_lote_by_codigo("LOT-001", AlcanceSede(sede_id=3, ve_todas=False, bodegas=(4, 5)))
+        assert ruta.calls.last.request.url.params["bodegas"] == "4,5"
+
+    def test_get_lote_dado_sin_filtro_de_bodegas_cuando_valida_entonces_no_las_envia(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        ruta = respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(404, json={"detail": "x"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+        client.get_lote_by_codigo("LOT-001", AlcanceSede(sede_id=3, ve_todas=False))
+        assert "bodegas" not in ruta.calls.last.request.url.params

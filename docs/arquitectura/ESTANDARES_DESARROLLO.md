@@ -63,10 +63,10 @@ No se abren toasts nuevos por cada paso. Los mocks de `sonner` en las pruebas de
 
 ### Fechas y horas visibles para el usuario
 
-`TIME_ZONE` es UTC (se guarda y se calcula en UTC), pero todo texto con fecha u hora que lee una persona va en **hora de la planta**: `ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`.
+`TIME_ZONE` es la zona de la planta: `ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`. Con `USE_TZ=True` la base guarda en UTC; `TIME_ZONE` decide el «día» del negocio (despachos, producción de hoy, vencimientos, filtros `__date`) y la hora de los textos. Una zona mal escrita detiene el arranque de Django y de printing_service.
 
-- **Backend:** un texto con hora que arma Django (PDF o mensaje) usa `gestion/hora_planta.py`: `texto_fecha_hora`, `texto_fecha` y `fecha_hoy_planta`. Nunca `timezone.localtime()` ni `strftime` sobre un instante UTC, ni `timezone.now().date()` para «hoy»: después de las 19:00 de Ecuador en UTC ya es mañana.
-- **printing_service:** las fechas que llegan en ISO con zona se muestran con el filtro `fecha_hora`.
+- **Backend:** «hoy» es `timezone.localdate()`, nunca `timezone.now().date()`, que devuelve el día UTC: después de las 19:00 de Ecuador ya es mañana. Una prueba estática lo vigila (`gestion/tests/test_dia_de_la_planta.py`). El día de un instante es `timezone.localdate(instante)`, no `instante.date()`. Los textos con hora que arma Django (PDF o mensaje) usan `gestion/hora_planta.py`.
+- **printing_service:** las fechas viajan en ISO con zona (`timezone.now().isoformat()`) y las formatea la plantilla con el filtro `fecha_hora`; no se mandan ya formateadas.
 - **Frontend:** recibe ISO y lo convierte con la zona del navegador.
 - **Pruebas:** fijan la hora exacta (por ejemplo, 18:23 UTC → 13:23), no solo el patrón `dd/mm/aaaa HH:MM`, que una hora en UTC también cumple.
 
@@ -188,8 +188,9 @@ MR desde `staging` (job `ramas:politica`). Ningún MR puede fusionarse a `stagin
 6. **SCA**: `pip-audit` (backend y microservicios) y `npm audit` del frontend sin vulnerabilidades conocidas.
 7. **Frontend**: `tsc --noEmit`, Vitest con sus umbrales de cobertura y el build de React.
 8. **Convención de pruebas ISTQB** (`lint:istqb`, `scripts/auditar_convencion_pruebas.py`): cada prueba sigue `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]` y cada archivo declara las técnicas que aplica.
-9. **Control de acceso** (`lint:permisos`, `scripts/auditar_permisos_backend.py`): ninguna ruta es pública fuera de la lista blanca.
-10. **En `staging` y `master`**: las imágenes Docker se construyen (`build:validacion` y `build:imagenes`).
+9. **TDD** (`lint:tdd`, `scripts/auditar_tdd.py`): si un merge request cambia el código de producción de un componente (backend, frontend o un microservicio), también cambia sus pruebas. Un refactor sin cambio de comportamiento o un cambio de configuración lo declara en un commit con la línea `Sin-pruebas: <motivo>`, que queda en el log del pipeline. No cuentan las migraciones, los comandos de management ni los `.d.ts`.
+10. **Control de acceso** (`lint:permisos`, `scripts/auditar_permisos_backend.py`): ninguna ruta es pública fuera de la lista blanca.
+11. **En `staging` y `master`**: las imágenes Docker se construyen (`build:validacion` y `build:imagenes`).
 
 Una función que supera la complejidad 15 se divide en pasos con nombre (extraer métodos o servicios, SRP), cubiertos antes con pruebas de caracterización. No se excluye con `noqa` salvo que el motivo quede escrito.
 

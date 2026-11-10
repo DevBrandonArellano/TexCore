@@ -49,6 +49,8 @@ class DjangoApiClient:
         if not alcance.ve_todas and alcance.sede_id is None:
             return None
         params = {} if alcance.ve_todas else {"sede_id": alcance.sede_id}
+        if alcance.bodegas is not None:
+            params["bodegas"] = ",".join(str(b) for b in alcance.bodegas)
         try:
             response = httpx.get(url, params=params, headers=self._headers(), timeout=5.0)
             self._error_count = 0  # reset en éxito

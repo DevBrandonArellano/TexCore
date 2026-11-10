@@ -27,7 +27,7 @@ export function useReportesExport(rkBodega: string) {
       const queryParams = { ...params, ...(needsBodega && { bodega_id: rkBodega }) };
       const endpoint = `/reporting/export/${reportType}`;
 
-      // Reporte pesado: se genera en la cola (Celery) y se descarga al terminar.
+      // Los pesados van a la cola (Celery) y se descargan al terminar; los livianos, directo.
       const resp = await obtenerReporte(endpoint, queryParams, { alAvanzar: aviso.avance });
 
       const disposition = resp.headers['content-disposition'];

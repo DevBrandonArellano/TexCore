@@ -406,7 +406,7 @@ No hay paquetes `infrastructure/` ni `repositories/`: `django_client.py`, `jwt_t
 **Tecnologia:** FastAPI + Uvicorn + WeasyPrint (PDF) + Jinja2 (ZPL)
 **Acceso a BD:** Ninguno. Recibe datos completos en el payload del request.
 
-**Fechas:** Django envía UTC; el servicio las muestra en hora de la planta (`ZONA_HORARIA_PLANTA`, filtro `fecha_hora`). Los textos con hora que arma Django usan `gestion/hora_planta.py`. Regla en `ESTANDARES_DESARROLLO.md`, *Fechas y horas visibles para el usuario*.
+**Fechas:** Django envía ISO con zona (`TIME_ZONE` es la zona de la planta; la base guarda en UTC); el servicio las muestra en hora de la planta (`ZONA_HORARIA_PLANTA`, filtro `fecha_hora`). Los textos con hora que arma Django usan `gestion/hora_planta.py`. Regla en `ESTANDARES_DESARROLLO.md`, *Fechas y horas visibles para el usuario*.
 
 **Endpoints:**
 
@@ -1146,7 +1146,6 @@ ServiceCredential (tabla: internal_service_credential)
 | `GET` | `/api/internal/v1/produccion/tendencia/` | `reports:read` | Tendencia de produccion |
 | `GET` | `/api/internal/v1/reports/productos/` · `reports/usuarios/` | `reports:read` | Catalogo de productos y usuarios |
 | `POST` | `/api/internal/v1/reports/produccion/reporte-avance/` · `reporte-balance/` | `reports:read`, o cookie de jefe de planta, jefe de area, administradores o ejecutivo | PDF de avance y balance (unica excepcion publicada por nginx, §3.1) |
-| `GET` | `/api/internal/v1/planta/pulso-diario/` | `reports:read` | Pulso diario de planta |
 
 Desde el 31-ago-2026 `reporting_excel` ya no llama a estos endpoints de reportes: el backend ejecuta las mismas funciones (`internal_api/services/reporting_data.py`) en proceso y le envia las filas a `POST /generate` (§7.3). Los endpoints siguen disponibles para integraciones con scope `reports:read`.
 
@@ -1465,6 +1464,7 @@ feature/* ─── MR ──► staging ─── (CI pasa) ──► MR stagin
 ramas:politica · lint:pipeline (yamllint + shellcheck) ───────┐
 lint:backend (Ruff, detect-secrets, mypy) ────────────────────┤
 lint:istqb (convencion de nombres y tecnicas ISTQB) ──────────┤
+lint:tdd (produccion de cada componente con sus pruebas) ─────┤
 lint:permisos (auditor de rutas, RNF-02) ─────────────────────┤
 sast:semgrep ─────────────────────────────────────────────────┤
 test:backend (needs: lint:backend; SQL Server 2022 como service) ┤

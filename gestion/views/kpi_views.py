@@ -196,7 +196,7 @@ class PlantaPulsoDiarioView(APIView):
         if error is not None:
             return error
 
-        hoy = timezone.now().date()
+        hoy = timezone.localdate()
 
         # 1. kg planificados hoy (órdenes cuya fecha fin planificada es hoy)
         qs_ordenes = OrdenProduccion.objects.filter(fecha_fin_planificada=hoy)

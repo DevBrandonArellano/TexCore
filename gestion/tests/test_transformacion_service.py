@@ -178,3 +178,38 @@ class TransformacionServiceRegistrarTest(TestCase):
             self.user,
         )
         self.assertEqual(t.producto_entrada, entrada)
+
+
+class TransformacionServiceResolverTest(TestCase):
+    """Resolución de máquina, producto y operario de una transformación (EP: instancia / id / vacío / inexistente)."""
+
+    def test_resolver_maquina_dado_vacia_o_instancia_cuando_resuelve_entonces_obligatoria_o_la_misma(self):
+        from gestion.services.transformacion import TransformacionService
+        from gestion.tests.factories import MaquinaFactory
+
+        with self.assertRaisesMessage(ValidationError, "La máquina es obligatoria"):
+            TransformacionService._resolver_maquina(None)
+        maquina = MaquinaFactory()
+        self.assertIs(TransformacionService._resolver_maquina(maquina), maquina)
+
+    def test_resolver_producto_dado_vacio_inexistente_o_global_cuando_resuelve_entonces_valida_o_lo_permite(self):
+        from gestion.services.transformacion import TransformacionService
+        from gestion.tests.factories import ProductoFactory, SedeFactory
+
+        with self.assertRaisesMessage(ValidationError, "producto_salida es obligatorio"):
+            TransformacionService._resolver_producto(None, "producto_salida")
+        with self.assertRaisesMessage(ValidationError, "id=999999 no existe"):
+            TransformacionService._resolver_producto(999999, "producto_salida")
+        global_ = ProductoFactory(sede=None)
+        self.assertEqual(TransformacionService._resolver_producto(global_.id, "p", sede_id=SedeFactory().id), global_)
+
+    def test_resolver_operario_dado_instancia_id_o_inexistente_cuando_resuelve_entonces_el_operario_o_el_usuario(self):
+        from gestion.services.transformacion import TransformacionService
+        from gestion.tests.factories import CustomUserFactory
+
+        usuario, operario = CustomUserFactory(), CustomUserFactory()
+        self.assertIs(TransformacionService._resolver_operario(operario, usuario), operario)
+        self.assertEqual(TransformacionService._resolver_operario(operario.id, usuario), operario)
+        self.assertIs(TransformacionService._resolver_operario(None, usuario), usuario)
+        # Comportamiento vigente: un id inexistente registra al usuario que opera, sin avisar.
+        self.assertIs(TransformacionService._resolver_operario(999999, usuario), usuario)

@@ -36,7 +36,6 @@ def motivo_lote_despachado(lote, ids_bodegas):
     historial = detalle.historial
     usuario = historial.usuario
     quien = (usuario.get_full_name() or usuario.username) if usuario else "otro usuario"
-    # Hora de la planta: TIME_ZONE es UTC y el despachador lee la hora de su reloj.
     cuando = en_hora_planta(historial.fecha_despacho)
     return (
         f"El lote {lote.codigo_lote} ya fue despachado por {quien} el {cuando:%d/%m/%Y} "

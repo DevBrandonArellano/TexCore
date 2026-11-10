@@ -333,7 +333,7 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 
 ### Hora de la planta en los PDF (27-oct-2026)
 
-`TIME_ZONE` es UTC. Los textos con hora que arma el backend usan `gestion/hora_planta.py` (`ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`), y `printing_service` convierte a esa zona las fechas que recibe en ISO (filtro `fecha_hora`). Cada prueba fija una hora a las 18:23 UTC y exige las 13:23. Con la zona forzada a UTC, las cinco pruebas de backend fallan.
+Hasta el 9-nov `TIME_ZONE` era UTC (desde entonces es la zona de la planta; ver la sección del 9-nov). Los textos con hora que arma el backend usan `gestion/hora_planta.py` (`ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`), y `printing_service` convierte a esa zona las fechas que recibe en ISO (filtro `fecha_hora`). Cada prueba fija una hora a las 18:23 UTC y exige las 13:23. Con la zona forzada a UTC, las cinco pruebas de backend fallan.
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
@@ -342,6 +342,33 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Hoja de dosificación: «Generado» en hora de la planta † | `gestion/tests/test_formula_imprimir_dosificacion.py` | EP | ✅ |
 | Historial de despachos: fecha de cada despacho en hora de la planta; guía de remisión: a las 02:00 UTC la emisión lleva la fecha del día en la planta, no la de mañana † | `inventory/tests/test_despacho_documentos.py` | EP, BVA | ✅ |
 | `printing_service`: `formatear_fecha` convierte un ISO con zona a la hora de la planta (también el cambio de día) y deja igual un texto ya formateado; las seis plantillas con «Generado» muestran la hora de la planta y no el ISO crudo † | `printing_service/tests/unit/test_document_service.py` | EP, BVA | ✅ |
+
+### Revisión de código del 9-nov-2026: día de la planta, escáner por bodegas y exportes en cola
+
+`TIME_ZONE` es la zona de la planta (`ZONA_HORARIA_PLANTA`, por defecto `America/Guayaquil`) y la base guarda en UTC. Las pruebas del día fijan las 21:00 de la planta (02:00 UTC del día siguiente).
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| «Hoy» es el día de la planta: `TIME_ZONE` = zona de la planta; a las 21:00 el despacho lleva la fecha del día, la producción del operario cuenta un lote de las 18:30, el pulso cuenta las órdenes que terminan hoy, el vencimiento del pedido parte del día y el costeo no aplica una tarifa que rige desde mañana; ningún archivo del backend calcula «hoy» con `timezone.now().date()`; una zona mal escrita detiene el arranque † | `gestion/tests/test_dia_de_la_planta.py` | BVA, EP, revisión estática | ✅ |
+| Despacho: un lote escaneado dos veces se despacha una vez; con parte del lote en una bodega que el usuario no opera, pide confirmar el despacho incompleto (antes quedaba parcial sin avisar); lotes y stock se leen una sola vez antes de la transacción † | `inventory/tests/test_process_despacho.py` | EP, BVA | ✅ |
+| Escáner acotado a las bodegas del usuario (OWASP A01): la verificación de sesión envía `X-Texcore-Bodegas` (`*` = todas, vacío = ninguna), nginx la reenvía en los dos `server`, `scanning_service` la traduce a `AlcanceSede.bodegas` y la internal_api no ofrece stock ni revela quién despachó desde una bodega ajena; ids no numéricos → 400 † | `gestion/tests/test_profile_views.py`, `gestion/tests/test_nginx_redireccion_https.py`, `internal_api/tests/test_scanning_views.py`, `scanning_service/tests/integration/test_validate_endpoint.py`, `scanning_service/tests/test_django_client.py` | EP | ✅ |
+| Exportes en cola: un filtro inválido responde 400 con el motivo antes de encolar; un 4xx de reporting_excel falla sin reintentar y su motivo llega al usuario en el estado de la tarea † | `inventory/tests/test_reporting_proxy_extra.py`, `gestion/tests/test_tasks.py`, `inventory/tests/test_reportes_async.py` | EP, caja blanca | ✅ |
+| Frontend `obtenerReporte`: los reportes livianos (catálogos, stock cero y bajo, deudores) se piden directo; el sondeo tolera fallos transitorios sueltos (502/503/504 o red) y se rinde a los tres seguidos; un 404 se propaga; el 400 al encolar muestra su motivo † | `lib/reporteAsync.test.ts`, `useReportesExport.test.ts` | EP | ✅ |
+| PDF: «Generado» viaja en ISO con zona y lo formatea la plantilla (antes se formateaba dos veces); `printing_service` valida la zona al cargar la configuración † | `gestion/tests/test_formula_imprimir_dosificacion.py`, `gestion/tests/test_historial_mantenimiento.py`, `printing_service/tests/unit/test_config_zona_horaria.py` | EP | ✅ |
+
+### TDD en todo el programa: gate del CI, cobertura por archivo y mutaciones (9-nov-2026)
+
+Ningún archivo del núcleo, de los microservicios ni del frontend queda bajo el 75 % por archivo. Cada prueba de caracterización nueva se validó con mutaciones: se rompe una condición o un límite del código y se exige que la prueba falle. Se detectaron todas, salvo un mutante equivalente: React descarta un `setState` después del desmontaje, y la prueba que pretendía verificarlo se eliminó porque no podía fallar.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Gate TDD: un merge request que cambia el código de producción de un componente (backend, frontend o un microservicio) trae sus pruebas, o declara `Sin-pruebas: <motivo>`; no cuentan migraciones, comandos de management ni `.d.ts`; la base del cambio solo se acepta como SHA; el job `lint:tdd` corre con el historial completo y bloquea la construcción de imágenes † | `gestion/tests/test_auditoria_tdd_script.py` | EP, TD, BVA | ✅ |
+| MES: filtros de corridas, operaciones y planes; alcance por sede al iniciar una corrida y al crear un plan; el operario no cambia el material que fijó el supervisor; estados finalizada / borrador / cerrado / cancelado; errores inesperados → 500 genérico † | `gestion/tests/test_mes_views_api.py` | EP, STT, CB | ✅ |
+| Trazabilidad: la materia prima consumida (`ConsumoMateriaPrima`) aparece hacia atrás y hacia adelante (antes se omitía y el recorrido desde un lote de materia prima lanzaba `FieldError`); profundidad 0; referencia por id, código o tipo inválido † | `gestion/tests/test_genealogia_service.py` | EP, BVA | ✅ |
+| Reposición MTS y reservas MTO: saldo 0, peso 0, código de OP de exactamente 101 caracteres, calidad segunda, plan cerrado que vuelve a ejecución, liberación sin cantidades negativas; producto inexistente en un plan desde alertas → error de validación (antes, 500) † | `inventory/tests/test_reposicion_service_ramas.py`, `inventory/tests/test_reserva_service_ramas.py` | EP, BVA, STT | ✅ |
+| Mezcla, transformación y pagos: sin stock en la bodega, reversión de filas antiguas con una, dos o ninguna bodega; resolución de máquina, producto y operario; la reversión de un pago que falla deja el pago y registra el error (la prueba previa decía probarlo y ejercitaba el caso exitoso) † | `gestion/tests/test_consumo_mezcla_service.py`, `gestion/tests/test_transformacion_service.py`, `gestion/tests/test_pago_reversion.py` | EP, CB | ✅ |
+| Reportes de la internal_api: un token con la sede de un usuario no pide otra sede (403) en las 8 vistas; filtros por sede y rango con el límite a las 23:00 del último día; la ruta interna del pulso diario, sin consumidor, se retiró (404) † | `internal_api/tests/test_reporting_views_alcance_sede.py`, `internal_api/tests/test_reporting_data_filtros.py` | EP, BVA | ✅ |
+| Frontend: registro de lote (hora final igual a la de inicio rechazada), paro de máquina, reimpresión de etiqueta, catálogo de procesos, etapas y flujo de producción, acciones de máquina, receta de una versión, detalle de anulación, alertas de stock y desmontaje antes de la respuesta † | `RegistrarLoteDialog.test.tsx`, `RegistrarParoModal.test.tsx`, `ReimprimirModal.test.tsx`, `ManageProcesos.test.tsx`, `EtapasProduccion.test.tsx`, `FlujoProduccion.test.tsx`, `useMaquinaActions.test.ts`, `RecetaVersionDialog.test.tsx`, `HistorialPedidoModal.test.tsx`, `useStockEjecutivo.test.ts`, `useJefeAreaData.test.ts`, `lotesApi.test.ts` | EP, BVA, CB | ✅ |
 
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
@@ -634,11 +661,13 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | Ruff Etapa 4: DJ001, DJ012 y C901 (5-oct-2026, SQLite local, igual que el CI con `.coveragerc`) | **91.8%** | **1530 ✅** |
 | Validación con topes de memoria del CI (26-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.5% | 1944 ✅ |
 | Exportes por la cola Celery + Redis (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.6% | 1971 ✅ |
-| Rechazo por lote ya despachado con motivo (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | **92.6%** | **1980 ✅** |
+| Rechazo por lote ya despachado con motivo (27-oct-2026, SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.6% | 1980 ✅ |
+| Revisión de código del 9-nov-2026 (SQL Server 2022, `scripts/run_backend_tests.sh`) | 92.5% | 2017 ✅ |
+| TDD en todo el programa: gate, cobertura por archivo y mutaciones (9-nov-2026, SQL Server 2022) | **95.0%** | **2125 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).
 
 Frontend (`npx vitest run --coverage`, umbrales en `frontend/vite.config.ts`: lines 95, functions 91, branches 89,
-statements 94): **1981 pruebas** en 138 archivos, 95,37 / 90,22 / 93,67 / 96,47 % (statements / branches /
-functions / lines), medido el 26-oct-2026 con `--maxWorkers=2`.
+statements 94): **2056 pruebas** en 145 archivos, 95,99 / 91,12 / 94,48 / 97,00 % (statements / branches /
+functions / lines), medido el 9-nov-2026 con `--maxWorkers=2`; ningún archivo bajo el 75 %.

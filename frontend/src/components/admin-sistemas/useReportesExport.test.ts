@@ -91,8 +91,19 @@ describe('useReportesExport', () => {
     mockGet.mockResolvedValue({ data: new Blob(['x']), headers: {} });
     const { result } = renderHook(() => useReportesExport(''));
     await act(async () => { await result.current.handleExport('productos'); });
+    // Catálogo liviano: se pide directo, sin pasar por la cola.
     expect(mockGet).toHaveBeenCalledWith('/reporting/export/productos', {
-      params: { async: 'true' },
+      params: {},
+      responseType: 'blob',
+    });
+  });
+
+  it('dado reporte pesado kardex con bodega cuando exporta entonces lo encola', async () => {
+    mockGet.mockResolvedValue({ data: new Blob(['x']), headers: {} });
+    const { result } = renderHook(() => useReportesExport('7'));
+    await act(async () => { await result.current.handleExport('kardex'); });
+    expect(mockGet).toHaveBeenCalledWith('/reporting/export/kardex', {
+      params: { bodega_id: '7', async: 'true' },
       responseType: 'blob',
     });
   });
@@ -109,7 +120,7 @@ describe('useReportesExport', () => {
     const { result } = renderHook(() => useReportesExport('7'));
     await act(async () => { await result.current.handleExport('stock-bajo'); });
     expect(mockGet).toHaveBeenCalledWith('/reporting/export/stock-bajo', {
-      params: { bodega_id: '7', async: 'true' },
+      params: { bodega_id: '7' },
       responseType: 'blob',
     });
   });

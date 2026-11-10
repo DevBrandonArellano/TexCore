@@ -45,7 +45,7 @@ class ClienteManager(models.Manager):
 
         cartera_vencida_sq = (
             PedidoVenta.objects.filter(
-                cliente=OuterRef("pk"), anulado=False, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()
+                cliente=OuterRef("pk"), anulado=False, esta_pagado=False, fecha_vencimiento__lt=timezone.localdate()
             )
             .values("cliente")
             .annotate(

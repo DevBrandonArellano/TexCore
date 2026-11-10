@@ -1,8 +1,8 @@
 """
 Hora de la planta en los textos que arma el backend (PDF y mensajes).
 
-TIME_ZONE es UTC; quien lee un documento o un mensaje usa el reloj de la planta
-(ZONA_HORARIA_PLANTA, por defecto America/Guayaquil, UTC-5).
+TIME_ZONE es la zona de la planta (ZONA_HORARIA_PLANTA, por defecto America/Guayaquil, UTC-5);
+la base guarda en UTC.
 
 Técnicas ISTQB aplicadas (CTFL v4.0):
 - Partición de equivalencia (EP): fecha con hora / solo fecha / ahora.
@@ -29,11 +29,11 @@ class HoraPlantaTest(SimpleTestCase):
         with patch("gestion.hora_planta.timezone.now", return_value=datetime(2026, 10, 28, 2, 0, tzinfo=UTC)):
             self.assertEqual(fecha_hoy_planta().isoformat(), "2026-10-27")
 
-    @override_settings(ZONA_HORARIA_PLANTA="America/Bogota")
+    @override_settings(TIME_ZONE="America/Bogota")
     def test_texto_fecha_hora_dado_otra_zona_configurada_cuando_formatea_entonces_la_respeta(self):
         self.assertEqual(texto_fecha_hora(datetime(2026, 10, 27, 18, 23, tzinfo=UTC)), "27/10/2026 13:23")
 
-    @override_settings(ZONA_HORARIA_PLANTA="Europe/Madrid")
+    @override_settings(TIME_ZONE="Europe/Madrid")
     def test_texto_fecha_hora_dado_zona_con_horario_de_verano_cuando_formatea_entonces_aplica_su_desfase(self):
         self.assertEqual(texto_fecha_hora(datetime(2026, 7, 1, 10, 0, tzinfo=UTC)), "01/07/2026 12:00")
 

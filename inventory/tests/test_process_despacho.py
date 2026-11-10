@@ -121,6 +121,81 @@ class ProcessDespachoAPIViewTestCase(TestCase):
         detalle_pedido = DetalleHistorialDespachoPedido.objects.get(pedido=pedido)
         self.assertEqual(detalle_pedido.cantidad_despachada, Decimal("50.000"))
 
+    def test_despacho_dado_mismo_lote_escaneado_dos_veces_cuando_procesa_entonces_lo_despacha_una_vez(self):
+        """Hallazgo 9-nov-2026: la segunda copia del código encontraba el detalle del historial que
+        la primera acababa de crear y rechazaba el despacho culpando al propio usuario de un
+        despacho que el rollback deshacía."""
+        from gestion.models import OrdenProduccion
+
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-DUP", peso_neto_requerido=Decimal("50.00"), producto_salida=self.producto_a
+        )
+        lote = self._crear_lote_con_stock("LOTE-DUP", self.producto_a, Decimal("50.000"))
+        lote.orden_produccion = orden
+        lote.save()
+        pedido = self._crear_pedido(Decimal("50.000"))
+
+        resp = self.client.post(
+            "/api/inventory/process-despacho/",
+            {"pedidos": [pedido.id], "lotes": ["LOTE-DUP", "LOTE-DUP"]},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, getattr(resp, "data", None))
+        historial = HistorialDespacho.objects.get()
+        self.assertEqual(historial.total_bultos, 1)
+        self.assertEqual(historial.detalles.count(), 1)
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, "despachado")
+
+    def _lote_repartido_entre_bodegas(self):
+        """LOTE-REP: 30 kg en la bodega del despachador y 20 kg en una que no opera."""
+        from gestion.models import OrdenProduccion
+
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-REP", peso_neto_requerido=Decimal("50.00"), producto_salida=self.producto_a
+        )
+        lote = self._crear_lote_con_stock("LOTE-REP", self.producto_a, Decimal("30.000"))
+        lote.orden_produccion = orden
+        lote.save()
+        ajena = Bodega.objects.create(nombre="Bodega Ajena", sede=self.sede)
+        StockBodega.objects.create(bodega=ajena, producto=self.producto_a, lote=lote, cantidad=Decimal("20.000"))
+        return self._crear_pedido(Decimal("50.000"))
+
+    def test_despacho_dado_parte_del_lote_en_bodega_que_no_opera_cuando_procesa_entonces_pide_confirmar_incompleto(
+        self,
+    ):
+        """Hallazgo 9-nov-2026: el cálculo de incompletos contaba el stock de todas las bodegas,
+        pero el despacho solo se lleva el de las del usuario: quedaba parcial sin avisar."""
+        pedido = self._lote_repartido_entre_bodegas()
+
+        resp = self.client.post(
+            "/api/inventory/process-despacho/", {"pedidos": [pedido.id], "lotes": ["LOTE-REP"]}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT, getattr(resp, "data", None))
+        self.assertEqual(resp.data["items_incompletos"]["Tela A"]["escaneado"], 30.0)
+        self.assertFalse(HistorialDespacho.objects.exists())
+
+    def test_despacho_dado_validaciones_previas_cuando_procesa_entonces_consulta_los_lotes_una_sola_vez(self):
+        """Hallazgo 9-nov-2026: rechazo de lotes sin stock e incompletos repetían la misma consulta
+        de lotes y de stock antes de la transacción."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        pedido = self._lote_repartido_entre_bodegas()
+        tabla_lotes = LoteProduccion._meta.db_table
+
+        with CaptureQueriesContext(connection) as consultas:
+            self.client.post(
+                "/api/inventory/process-despacho/", {"pedidos": [pedido.id], "lotes": ["LOTE-REP"]}, format="json"
+            )
+
+        por_codigo = [
+            q["sql"] for q in consultas.captured_queries if tabla_lotes in q["sql"] and "codigo_lote" in q["sql"]
+        ]
+        self.assertEqual(len(por_codigo), 1, por_codigo)
+
     def test_despacho_parcial_dado_parte_del_stock_cuando_confirma_incompleto_entonces_estado_parcial(self):
         from gestion.models import OrdenProduccion
 

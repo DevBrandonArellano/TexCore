@@ -6,6 +6,7 @@ higiene, 2026-09-02): mismo archivo suelto en la raíz de gestion/, renombrado
 a convención ISTQB y con factories en vez de creación manual de fixtures.
 
 Técnicas ISTQB aplicadas:
+- Partición de equivalencia (EP): alta / modificación; con / sin justificación.
 - Caja blanca: AuditableModelMixin.clean() exige _justificacion_auditoria en
   UPDATE de un registro con requiere_justificacion_auditoria=True, pero no en
   CREATE (is_new=True salta la validación).

@@ -139,3 +139,21 @@ class VerificarSesionViewTestCase(TestCase):
     def test_verificar_dado_ejecutivo_cuando_consulta_entonces_ve_todas(self):
         resp = self._con_cookie(CustomUserFactory(groups=["ejecutivo"])).get(self.URL)
         self.assertEqual(resp["X-Texcore-Ve-Todas"], "1")
+
+    def test_verificar_dado_despachador_con_bodegas_asignadas_cuando_consulta_entonces_las_envia(self):
+        """El escáner acota el lote a las bodegas que el usuario opera, como el despacho."""
+        from gestion.tests.factories import BodegaFactory
+
+        user = CustomUserFactory(groups=["despacho"])
+        b1, b2 = BodegaFactory(sede=user.sede), BodegaFactory(sede=user.sede)
+        user.bodegas_asignadas.add(b2, b1)
+        resp = self._con_cookie(user).get(self.URL)
+        self.assertEqual(resp["X-Texcore-Bodegas"], ",".join(str(i) for i in sorted([b1.id, b2.id])))
+
+    def test_verificar_dado_despachador_sin_bodegas_cuando_consulta_entonces_lista_vacia(self):
+        resp = self._con_cookie(CustomUserFactory(groups=["despacho"])).get(self.URL)
+        self.assertEqual(resp["X-Texcore-Bodegas"], "")
+
+    def test_verificar_dado_ejecutivo_cuando_consulta_entonces_todas_las_bodegas(self):
+        resp = self._con_cookie(CustomUserFactory(groups=["ejecutivo"])).get(self.URL)
+        self.assertEqual(resp["X-Texcore-Bodegas"], "*")

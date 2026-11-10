@@ -14,6 +14,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -172,10 +173,16 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
-# Hora de la planta para los mensajes que el backend arma en texto (p. ej., «despachado a
-# las 13:23»): TIME_ZONE sigue en UTC y el frontend convierte las fechas por su cuenta.
+# El día del negocio es el de la planta: con UTC, entre las 19:00 y la medianoche de Ecuador
+# «hoy» ya era mañana (despachos, producción del día, vencimientos). Con USE_TZ=True la base
+# sigue guardando en UTC; TIME_ZONE solo decide cómo se lee la hora. Una zona mal escrita
+# detiene el arranque en lugar de romper cada PDF o mensaje.
 ZONA_HORARIA_PLANTA = os.environ.get("ZONA_HORARIA_PLANTA", "America/Guayaquil")
+try:
+    ZoneInfo(ZONA_HORARIA_PLANTA)
+except (ZoneInfoNotFoundError, ValueError) as exc:
+    raise ImproperlyConfigured(f"ZONA_HORARIA_PLANTA inválida: {ZONA_HORARIA_PLANTA!r}") from exc
+TIME_ZONE = ZONA_HORARIA_PLANTA
 
 USE_I18N = True
 

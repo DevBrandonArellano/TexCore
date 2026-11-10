@@ -50,6 +50,16 @@ class ValidateLoteView(APIView):
         if sede_id is not None and not str(sede_id).isdigit():
             return Response({"detail": "sede_id inválido."}, status=400)
 
+        # Bodegas que opera el usuario (las mismas que acotan el despacho); sin el parámetro,
+        # todas las de la sede. Así el escáner no ofrece stock que el despacho rechazaría ni
+        # revela quién despachó desde una bodega ajena (OWASP A01).
+        ids_bodegas = None
+        if "bodegas" in request.query_params:
+            crudo = [b for b in request.query_params["bodegas"].split(",") if b != ""]
+            if not all(b.isdigit() for b in crudo):
+                return Response({"detail": "bodegas inválidas."}, status=400)
+            ids_bodegas = [int(b) for b in crudo]
+
         lotes = LoteProduccion.objects.select_related("orden_produccion__producto_salida").filter(
             codigo_lote=codigo_barras
         )
@@ -57,6 +67,8 @@ class ValidateLoteView(APIView):
         if sede_id is not None:
             lotes = filtrar_lotes_de_sede(lotes, sede_id)
             existencias = existencias.filter(bodega__sede_id=sede_id)
+        if ids_bodegas is not None:
+            existencias = existencias.filter(bodega_id__in=ids_bodegas)
         # El código no es único entre sedes: sin acotar, el primero (antes, un 500).
         lote = lotes.order_by("id").first()
         if lote is None:
@@ -98,8 +110,8 @@ class ValidateLoteView(APIView):
                 # despacho los vende si los piden los pedidos.
                 "peso_total_kg": str(sum(f.cantidad for f in filas)) if filas else None,
                 # Sin stock porque otro despachador ya se lo llevó: quién, cuándo y en qué
-                # despacho. El lote ya está acotado a la sede del usuario que escanea.
-                "motivo_sin_stock": None if filas else motivo_lote_despachado(lote, ids_bodegas=None),
+                # despacho, con el mismo filtro de bodegas que aplica el despacho.
+                "motivo_sin_stock": None if filas else motivo_lote_despachado(lote, ids_bodegas),
                 "productos": [
                     {
                         "producto_id": f.producto_id,

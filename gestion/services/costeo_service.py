@@ -61,7 +61,7 @@ class CostoLoteService:
             tarifa = CostoLoteService._obtener_tarifa_operario(
                 operario=operario,
                 sede=orden.sede if orden else None,
-                fecha=lote_produccion.hora_final.date(),
+                fecha=timezone.localdate(lote_produccion.hora_final),
             )
             if tarifa and tarifa.tipo_contrato == "tiempo" and tarifa.tarifa_hora:
                 costo.costo_operario = (horas * tarifa.tarifa_hora).quantize(Decimal("0.001"))
@@ -81,7 +81,7 @@ class CostoLoteService:
         if maquina and horas > 0:
             costo_hora = CostoLoteService._obtener_costo_hora_maquina(
                 maquina=maquina,
-                fecha=lote_produccion.hora_final.date(),
+                fecha=timezone.localdate(lote_produccion.hora_final),
             )
             if costo_hora:
                 costo.costo_maquina = (horas * costo_hora.costo_hora).quantize(Decimal("0.001"))
