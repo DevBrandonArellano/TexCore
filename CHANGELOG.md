@@ -2,6 +2,25 @@
 
 ## Noviembre 2026
 
+### 10 de Noviembre de 2026 — Estándares y flujo de desarrollo en CLAUDE.md (sin commitear)
+
+A pedido del usuario: que el estilo de desarrollo y el flujo de trabajo queden fijados en el repo para que se mantengan en cualquier computadora (`git pull`).
+
+**Sincronización:**
+- `git pull` en `staging`: `b8a66b2..b74cd7d` (fast-forward, 190 archivos). Incluye los módulos de reportes asíncronos, el servicio de despacho por lote, `gestion/hora_planta.py` y nuevas pruebas. `graphify-out/` se regeneró.
+
+**`CLAUDE.md` del proyecto:**
+- **Sección 4, Estándares de desarrollo:** requisitos claros antes de programar, patrones de diseño que ya usa el código, SOLID, código limpio, TDD con ISTQB (EP, BVA, STT), `@transaction.atomic` en operaciones críticas, `factory_boy` en lugar de fixtures JSON, sin secretos hardcodeados, y una lista de prohibiciones.
+- **Sección 5, Flujo de desarrollo:**
+  0. Leer `CHANGELOG.md` (entradas recientes) y, si hace falta, `git log`, para retomar el contexto.
+  1. Presentar un plan antes de cambiar código.
+  2. No implementar sin aprobación explícita.
+  3. Implementar con TDD y correr las pruebas.
+  4. Documentar siempre: entrada en `CHANGELOG.md`, actualizar `docs/` y correr `graphify update .`.
+  5. Reportar cambios, pruebas y documentación actualizada.
+
+**Pendiente:** commit y push a `staging` de `CLAUDE.md` y `CHANGELOG.md`, si el usuario lo confirma.
+
 ### 9 de Noviembre de 2026 — TDD verificable en todo el programa (sin commitear)
 
 A pedido del usuario: validar contra la tesis (p. 78, TDD; DoD ≥ 75 %) que el desarrollo usa TDD y completar lo que faltaba.
