@@ -252,12 +252,25 @@ export function DerivarFormulaDialog({ origen, onOpenChange, onConfirm }: Deriva
 interface ImprimirDosificacionDialogProps {
   formula: (FormulaRef & { version_oficial?: number | null }) | null;
   onOpenChange: (open: boolean) => void;
+  /** Versión concreta a imprimir; sin ella, la oficial (o la receta en edición). */
+  numeroVersion?: number | null;
+}
+
+function descripcionVersion(formula: FormulaRef & { version_oficial?: number | null }, numeroVersion: number | null) {
+  if (numeroVersion != null) {
+    return numeroVersion === formula.version_oficial
+      ? `Se imprime la versión oficial v${numeroVersion}, la que usa planta.`
+      : `Se imprime la versión v${numeroVersion}, que no es la oficial: se marca como BORRADOR.`;
+  }
+  return formula.version_oficial
+    ? `Se imprime la versión oficial v${formula.version_oficial}, la que usa planta.`
+    : 'La fórmula no tiene versión oficial: se imprime la receta en edición, marcada como BORRADOR.';
 }
 
 /** Pide el peso de la tela y los litros de baño e imprime la hoja de dosificación para
- * quien pesa y prepara. Se imprime la versión oficial; sin ella, la receta en edición
- * marcada como BORRADOR. */
-export function ImprimirDosificacionDialog({ formula, onOpenChange }: ImprimirDosificacionDialogProps) {
+ * quien pesa y prepara. Se imprime la versión pedida o, por defecto, la oficial; sin
+ * oficial, la receta en edición marcada como BORRADOR. */
+export function ImprimirDosificacionDialog({ formula, onOpenChange, numeroVersion = null }: ImprimirDosificacionDialogProps) {
   const [peso, setPeso] = useState('');
   const [litros, setLitros] = useState('');
   const [imprimiendo, setImprimiendo] = useState(false);
@@ -278,7 +291,9 @@ export function ImprimirDosificacionDialog({ formula, onOpenChange }: ImprimirDo
     if (!formula || !valido) return;
     setImprimiendo(true);
     try {
-      const pdf = await formulasApi.imprimirDosificacion(formula.id, kg, l);
+      const pdf = numeroVersion == null
+        ? await formulasApi.imprimirDosificacion(formula.id, kg, l)
+        : await formulasApi.imprimirDosificacion(formula.id, kg, l, numeroVersion);
       window.open(URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })), '_blank');
       onOpenChange(false);
     } catch {
@@ -295,9 +310,7 @@ export function ImprimirDosificacionDialog({ formula, onOpenChange }: ImprimirDo
           <DialogTitle>Imprimir hoja de dosificación</DialogTitle>
           <DialogDescription>
             {formula && `${formula.codigo} — ${formula.nombre_color}. `}
-            {formula?.version_oficial
-              ? `Se imprime la versión oficial v${formula.version_oficial}, la que usa planta.`
-              : 'La fórmula no tiene versión oficial: se imprime la receta en edición, marcada como BORRADOR.'}
+            {formula && descripcionVersion(formula, numeroVersion)}
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">

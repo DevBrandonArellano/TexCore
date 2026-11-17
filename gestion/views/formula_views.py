@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -26,6 +26,7 @@ from gestion.serializers import (
     CrearVersionSerializer,
     DerivarFormulaSerializer,
     DosificacionSerializer,
+    ImprimirDosificacionSerializer,
     FormulaColorSerializer,
     FormulaColorWriteSerializer,
     ProcesoTintoreriaSerializer,
@@ -204,22 +205,34 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             status=status.HTTP_200_OK,
         )
 
+    @staticmethod
+    def _version_a_imprimir(formula, numero):
+        """Versión a imprimir: la pedida (solo de esta fórmula), o la oficial si no se pide
+        ninguna. None si no hay número y la fórmula no tiene versión oficial."""
+        if numero is None:
+            return formula.versiones.filter(es_oficial=True).first()
+        version = formula.versiones.filter(numero=numero).first()
+        if version is None:
+            raise NotFound(f"La fórmula no tiene la versión {numero}.")
+        return version
+
     @action(detail=True, methods=["post"], url_path="imprimir-dosificacion")
     def imprimir_dosificacion(self, request, pk=None):
         """
-        POST /api/formula-colors/{id}/imprimir-dosificacion/ — body {peso, litros}.
-        Hoja de dosificación en PDF para quien pesa y prepara: la versión oficial (la
-        que usa planta) con la cantidad de cada insumo por fase. Sin versión oficial
-        se imprime la receta viva marcada como borrador.
+        POST /api/formula-colors/{id}/imprimir-dosificacion/ — body {peso, litros, numero_version?}.
+        Hoja de dosificación en PDF para quien pesa y prepara, con la cantidad de cada
+        insumo por fase. Sin `numero_version` imprime la versión oficial (la que usa
+        planta); sin oficial, la receta viva marcada como borrador. Con `numero_version`,
+        imprime esa versión, marcada como borrador si no es la oficial.
         """
         formula = self.get_object()
-        serializer = DosificacionSerializer(data=request.data)
+        serializer = ImprimirDosificacionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         peso = serializer.validated_data["peso"]
         litros = serializer.validated_data["litros"]
 
-        oficial = formula.versiones.filter(es_oficial=True).first()
-        snapshot = oficial.snapshot if oficial else VersionadoFormulaService.construir_snapshot(formula)
+        version = self._version_a_imprimir(formula, serializer.validated_data.get("numero_version"))
+        snapshot = version.snapshot if version else VersionadoFormulaService.construir_snapshot(formula)
         resultado = calcular_dosificacion_desde_snapshot(snapshot, peso=peso, litros=litros)
 
         # El cálculo devuelve los insumos en el orden de las fases del snapshot:
@@ -259,8 +272,8 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             "formula_codigo": formula.codigo,
             "formula_nombre": formula.nombre_color,
             "tipo_sustrato": formula.tipo_sustrato or None,
-            "version_numero": oficial.numero if oficial else None,
-            "es_oficial": oficial is not None,
+            "version_numero": version.numero if version else None,
+            "es_oficial": bool(version and version.es_oficial),
             "peso_kg": float(resultado.kg_tela),
             "litros_bano": float(resultado.volumen_bano_litros),
             "relacion_bano": float(resultado.relacion_bano),

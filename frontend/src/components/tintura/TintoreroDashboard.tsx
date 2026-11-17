@@ -9,6 +9,7 @@ import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
 import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
 import { ManageProcesosTintoreria } from './ManageProcesosTintoreria';
 import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintoreria';
+import { ImprimirFormulasPanel } from '../tintura/ImprimirFormulasPanel';
 import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -45,6 +46,8 @@ export function TintoreroDashboard() {
     ? 'historial'
     : pathname.includes('/descargas')
     ? 'descargas'
+    : pathname.includes('/imprimir')
+    ? 'imprimir'
     : 'formulas';
 
   // Filtros desde URL (Modelo Híbrido)
@@ -217,8 +220,9 @@ export function TintoreroDashboard() {
         )}
         className="flex-1 flex flex-col"
       >
-        <TabsList className="grid w-full max-w-3xl grid-cols-5">
+        <TabsList className="flex h-auto w-full max-w-4xl flex-wrap">
           <TabsTrigger value="formulas">Fórmulas</TabsTrigger>
+          <TabsTrigger value="imprimir">Imprimir Fórmulas</TabsTrigger>
           <TabsTrigger value="stock">Stock de Químicos</TabsTrigger>
           <TabsTrigger value="historial">Historial de Órdenes</TabsTrigger>
           <TabsTrigger value="descargas">Descargas de Químicos</TabsTrigger>
@@ -243,6 +247,10 @@ export function TintoreroDashboard() {
             onFormulaDelete={handleDelete}
             onExportDosificador={handleExportDosificador}
           />
+        </TabsContent>
+
+        <TabsContent value="imprimir" className="flex-1">
+          <ImprimirFormulasPanel />
         </TabsContent>
 
         <TabsContent value="procesos" className="flex-1">

@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import type { DosificacionFormulaResultado, FormulaColor, VersionFormula } from '../types';
+import type { DosificacionFormulaResultado, FormulaColor, VersionFormula, VersionFormulaResumen } from '../types';
 
 /**
  * Repository de fórmulas de color: cálculos y consultas de una fórmula guardada.
@@ -13,10 +13,28 @@ export const formulasApi = {
     return res.data;
   },
 
-  /** Hoja de dosificación en PDF (versión oficial, o la receta viva como borrador). */
-  async imprimirDosificacion(formulaId: number, peso: number, litros: number): Promise<Blob> {
+  /** Catálogo de fórmulas de la sede (sin laboratorio), para elegir color, material y fórmula. */
+  async listar(): Promise<FormulaColor[]> {
+    const res = await apiClient.get<FormulaColor[]>('/formula-colors/');
+    return res.data;
+  },
+
+  /** Historial de versiones de una fórmula, de la más nueva a la más antigua. */
+  async versiones(formulaId: number): Promise<VersionFormulaResumen[]> {
+    const res = await apiClient.get<VersionFormulaResumen[]>(`/formula-colors/${formulaId}/versiones/`);
+    return res.data;
+  },
+
+  /**
+   * Hoja de dosificación en PDF. Sin `numeroVersion` imprime la oficial (o la receta
+   * viva como borrador); con él, la versión pedida, marcada como borrador si no es la oficial.
+   */
+  async imprimirDosificacion(formulaId: number, peso: number, litros: number, numeroVersion?: number): Promise<Blob> {
+    const cuerpo = numeroVersion === undefined
+      ? { peso, litros }
+      : { peso, litros, numero_version: numeroVersion };
     const res = await apiClient.post<Blob>(
-      `/formula-colors/${formulaId}/imprimir-dosificacion/`, { peso, litros }, { responseType: 'blob' },
+      `/formula-colors/${formulaId}/imprimir-dosificacion/`, cuerpo, { responseType: 'blob' },
     );
     return res.data;
   },

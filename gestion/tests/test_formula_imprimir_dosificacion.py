@@ -160,6 +160,61 @@ class ImprimirDosificacionFormulaTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         generar.assert_not_called()
 
+    def test_imprimir_dado_version_no_oficial_pedida_cuando_imprime_entonces_usa_esa_version_como_borrador(self):
+        VersionadoFormulaService.crear_version(self.formula, "Ensayo más rojizo, sin aprobar", self.tintorero)
+        DetalleFormula.objects.filter(pk=self.detalle_gr_l.pk).update(concentracion_gr_l=Decimal("5.000"))
+
+        resp, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": 1})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        datos = generar.call_args.args[0]
+        self.assertEqual(datos["version_numero"], 1)
+        self.assertFalse(datos["es_oficial"])
+        self.assertEqual(datos["fases"][0]["insumos"][0]["dosis"], "0.7000 g/L")  # la v1, no la viva de 5 g/L
+
+    def test_imprimir_dado_version_pedida_distinta_de_la_oficial_cuando_imprime_entonces_gana_la_pedida(self):
+        self._oficializar()  # v1 oficial con 0,7 g/L
+        DetalleFormula.objects.filter(pk=self.detalle_gr_l.pk).update(concentracion_gr_l=Decimal("2.000"))
+        VersionadoFormulaService.crear_version(self.formula, "Ensayo con más colorante", self.tintorero)
+
+        resp, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": 2})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        datos = generar.call_args.args[0]
+        self.assertEqual(datos["version_numero"], 2)
+        self.assertFalse(datos["es_oficial"])
+        self.assertEqual(datos["fases"][0]["insumos"][0]["dosis"], "2.0000 g/L")
+
+    def test_imprimir_dado_version_oficial_pedida_cuando_imprime_entonces_no_es_borrador(self):
+        version = self._oficializar()
+
+        _, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": version.numero})
+
+        datos = generar.call_args.args[0]
+        self.assertTrue(datos["es_oficial"])
+        self.assertEqual(datos["version_numero"], version.numero)
+
+    def test_imprimir_dado_numero_de_version_inexistente_cuando_imprime_entonces_404_sin_llamar_al_servicio(self):
+        resp, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": 99})
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        generar.assert_not_called()
+
+    def test_imprimir_dado_version_de_otra_formula_cuando_imprime_entonces_404(self):
+        otra = FormulaColorFactory(sede=self.sede, codigo="AZ-OTRA", nombre_color="Verde Bosque", estado="en_pruebas")
+        VersionadoFormulaService.crear_version(otra, "Ensayo de otra fórmula", self.tintorero)
+
+        resp, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": 1})
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        generar.assert_not_called()
+
+    def test_imprimir_dado_numero_de_version_cero_cuando_imprime_entonces_400(self):
+        resp, generar = self._imprimir({"peso": "100", "litros": "800", "numero_version": 0})
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        generar.assert_not_called()
+
     def test_imprimir_dado_pdf_generado_cuando_responde_entonces_nombra_el_archivo_con_el_codigo(self):
         resp, _ = self._imprimir()
         self.assertEqual(resp.content, b"%PDF-hoja")

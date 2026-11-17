@@ -2,6 +2,82 @@
 
 ## Noviembre 2026
 
+### 17 de Noviembre de 2026 — Imprimir fórmulas por color y material (sin commitear)
+
+A pedido del usuario: un apartado en el rol Tintorero para imprimir las fórmulas. Se elige el **color**, luego el **tipo de material** y se obtiene la fórmula de ese par; se imprime su **versión estándar** o cualquier otra versión, y se consultan los **matices** (fórmulas derivadas). Decisiones del usuario: un mismo color puede tener una fórmula por material, los matices son las derivadas y en la pestaña nueva se puede imprimir cualquier versión.
+
+**Backend:**
+- `gestion/models/formula.py`: la unicidad de `FormulaColor` pasa de `(nombre_color, sede)` a `(nombre_color, tipo_sustrato, sede)`. Migración `gestion/0011_formula_nombre_por_sustrato`. Relajar una restricción única no puede fallar con datos existentes.
+- `POST /api/formula-colors/{id}/imprimir-dosificacion/` acepta `numero_version` opcional (`ImprimirDosificacionSerializer`). Sin número, sigue imprimiendo la oficial o la receta en edición. Con número, imprime esa versión de la propia fórmula (404 si no existe o es de otra fórmula) y marca borrador si no es la oficial.
+- Sin endpoint nuevo de catálogo: la cascada usa `GET /formula-colors/`, y el historial, `versiones/` y `derivadas/`, que ya existían.
+
+**printing_service:**
+- `formula_dosificacion.html`: la versión no oficial se muestra como «v2 (no oficial)» y el aviso dice qué versión se imprimió, en vez de «Receta en edición».
+
+**Frontend:**
+- `components/tintura/ImprimirFormulasPanel.tsx` (nuevo): selectores en cascada, versión estándar, otras versiones con su botón Imprimir, y matices con `DerivadasFormula`.
+- Pestaña «Imprimir Fórmulas» en `TintoreroDashboard` (ruta `/imprimir`).
+- `DialogosFormula.tsx`: `ImprimirDosificacionDialog` acepta `numeroVersion`; sin él, el comportamiento es el de antes.
+- `lib/api/formulasApi.ts`: `listar`, `versiones`, e `imprimirDosificacion` con `numero_version`.
+
+**Pruebas (TDD: pruebas escritas antes del código):**
+- Backend: 3 nuevas de la restricción por material (`test_formula_nombre_por_sustrato.py`); 6 nuevas de impresión por versión (no oficial, distinta de la oficial, oficial pedida, número inexistente, versión de otra fórmula y número cero); 1 de la plantilla en `printing_service`.
+- Frontend: 10 del panel, 3 del API nuevas y 1 de la pestaña.
+
+**Verificación:**
+- Backend: las 1505 pruebas de `gestion` corren sobre SQLite en memoria, porque en este equipo no hay Docker para SQL Server. Quedan 3 fallos que también se reproducen en `HEAD` limpio, sin estos cambios: 2 de `test_despliegue_produccion` (scripts de entrypoint que no corren en Windows) y 1 de `test_pedido_venta_anulacion` (auditoría sin usuario en SQLite). Las suites de fórmulas (239) pasan. Falta correrlas en SQL Server (`scripts/run_backend_tests.sh`).
+- `printing_service`: 124 pruebas OK.
+- Frontend: `tsc --noEmit` limpio; `eslint` limpio en los archivos cambiados; 242 pruebas de `tintura` y del API OK; convención ISTQB con 0 hallazgos.
+
+**Documentación:** `docs/manuales-usuario/MANUAL_TINTORERO.md` (§3.5 y §3.6) y `docs/matriz_trazabilidad_pruebas.md` (nueva sección).
+
+**Ajuste de layout:** la lista de pestañas del Tintorero pasó de `grid-cols-5` a `flex flex-wrap` (`TintoreroDashboard.tsx`). Con seis pestañas, «Historial de Órdenes» y «Descargas de Químicos» se encimaban a 834 px. Ahora caben en una fila en escritorio y envuelven en filas de dos a 390 px, sin scroll horizontal.
+
+**Validación en el navegador (backend real sobre SQLite, Vite en local):**
+- Login como tintorero, cascada color → material → fórmula, versión estándar, otras versiones, matices (derivadas) y diálogo de impresión con el aviso de borrador para la versión no oficial.
+- `POST imprimir-dosificacion` con `numero_version`: versión existente responde 503 (servicio de impresión caído en este equipo); versión inexistente responde 404.
+- No validado: el PDF real, porque el `printing_service` no corre en este equipo.
+
+**Impacto revisado con graphify:** `FormulaColor` (`duplicar`, `derivar`, fábrica, comandos de siembra que buscan por `codigo`), `DosificacionSerializer` (`calcular-dosificacion`), `ImprimirDosificacionDialog` (`FormulaQuimica`), `formulasApi`, `TintoreroDashboard`. URLs verificadas con el resolver: `/api/formula-colors/`, `/{id}/imprimir-dosificacion/`, `/{id}/versiones/`, `/{id}/derivadas/`.
+
+**Suites completas al cierre:**
+- Frontend: 146 archivos, 2070 pruebas OK.
+- `gestion` (SQLite): 1505 pruebas; 3 fallos reproducidos también en `HEAD` limpio (2 de despliegue por scripts de shell en Windows, 1 de auditoría de anulación).
+- `inventory` + `internal_api` (SQLite): 630 pruebas; 1 fallo (tiempo con Redis caído) reproducido también en `HEAD` limpio.
+- `printing_service`: 124 pruebas OK.
+- Pendiente: correr el backend en SQL Server con `scripts/run_backend_tests.sh` en el equipo Linux.
+
+**Al desplegar:** correr la migración `0011` antes de usar la pestaña. La restricción nueva es más permisiva que la anterior: todo lo que se guardó con la restricción por color y sede sigue siendo válido, así que la migración no puede fallar con datos existentes.
+
+### 12 de Noviembre de 2026 — Auditoría y ajustes de Jira (proyecto TEX)
+
+- Sprint 3 iniciado (02–13 nov). Ceremonias TEX-127 a TEX-144 renombradas «Sprint N — Sprint Review/Retrospective», pasadas a tipo *Tarea* y todas con responsable; las de los Sprints 1 y 2 salieron del Sprint 3 activo.
+- Épicas EP-03 a EP-08 pasadas a *En curso* (implementadas, pendientes de aceptación).
+- Versiones R1–R4 creadas en Jira (R1 publicada el 30-oct) y asignadas a las 50 historias de los Sprints 1–8.
+- `docs/gestion-proyecto/PLANIFICACION_SPRINTS.md`: puntos comprometidos frente a entregados (Sprint 0: 21 → 16; Sprint 1: 32 → 37, por el traslado de TEX-04).
+- Pendiente: la resolución de las incidencias en *Listo* sigue vacía; el flujo simplificado la limpia al pasar a *Listo* y la opción «Ajustar resolución» del tablero no se guarda.
+
+### 12 de Noviembre de 2026 — Diagrama BPMN del proceso de negocio (sin commitear)
+
+- Nuevo `docs/diagramas-bpmn/TexCore_proceso_negocio.bpmn` (BPMN 2.0 con DI, abre en Camunda Modeler o bpmn.io), con su render en `.svg` y `.png`.
+- Modela el flujo completo **pedido → producción → despacho → cobro**: pool *Cliente* (contraído, con flujos de mensaje) y pool *Interfibra S.A. — TexCore* con carriles Vendedor, Jefe de Planta, Tintorero, Bodeguero, Jefe de Área, Operario, Empaquetado y Despacho.
+- Incluye las reglas de negocio documentadas: validación de crédito y precio base, MRP, receta aprobada (versión oficial), estados de la OP (Pendiente → En Proceso → Finalizada), rechazo de lote con reversión de inventario, transferencia interárea, validación de escaneo en el servicio satélite, despacho parcial y conciliación de pagos FIFO.
+
+### 12 de Noviembre de 2026 — Documento de tesis V15, puntos 7 a 11 (sin commitear)
+
+A pedido del usuario: traer al repositorio el documento de los puntos 7 a 11 (versión del 6-oct, en la carpeta del 7.º semestre), actualizarlo y ajustarlo al *Formato Documento Capstone* (feb-2026).
+
+- **Nuevo:** `docs/tesis/Capstone_V15_2026-11-12.docx` y `docs/tesis/figuras/` (13 imágenes).
+- **Formato Capstone:** portada; índices de figuras y de tablas; resumen y abstract de 350 palabras como máximo; introducción del capítulo 7 en un solo párrafo; títulos de tablas y figuras en APA 7 (número en negrita y título en cursiva, encima del objeto, con nota de fuente); toda figura y tabla citada en el texto; referencias en orden alfabético.
+- **Sprints según el cronograma y Jira:** 0 a 2 cerrados, 3 en ejecución y 4 a 8 planificados. TEX-04 figura como trasladada al Sprint 1, igual que en Jira.
+- **Sprint Review:** tabla con cada criterio de aceptación, su resultado y su evidencia (Sprints 0 a 2). Se retiraron los apuntes del tutor.
+- **Cifras actualizadas:**
+  - Pruebas y cobertura al 9-nov; carga al 8 y 27-oct; 416 commits.
+  - Pipeline de GitLab CI, Ruff, cifrado Fernet y exportes en cola (`CORRECCIONES_TESIS.md`).
+- **Pendiente:**
+  - Cuatro capturas: login y panel con acceso restringido, panel del Operario, pipeline en GitLab, y ejecución de pruebas con cobertura.
+  - La Figura 27 (C4 nivel 2) no incluye Redis ni Celery.
+
 ### 10 de Noviembre de 2026 — Estándares y flujo de desarrollo en CLAUDE.md (sin commitear)
 
 A pedido del usuario: que el estilo de desarrollo y el flujo de trabajo queden fijados en el repo para que se mantengan en cualquier computadora (`git pull`).

@@ -283,6 +283,17 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | KPI ejecutivo del MRP (última ejecución completada por sede) | `inventory/tests/test_executive_kpi_service.py` (`MRPKPIsTestCase`) | EP | ✅ |
 | Frontend: panel MRP, Plan MTS con desglose, requisitos de la orden y KPI | `MRPDashboard.test.tsx`, `mrpApi.test.ts`, `PlanProduccionMTS.test.tsx`, `RequisitosMaterialesDialog.test.tsx`, `EjecutivosDashboard.test.tsx` | EP | ✅ |
 
+### Tintorería: impresión de fórmulas por color y material (17-nov-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Un color tiene una fórmula por tipo de material en la sede; mismo color y material se rechaza; otra sede se acepta | `gestion/tests/test_formula_nombre_por_sustrato.py` | EP | ✅ |
+| `imprimir-dosificacion` con `numero_version`: imprime la versión pedida, marca borrador si no es la oficial; número inexistente o de otra fórmula → 404; cero → 400 | `gestion/tests/test_formula_imprimir_dosificacion.py` | EP, BVA | ✅ |
+| `printing_service`: la plantilla muestra «v2 (no oficial)» y el aviso con el número de la versión | `printing_service/tests/unit/test_printing_endpoints.py` | EP | ✅ |
+| `formulasApi`: `listar`, `versiones` e `imprimirDosificacion` con `numero_version` | `frontend/src/lib/api/formulasApi.test.ts` | EP | ✅ |
+| `ImprimirFormulasPanel`: cascada color → material → fórmula, versión estándar, otras versiones, matices, impresión de una versión, catálogo vacío y error de versiones | `frontend/src/components/tintura/ImprimirFormulasPanel.test.tsx` | EP, CN, CB | ✅ |
+| Pestaña «Imprimir Fórmulas» del Tintorero (ruta `/imprimir`) | `frontend/src/components/tintura/TintoreroDashboard.test.tsx` | EP | ✅ |
+
 ### Tintorería: hoja de dosificación imprimible (13-oct-2026)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |

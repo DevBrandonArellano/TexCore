@@ -86,7 +86,8 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
         verbose_name = "Formula de Color"
         verbose_name_plural = "Formulas de Color"
         ordering = ["codigo", "-version"]
-        unique_together = [("codigo", "sede"), ("nombre_color", "sede")]
+        # Un color tiene una fórmula por tipo de material (algodón, poliéster…) en cada sede.
+        unique_together = [("codigo", "sede"), ("nombre_color", "tipo_sustrato", "sede")]
 
     def __str__(self):
         return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"

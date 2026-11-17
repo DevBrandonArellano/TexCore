@@ -444,6 +444,15 @@ class TestPdfFormulaDosificacion:
         assert "1500.0" in html or "1500.00" in html
         assert "BORRADOR" in html
 
+    def test_formula_dosificacion_dado_version_no_oficial_pedida_cuando_renderiza_entonces_muestra_su_numero(self):
+        env = get_pdf_strategy()._env
+        html = env.get_template("formula_dosificacion.html").render(
+            **self._payload(es_oficial=False, version_numero=2)
+        )
+        assert "v2 (no oficial)" in html
+        assert "se imprimió la versión 2" in html
+        assert "Receta en edición" not in html
+
     def test_formula_dosificacion_dado_peso_cero_cuando_genera_entonces_422(self):
         response = client.post(
             "/pdf/formula-dosificacion",

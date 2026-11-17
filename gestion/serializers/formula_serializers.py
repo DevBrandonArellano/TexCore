@@ -361,3 +361,12 @@ class DosificacionSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("Los litros de bano deben ser mayores a cero.")
         return value
+
+
+class ImprimirDosificacionSerializer(DosificacionSerializer):
+    """Entrada de la hoja de dosificación impresa. Sin `numero_version` se imprime la
+    oficial (o la receta en edición); con él, la versión pedida de la fórmula."""
+
+    numero_version = serializers.IntegerField(
+        min_value=1, required=False, allow_null=True, help_text="Número de versión a imprimir."
+    )

@@ -73,6 +73,10 @@ vi.mock('./StockQuimicosDashboard', () => ({
   StockQuimicosDashboard: () => <div data-testid="stock-quimicos-mock">Stock Mock</div>,
 }));
 
+vi.mock('./ImprimirFormulasPanel', () => ({
+  ImprimirFormulasPanel: () => <div data-testid="imprimir-formulas-mock">Imprimir Mock</div>,
+}));
+
 const FORMULA_1 = { id: 1, codigo: 'F1', nombre_color: 'Rojo Carmesí' };
 const QUIMICO_1 = { id: 1, codigo: 'Q1', descripcion: 'Soda Cáustica' };
 
@@ -176,6 +180,15 @@ describe('TintoreroDashboard', () => {
 
     await waitFor(() => expect(screen.getByTestId('procesos-mock')).toBeInTheDocument());
     expect(screen.getByRole('tab', { name: 'Procesos' })).toHaveAttribute('data-state', 'active');
+  });
+
+  it('dado pathname que contiene imprimir cuando monta entonces la pestaña activa es imprimir y se muestra el panel', async () => {
+    mockFetch([], []);
+    renderAt('/imprimir');
+
+    await waitFor(() => expect(screen.getByTestId('imprimir-formulas-mock')).toBeInTheDocument());
+    expect(screen.getByRole('tab', { name: 'Imprimir Fórmulas' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'inactive');
   });
 
   it('dado un cambio en el catalogo de procesos cuando se notifica entonces recarga los procesos activos de las recetas', async () => {

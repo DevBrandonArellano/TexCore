@@ -74,7 +74,19 @@ La hoja de dosificación es el documento que se entrega a la persona que pesa y 
 
 La hoja trae, por cada fase, el proceso, la temperatura, el tiempo y cada químico o colorante con su dosis (g/L o %) y la **cantidad a pesar en gramos y kilos**.
 
-Se imprime siempre la **versión oficial**, la que usa planta, aunque la receta en edición haya cambiado después. Si la fórmula todavía no tiene versión oficial, se imprime la receta en edición y la hoja lleva el aviso **«BORRADOR — NO OFICIAL»**.
+Desde este botón se imprime siempre la **versión oficial**, la que usa planta, aunque la receta en edición haya cambiado después. Si la fórmula todavía no tiene versión oficial, se imprime la receta en edición y la hoja lleva el aviso **«BORRADOR — NO OFICIAL»**. Para imprimir otra versión, use la pestaña **Imprimir Fórmulas** (ver 3.6).
+
+### 3.6 Imprimir cualquier versión (pestaña Imprimir Fórmulas)
+
+1. Abra la pestaña **Imprimir Fórmulas** y elija el **Color**.
+2. Elija el **Tipo de material** (algodón, poliéster…) en el que existe ese color. Cada material tiene su propia fórmula.
+3. La pantalla muestra:
+   - **Versión estándar**: la versión oficial, con su botón **Imprimir**. Si la fórmula no tiene versión oficial, aparece **Imprimir receta en edición**, que sale como borrador.
+   - **Otras versiones**: los ensayos guardados, con su motivo, sus observaciones y su fecha. Cada uno tiene su botón **Imprimir**.
+   - **Matices (fórmulas derivadas)**: las fórmulas nacidas de esta, con la versión de origen y el motivo de cada una. Sirven para revisar los matices hechos a partir de la fórmula.
+4. Pulse **Imprimir** en la versión que necesita, ingrese el peso y los litros, y pulse **Imprimir hoja**.
+
+Una versión que no es la oficial sale con el aviso **«BORRADOR — NO OFICIAL: se imprimió la versión N, que no es la oficial»**.
 
 ## 4. Pestaña Stock de Químicos
 

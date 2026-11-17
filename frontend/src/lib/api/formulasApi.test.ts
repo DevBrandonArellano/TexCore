@@ -32,6 +32,24 @@ describe('formulasApi', () => {
     );
   });
 
+  it('imprimirDosificacion dado un número de versión cuando imprime entonces lo envía en el cuerpo', async () => {
+    mockPost.mockResolvedValueOnce({ data: 'pdf-blob' });
+    await expect(formulasApi.imprimirDosificacion(4, 100, 800, 2)).resolves.toBe('pdf-blob');
+    expect(mockPost).toHaveBeenCalledWith(
+      '/formula-colors/4/imprimir-dosificacion/', { peso: 100, litros: 800, numero_version: 2 }, { responseType: 'blob' },
+    );
+  });
+
+  it('listar dado el catálogo de la sede cuando consulta entonces usa el listado de fórmulas', async () => {
+    await formulasApi.listar();
+    expect(mockGet).toHaveBeenCalledWith('/formula-colors/');
+  });
+
+  it('versiones dado fórmula cuando consulta entonces trae su historial de versiones', async () => {
+    await formulasApi.versiones(4);
+    expect(mockGet).toHaveBeenCalledWith('/formula-colors/4/versiones/');
+  });
+
   it('derivadas dado fórmula cuando consulta entonces usa su acción derivadas', async () => {
     await formulasApi.derivadas(4);
     expect(mockGet).toHaveBeenCalledWith('/formula-colors/4/derivadas/');
