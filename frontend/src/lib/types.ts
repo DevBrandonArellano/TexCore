@@ -244,7 +244,18 @@ export interface StockQuimico {
   bodega_nombre: string;
 }
 
-export type TipoSustrato = 'algodon' | 'poliester' | 'nylon' | 'mixto' | 'otro';
+/** Clave de un material del catálogo de la sede (`MaterialSustrato.clave`): algodon, poliester, lino... */
+export type TipoSustrato = string;
+
+/** Material (tipo de sustrato) del catálogo de la sede; lo crea el tintorero. */
+export interface MaterialSustrato {
+  id: number;
+  /** Se genera del nombre al crear y no cambia: las fórmulas la citan. */
+  clave: string;
+  nombre: string;
+  activo: boolean;
+  sede: number | null;
+}
 
 export interface FormulaColor {
   id: number;

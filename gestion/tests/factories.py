@@ -154,6 +154,15 @@ class ProcesoTintoreriaFactory(DjangoModelFactory):
     sede = factory.SubFactory(SedeFactory)
 
 
+class MaterialSustratoFactory(DjangoModelFactory):
+    class Meta:
+        model = "gestion.MaterialSustrato"
+
+    nombre = factory.Sequence(lambda n: f"Material Test {n}")
+    activo = True
+    sede = factory.SubFactory(SedeFactory)
+
+
 class FormulaColorFactory(DjangoModelFactory):
     class Meta:
         model = "gestion.FormulaColor"

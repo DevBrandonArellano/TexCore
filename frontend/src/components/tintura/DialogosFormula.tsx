@@ -6,10 +6,10 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { formulasApi } from '../../lib/api/formulasApi';
 import type { TipoSustrato } from '../../lib/types';
+import { SelectorMaterial } from './SelectorMaterial';
 
 /** Mínimo exigido por el backend para observaciones/motivo (VersionFormula.motivo). */
 export const OBSERVACIONES_MIN = 10;
@@ -147,8 +147,6 @@ export function CrearVarianteDialog({ formula, onOpenChange, onConfirm }: CrearV
   );
 }
 
-const SUSTRATOS: TipoSustrato[] = ['algodon', 'poliester', 'nylon', 'mixto', 'otro'];
-
 export interface DerivarFormulaDatos {
   codigo: string;
   nombre_color: string;
@@ -221,12 +219,8 @@ export function DerivarFormulaDialog({ origen, onOpenChange, onConfirm }: Deriva
           </div>
           <div className="space-y-1">
             <Label htmlFor="derivar-sustrato">Sustrato (opcional; por defecto el del origen)</Label>
-            <Select value={tipoSustrato} onValueChange={(v) => setTipoSustrato(v as TipoSustrato)}>
-              <SelectTrigger id="derivar-sustrato"><SelectValue placeholder="Igual que el origen" /></SelectTrigger>
-              <SelectContent>
-                {SUSTRATOS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectorMaterial id="derivar-sustrato" value={tipoSustrato} opcional="Igual que el origen"
+              onChange={setTipoSustrato} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="derivar-motivo">Motivo de la derivación (opcional)</Label>

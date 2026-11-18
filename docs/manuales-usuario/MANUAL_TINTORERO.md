@@ -21,6 +21,8 @@ Arriba está **Nueva Fórmula**. Cada fila tiene cuatro botones:
 | 🖨 **Imprimir** | Imprime la hoja de dosificación para quien pesa y prepara (ver 3.5). |
 | 📄 **Crear variante** | Pide un **Código** y un **Nombre del color** nuevos y crea otra fórmula con la misma receta actual, *En Pruebas* y sin versiones. Sirve para desarrollar un color parecido sin tocar el original. |
 
+Al crear o editar una fórmula se elige su **Tipo de material** (algodón, poliéster…). Un mismo color puede tener una fórmula por material. Si el material que necesita no aparece, créelo en la pestaña **Materiales** (ver 8).
+
 ### 3.1 Editar una receta (la receta «viva»)
 
 Una receta se compone de **fases** (baños) en orden; con **Agregar Fase** se añade una nueva. En cada fase se indican:
@@ -78,13 +80,14 @@ Desde este botón se imprime siempre la **versión oficial**, la que usa planta,
 
 ### 3.6 Imprimir cualquier versión (pestaña Imprimir Fórmulas)
 
-1. Abra la pestaña **Imprimir Fórmulas** y elija el **Color**.
-2. Elija el **Tipo de material** (algodón, poliéster…) en el que existe ese color. Cada material tiene su propia fórmula.
-3. La pantalla muestra:
+1. Abra la pestaña **Imprimir Fórmulas**. La tabla **Colores** muestra todos los colores creados, con los materiales en que existe cada uno y su número de fórmulas.
+2. Para encontrar un color, escriba en **Buscar color** parte de su nombre o el código de una de sus fórmulas. No importan las mayúsculas ni las tildes: «limon» encuentra «Limón».
+3. Haga clic en el color. Debajo de la tabla, elija el **Tipo de material** (algodón, poliéster…). Si el color existe en un solo material, ese material ya queda elegido. Cada material tiene su propia fórmula.
+4. La pantalla muestra:
    - **Versión estándar**: la versión oficial, con su botón **Imprimir**. Si la fórmula no tiene versión oficial, aparece **Imprimir receta en edición**, que sale como borrador.
    - **Otras versiones**: los ensayos guardados, con su motivo, sus observaciones y su fecha. Cada uno tiene su botón **Imprimir**.
    - **Matices (fórmulas derivadas)**: las fórmulas nacidas de esta, con la versión de origen y el motivo de cada una. Sirven para revisar los matices hechos a partir de la fórmula.
-4. Pulse **Imprimir** en la versión que necesita, ingrese el peso y los litros, y pulse **Imprimir hoja**.
+5. Pulse **Imprimir** en la versión que necesita, ingrese el peso y los litros, y pulse **Imprimir hoja**.
 
 Una versión que no es la oficial sale con el aviso **«BORRADOR — NO OFICIAL: se imprimió la versión N, que no es la oficial»**.
 
@@ -112,7 +115,17 @@ Catálogo de **procesos de tintorería** de su sede (Descrude, Lavado reductivo,
 
 Los cambios se reflejan de inmediato en el editor de fórmulas.
 
-## 8. Preguntas frecuentes
+## 8. Pestaña Materiales
+
+Catálogo de **materiales** (tipos de sustrato) de su sede: algodón, poliéster, nylon, mixto, otro y los que usted agregue (lino, seda…). Cada sede nueva arranca con esos cinco materiales base.
+
+- **Nuevo material**: escriba el **Nombre** (de 2 a 60 caracteres). No puede repetirse en la sede: «Lino» y «LINO» se consideran el mismo material.
+- **Editar** (✎): cambia el nombre. Las fórmulas que ya usan el material lo siguen usando y muestran el nombre nuevo. Pide una **Justificación**.
+- **Desactivar / Activar** (⏻): un material inactivo deja de ofrecerse en las fórmulas nuevas. Las fórmulas que ya lo usan lo conservan y se pueden seguir editando. Pide una **Justificación** antes de confirmar.
+- Cada cambio queda en la **auditoría** con su usuario, fecha y justificación; la revisa el Administrador de Sistemas.
+- Los materiales no se eliminan desde esta pestaña. Solo el administrador puede eliminar uno, y únicamente si ninguna fórmula lo usa.
+
+## 9. Preguntas frecuentes
 
 **¿Cuándo marco una versión como oficial?** Cuando el ensayo ya fue validado en laboratorio. Desde ese momento producción puede lanzar órdenes con ella; coordínelo con el Jefe de Área o de Planta.
 
@@ -123,5 +136,7 @@ Los cambios se reflejan de inmediato en el editor de fórmulas.
 **¿Variante o derivada?** **Crear variante** (en la lista) copia la receta viva. **Derivar** (en Versiones) parte de una versión concreta y queda registrada como derivada del origen. En ambos casos se crea una fórmula nueva.
 
 **No encuentro una fórmula en la lista.** Puede ser de laboratorio: marque **Mostrar fórmulas de laboratorio**.
+
+**No encuentro el material que necesito al crear una fórmula.** Créelo en la pestaña **Materiales**, o actívelo si está inactivo. El catálogo es por sede.
 
 **No encuentro el proceso que necesito en las fases.** Créelo en la pestaña **Procesos**, o actívelo si está inactivo. El catálogo es por sede.

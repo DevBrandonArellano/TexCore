@@ -4,6 +4,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
+from gestion.middleware import set_current_user
+
 
 class CookieJWTAuthentication(JWTAuthentication):
     """
@@ -27,6 +29,10 @@ class CookieJWTAuthentication(JWTAuthentication):
         # otra página: una escritura exige además el token CSRF en `X-CSRFToken` (Zero
         # Trust, OWASP A01). Los métodos seguros (GET, HEAD, OPTIONS) no lo piden.
         self.enforce_csrf(request)
+        # AuditMiddleware guardó `request.user` antes de esta autenticación (era anónimo):
+        # se registra aquí el usuario real, para que la auditoría sepa quién hizo el cambio.
+        # El middleware lo limpia al terminar la petición.
+        set_current_user(user)
         return user, validated_token
 
     @staticmethod

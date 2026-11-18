@@ -195,6 +195,40 @@ class HistorialDespachoSerializer(serializers.ModelSerializer):
         return "Sistema"
 
 
+# Nombre legible de cada tabla auditada, para la columna «Objeto afectado» y el filtro
+# por módulo de la auditoría (Admin Sistemas).
+NOMBRES_TABLA = {
+    "customuser": "Usuario",
+    "detalleformula": "Detalle Fórmula",
+    "formulacolor": "Fórmula Color",
+    "materialsustrato": "Material",
+    "procesotintoreria": "Proceso de Tintorería",
+    "sede": "Sede",
+    "area": "Área",
+    "producto": "Producto",
+    "proveedor": "Proveedor",
+    "bodega": "Bodega",
+    "maquina": "Máquina",
+    "processstep": "Paso de Proceso",
+    "fasereceta": "Fase Receta",
+    "cliente": "Cliente",
+    "pagocliente": "Pago Cliente",
+    "ordenproduccion": "Orden Producción",
+    "loteproduccion": "Lote Producción",
+    "pedidoventa": "Pedido Venta",
+    "detallepedido": "Detalle Pedido",
+    "stockbodega": "Stock Bodega",
+    "movimientoinventario": "Movimiento Inventario",
+    "historialdespacho": "Historial Despacho",
+    "requerimientomaterial": "Requerimiento Material",
+    "ordencomprasugerida": "Orden Compra Sugerida",
+}
+
+
+def nombre_de_tabla(modelo: str) -> str:
+    return NOMBRES_TABLA.get(modelo.lower(), modelo.capitalize())
+
+
 class AuditLogSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
     tabla_afectada = serializers.SerializerMethodField()
@@ -227,34 +261,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
         return obj.usuario.username if obj.usuario else "Sistema"
 
     def get_tabla_afectada(self, obj):
-        if obj.content_type:
-            model = obj.content_type.model
-            nombres = {
-                "customuser": "Usuario",
-                "detalleformula": "Detalle Fórmula",
-                "formulacolor": "Fórmula Color",
-                "sede": "Sede",
-                "area": "Área",
-                "producto": "Producto",
-                "proveedor": "Proveedor",
-                "bodega": "Bodega",
-                "maquina": "Máquina",
-                "processstep": "Paso de Proceso",
-                "fasereceta": "Fase Receta",
-                "cliente": "Cliente",
-                "pagocliente": "Pago Cliente",
-                "ordenproduccion": "Orden Producción",
-                "loteproduccion": "Lote Producción",
-                "pedidoventa": "Pedido Venta",
-                "detallepedido": "Detalle Pedido",
-                "stockbodega": "Stock Bodega",
-                "movimientoinventario": "Movimiento Inventario",
-                "historialdespacho": "Historial Despacho",
-                "requerimientomaterial": "Requerimiento Material",
-                "ordencomprasugerida": "Orden Compra Sugerida",
-            }
-            return nombres.get(model.lower(), model.capitalize())
-        return "N/A"
+        return nombre_de_tabla(obj.content_type.model) if obj.content_type else "N/A"
 
     def get_registro_id(self, obj):
         return str(obj.object_id) if obj.object_id is not None else "N/A"

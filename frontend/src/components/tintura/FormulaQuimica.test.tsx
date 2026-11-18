@@ -37,6 +37,15 @@ vi.mock('../../lib/api/formulasApi', async (importOriginal) => {
   };
 });
 
+const mockListarMateriales = vi.fn();
+vi.mock('../../lib/api/materialesSustratoApi', () => ({
+  materialesSustratoApi: { listar: (...args: unknown[]) => mockListarMateriales(...args) },
+}));
+const MATERIALES = [
+  { id: 1, clave: 'algodon', nombre: 'Algodón', activo: true, sede: 1 },
+  { id: 2, clave: 'seda', nombre: 'Seda', activo: true, sede: 1 },
+];
+
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
   Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
@@ -150,6 +159,8 @@ function inputConcentracionDeFila(textoProducto: string) {
 
 describe('FormulaQuimica', () => {
   beforeEach(() => {
+    mockListarMateriales.mockReset();
+    mockListarMateriales.mockResolvedValue(MATERIALES);
     toastErrorMock.mockReset();
   });
 
@@ -317,6 +328,28 @@ describe('FormulaQuimica', () => {
           orden_adicion: 1,
         })],
       })],
+    })));
+  });
+
+  it('dado un material creado por el tintorero cuando lo elige al crear entonces la fórmula se guarda con ese material', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+    await abrirNuevaFormula();
+
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-3010');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'AZUL SEDA');
+    await screen.findByRole('option', { name: 'Seda' });
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de material'), 'seda');
+
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    const concentracionInput = inputConcentracionDeFila('Soda Cáustica');
+    await userEvent.clear(concentracionInput);
+    await userEvent.type(concentracionInput, '10');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(expect.objectContaining({
+      nombre_color: 'AZUL SEDA', tipo_sustrato: 'seda',
     })));
   });
 

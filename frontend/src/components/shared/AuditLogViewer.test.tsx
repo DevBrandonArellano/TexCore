@@ -3,6 +3,7 @@
  * - Partición de equivalencia (EP): una peticion en curso / sin registros / registros existentes / un registro
  *   de creacion / un registro de edicion.
  * - Caja blanca (CB): ramas de error — un error en la peticion.
+ * - Filtro por módulo (EP): con módulo / sin módulo / catálogo de módulos que no carga.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -63,6 +64,20 @@ const LOG_DELETE = {
 function mockFetch(results: unknown[], count = results.length) {
   mockGet.mockResolvedValue({ data: { results, count } });
 }
+
+const MODULOS = [
+  { valor: 'formulacolor', etiqueta: 'Fórmula Color' },
+  { valor: 'materialsustrato', etiqueta: 'Material' },
+];
+
+/** El catálogo de módulos responde aparte de la lista de registros. */
+function mockFetchConModulos(results: unknown[] = []) {
+  mockGet.mockImplementation((url: string) => Promise.resolve(
+    url.includes('/modulos/') ? { data: MODULOS } : { data: { results, count: results.length } },
+  ));
+}
+
+const llamadasDeRegistros = () => mockGet.mock.calls.filter(([url]) => !(url as string).includes('/modulos/'));
 
 describe('AuditLogViewer', () => {
   beforeEach(() => {
@@ -176,6 +191,33 @@ describe('AuditLogViewer', () => {
     expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('page=1'));
   });
 
+  it('dado el catálogo de módulos cuando carga entonces los ofrece en el filtro Módulo', async () => {
+    mockFetchConModulos();
+    render(<AuditLogViewer />);
+    expect(await screen.findByRole('option', { name: 'Material' })).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/inventory/audit-logs/modulos/');
+  });
+
+  it('dado un módulo elegido cuando busca entonces filtra por esa tabla y reinicia la página', async () => {
+    mockFetchConModulos();
+    render(<AuditLogViewer />);
+    await screen.findByRole('option', { name: 'Material' });
+    mockGet.mockClear();
+
+    fireEvent.change(screen.getByLabelText('Módulo'), { target: { value: 'materialsustrato' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('&tabla=materialsustrato')));
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('page=1'));
+  });
+
+  it('dado sin módulo elegido cuando consulta entonces no envía el filtro de tabla', async () => {
+    mockFetchConModulos();
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(llamadasDeRegistros()).toHaveLength(1));
+    expect(llamadasDeRegistros()[0][0]).not.toContain('tabla=');
+  });
+
   it('dado sin filtros de fecha ni operacion cuando consulta entonces no los envia', async () => {
     mockFetch([], 0);
     render(<AuditLogViewer />);
@@ -256,11 +298,11 @@ describe('AuditLogViewer', () => {
     mockFetch([], 0);
     render(<AuditLogViewer />);
 
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(llamadasDeRegistros()).toHaveLength(1));
 
     await userEvent.click(screen.getByRole('button', { name: /Refrescar/ }));
 
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(llamadasDeRegistros()).toHaveLength(2));
   });
 
   it('dado un error en la peticion cuando monta entonces deja de cargar y muestra el mensaje de vacio', async () => {

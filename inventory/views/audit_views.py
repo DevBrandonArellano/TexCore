@@ -1,15 +1,18 @@
 import logging
 from datetime import datetime, time, timedelta
 
+from django.apps import apps
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import mixins, permissions, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
 
-from gestion.models import AuditLog
+from gestion.models import AuditableModelMixin, AuditLog
 from gestion.views._common import parse_int_param, parse_rango_fechas
-from inventory.serializers import AuditLogSerializer
+from inventory.serializers import AuditLogSerializer, nombre_de_tabla
 
 logger = logging.getLogger("inventory.views")
 
@@ -33,7 +36,7 @@ class AuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         grupos = set(user.groups.values_list("name", flat=True))
 
         # Solo admins pueden ver auditoría
-        if not (user.is_superuser or grupos & {"admin_sistemas", "admin_sede"}):
+        if not self._puede_ver_auditoria(user):
             return qs.none()
 
         # TEX-52 CA-1: rango de fechas y tipo de operación. Sin `fecha_desde` se muestran
@@ -79,9 +82,36 @@ class AuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             siguiente = timezone.make_aware(datetime.combine(fecha_hasta + timedelta(days=1), time.min))
             qs = qs.filter(fecha_hora__lt=siguiente)
 
+        # Filtro por módulo: el nombre de la tabla afectada (ContentType.model).
+        tabla = (params.get("tabla") or "").strip().lower()
+        if tabla:
+            qs = qs.filter(content_type__model=tabla)
+
         accion = (params.get("accion") or "").strip().upper()
         if accion:
             if accion not in dict(AuditLog.ACCION_CHOICES):
                 raise ValidationError({"accion": "Use CREATE, UPDATE o DELETE."})
             qs = qs.filter(accion=accion)
         return qs
+
+    @staticmethod
+    def _puede_ver_auditoria(user):
+        return user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "admin_sede"]).exists()
+
+    @action(detail=False, methods=["get"], url_path="modulos", pagination_class=None)
+    def modulos(self, request):
+        """GET /inventory/audit-logs/modulos/ — módulos que se auditan, para el filtro por
+        módulo del visor. Sale de los modelos auditados, sin recorrer la tabla de logs."""
+        if not self._puede_ver_auditoria(request.user):
+            raise PermissionDenied("Solo los administradores ven la auditoría.")
+        modelos = {m._meta.model_name for m in _modelos_auditados()}
+        datos = [{"valor": m, "etiqueta": nombre_de_tabla(m)} for m in modelos]
+        return Response(sorted(datos, key=lambda d: d["etiqueta"]))
+
+
+def _modelos_auditados():
+    """Modelos con AuditableModelMixin y los que se auditan por señal (gestion.signals)."""
+    from gestion.signals import modelos_auditados_por_senal
+
+    propios = [m for m in apps.get_models() if issubclass(m, AuditableModelMixin)]
+    return [*propios, *modelos_auditados_por_senal()]

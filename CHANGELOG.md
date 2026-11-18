@@ -2,6 +2,109 @@
 
 ## Noviembre 2026
 
+### 18 de Noviembre de 2026 — El tintorero crea los materiales (tipos de sustrato) (sin commitear)
+
+A pedido del usuario, el tintorero puede crear los materiales con los que trabaja y elegirlos al crear un color. Antes, el material era una lista fija en el código (Algodón, Poliéster, Nylon, Mixto, Otro) y el formulario «Nueva Fórmula» no tenía selector de material: toda fórmula se guardaba como algodón.
+
+El usuario aprobó tres decisiones:
+- **(a)** El catálogo es por sede.
+- **(b)** El tintorero crea y edita; eliminar es solo del administrador y se rechaza si alguna fórmula usa el material.
+- **(c)** `FormulaColor.tipo_sustrato` sigue guardando la clave como texto. No cambian el API ni la plantilla de impresión.
+
+**Backend:**
+- `gestion/models/formula.py`: modelo nuevo `MaterialSustrato` (`clave`, `nombre`, `activo`, `sede`), con unicidad `(clave, sede)`.
+  - La clave se genera del nombre («Lino Orgánico» → `lino_organico`) y no cambia al renombrar.
+  - `delete()` rechaza un material que usan fórmulas de su sede.
+  - `FormulaColor.tipo_sustrato` pierde las `choices`, y `TIPO_SUSTRATO_CHOICES` se elimina.
+- Migración `gestion/0012_materialsustrato`:
+  - Crea la tabla y siembra en cada sede los cinco materiales base, más cualquier otra clave que ya usen sus fórmulas.
+  - No modifica datos de fórmulas.
+- `gestion/signals.py`: cada sede nueva recibe los materiales base.
+- `MaterialSustratoViewSet` en `/api/materiales-sustrato/`:
+  - Leer: cualquier usuario autenticado.
+  - Crear y editar: tintorero o admin.
+  - Eliminar: solo admin. Si el material está en uso, responde 400.
+  - Filtro `?activo=`.
+- `FormulaColorWriteSerializer` valida que el material exista activo en la sede de la fórmula. Una fórmula que ya usaba un material desactivado puede seguir editándose sin cambiarlo.
+- `VersionadoFormulaService.derivar` aplica la misma validación.
+- `tipo_sustrato_display` sale del catálogo, anotado con un `Subquery` en el listado y en `derivadas/` para evitar N+1.
+- La hoja de dosificación imprime el nombre del material.
+
+**Frontend:**
+- `lib/api/materialesSustratoApi.ts` (nuevo), con el tipo `MaterialSustrato` en `lib/types.ts`. `TipoSustrato` pasa a ser `string`.
+- `components/tintura/ManageMaterialesSustrato.tsx` (nuevo): lista, crear, renombrar y activar o desactivar. Sigue el patrón de `ManageProcesosTintoreria`.
+- `components/tintura/SelectorMaterial.tsx` (nuevo): ofrece los materiales activos de la sede. Si la fórmula en edición usa un material ya inactivo, lo conserva como opción.
+- Pestaña «Materiales» en `TintoreroDashboard` (ruta `/materiales`).
+- `FormulaQuimica.tsx`: el formulario de fórmula tiene ahora el campo «Tipo de material».
+- `DialogosFormula.tsx`: «Derivar» usa el catálogo en vez de la lista fija.
+
+**Pruebas (TDD: escritas antes del código):**
+- Backend: 31 nuevas en `gestion/tests/test_materiales_sustrato.py` (EP, BVA, STT, TD).
+- Frontend: 17 nuevas en `ManageMaterialesSustrato`, `SelectorMaterial`, `materialesSustratoApi`, el selector en `FormulaQuimica` y la pestaña en `TintoreroDashboard`.
+
+**Verificación (en Linux, con Docker):**
+- Backend en **SQL Server** (contenedor `docker-db-1`, base de pruebas `test_texcore_ci`): las suites de fórmulas, materiales, versionado, impresión y procesos dan 184 pruebas OK. Suite completa (`gestion`, `inventory` e `internal_api`): 2166 pruebas OK en 17 minutos, sin fallos. Es la primera corrida completa en SQL Server desde el 17-nov, cuando quedó pendiente.
+- Frontend: `tsc --noEmit` limpio; `eslint` limpio en los archivos cambiados; suite completa con 149 archivos y 2087 pruebas OK.
+- La migración 0012 quedó aplicada en la base de desarrollo, con los cinco materiales base en la sede existente.
+
+**Documentación:**
+- `docs/manuales-usuario/MANUAL_TINTORERO.md`: §3 y la nueva §8 «Pestaña Materiales». Preguntas frecuentes renumeradas a §9.
+- `docs/matriz_trazabilidad_pruebas.md`: sección nueva.
+
+**Tabla de colores en «Imprimir Fórmulas» (plan aprobado por el usuario):**
+- `ImprimirFormulasPanel.tsx`: el selector «Color» se reemplaza por la tabla **Colores**, con todos los colores de la sede, sus materiales y su número de fórmulas.
+- Buscador **Buscar color**: filtra por nombre o por código de fórmula, sin importar mayúsculas ni tildes.
+- Al hacer clic en un color se elige el material, preseleccionado si es el único, y se muestran la versión estándar, las otras versiones y los matices.
+- Solo cambia el frontend: usa `GET /formula-colors/`, que ya existía.
+- Pruebas: 7 nuevas y 2 reescritas en `ImprimirFormulasPanel.test.tsx` (16 en total). `tintura`: 14 archivos y 189 pruebas OK. `tsc` y `eslint` limpios.
+- Documentación: `MANUAL_TINTORERO.md` §3.6 y la matriz de trazabilidad.
+
+**Auditoría de materiales, visible en Admin Sistemas (decisiones A, B y C aprobadas por el usuario):**
+
+- **(A) Justificación obligatoria:**
+  - `MaterialSustrato` exige justificación al renombrar, activar o desactivar (`requiere_justificacion_auditoria`). Crear no la pide.
+  - El serializador acepta `_justificacion_auditoria` y responde 400 si falta.
+  - En `ManageMaterialesSustrato`, editar muestra el campo **Justificación** y activar o desactivar abre un diálogo de confirmación que también la pide.
+- **(B) Filtro por módulo y nombres legibles:**
+  - `GET /inventory/audit-logs/?tabla=<modelo>` filtra por la tabla afectada.
+  - `GET /inventory/audit-logs/modulos/` devuelve los módulos auditados con su nombre, ordenados. Solo lo ven los administradores; los demás reciben 403. La lista sale de los modelos con `AuditableModelMixin` y de los que se auditan por señal (`gestion.signals.modelos_auditados_por_senal`), sin recorrer la tabla de logs.
+  - «Objeto afectado» muestra «Material» y «Proceso de Tintorería». El mapa de nombres pasó a `inventory.serializers.NOMBRES_TABLA`.
+  - `AuditLogViewer` agrega el filtro **Módulo**.
+- **(C) Siembra auditada:** `MaterialSustrato.sembrar_base` crea los materiales uno por uno, en vez de `bulk_create`. Así cada alta queda en la auditoría con su sede y la justificación *Material base sembrado al crear la sede «…»*.
+
+**Defecto corregido: la auditoría no registraba al usuario en los cambios hechos por la API.**
+- `AuditMiddleware` guardaba `request.user` antes de que DRF autenticara el JWT de la cookie, así que el usuario quedaba anónimo.
+- En la base de desarrollo, todos los cambios hechos desde la interfaz figuraban como «Sistema»: 23 de usuarios, 11 de productos, 7 de bodegas, máquinas y los materiales de hoy. Solo los datos sembrados por comando tenían usuario.
+- Corrección: `CookieJWTAuthentication` registra al usuario autenticado con `gestion.middleware.set_current_user`, y el middleware lo limpia al terminar la petición.
+- Los registros anteriores no se pueden recuperar: quedan como «Sistema».
+- La captura del usuario no cambió en git desde junio (`5e5e64e`): el middleware siempre leyó `request.user` antes de DRF, y el login con JWT nunca abre sesión de Django.
+- **Validado en vivo** contra el backend de desarrollo, con login por `POST /api/token/`, cookie JWT y `X-CSRFToken`, igual que el navegador. Con un usuario tintorero temporal (`validacion_auditoria`, desactivado al terminar), se desactivó y reactivó el material «Otro». Los dos `UPDATE` quedaron con ese usuario y su justificación. Los dos de las 18:49, previos a la corrección, siguen como «Sistema».
+
+**Selector de material en «Fórmulas» de Admin Sistemas:** `ManageFormulas.tsx` usa `SelectorMaterial`. Al crear se elige el material, que antes siempre era algodón. Al editar se precarga el actual y se conserva aunque esté inactivo.
+
+**Pruebas (TDD):**
+- Backend:
+  - 5 nuevas en `test_materiales_sustrato.py` (`MaterialSustratoAuditoriaTestCase`).
+  - 3 en `test_auditoria_usuario_jwt.py`, que reproducían el defecto antes de corregirlo.
+  - 5 en `inventory/tests/test_audit_modulos.py`.
+- Frontend:
+  - 5 nuevas y 2 reescritas en `ManageMaterialesSustrato`.
+  - 3 nuevas en `AuditLogViewer`; la de «Refrescar» ahora cuenta solo las consultas de registros.
+  - 3 nuevas en `ManageFormulas`.
+- Verificación (Linux, Docker):
+  - Backend completo (`gestion`, `inventory` e `internal_api`) en SQL Server: 2179 pruebas OK en 31 minutos, sin fallos (13 más que la corrida anterior).
+  - Frontend completo: 149 archivos y 2102 pruebas OK (15 más).
+  - `tsc --noEmit` y `eslint` limpios en los archivos cambiados.
+
+**Documentación:**
+- `MANUAL_ADMIN_SISTEMAS.md`: §7 (Fórmulas), §8 (filtro Módulo, materiales y usuario «Sistema») y §10 (materiales base de la sede nueva).
+- `MANUAL_ADMIN_SEDE.md` §4: filtro Módulo.
+- `MANUAL_TINTORERO.md` §8: justificación y auditoría.
+- Matriz de trazabilidad.
+- `docs/historias-usuarios/ROLES_Y_PERMISOS.md`: permisos de `/materiales-sustrato/`, el filtro `tabla`, `audit-logs/modulos/` y el usuario de cada registro.
+- `docs/requerimientos/REGISTRO_RIESGOS.md`: RS-26 (auditoría sin usuario), mitigado.
+- `docs/arquitectura/ARQUITECTURA_SISTEMA.md`: `CookieJWTAuthentication` fija el usuario de la auditoría.
+
 ### 17 de Noviembre de 2026 — Imprimir fórmulas por color y material (sin commitear)
 
 A pedido del usuario: un apartado en el rol Tintorero para imprimir las fórmulas. Se elige el **color**, luego el **tipo de material** y se obtiene la fórmula de ese par; se imprime su **versión estándar** o cualquier otra versión, y se consultan los **matices** (fórmulas derivadas). Decisiones del usuario: un mismo color puede tener una fórmula por material, los matices son las derivadas y en la pestaña nueva se puede imprimir cualquier versión.

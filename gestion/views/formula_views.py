@@ -16,6 +16,7 @@ from gestion.models import (
     DetalleFormula,
     FaseReceta,
     FormulaColor,
+    MaterialSustrato,
     ProcesoTintoreria,
     ProcessStep,
     VersionFormula,
@@ -29,6 +30,7 @@ from gestion.serializers import (
     ImprimirDosificacionSerializer,
     FormulaColorSerializer,
     FormulaColorWriteSerializer,
+    MaterialSustratoSerializer,
     ProcesoTintoreriaSerializer,
     ProcessStepSerializer,
     VersionFormulaResumenSerializer,
@@ -91,6 +93,45 @@ class ProcesoTintoreriaViewSet(
         return qs
 
 
+class MaterialSustratoViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
+    """Catálogo por sede de los materiales (tipos de sustrato) de las fórmulas. Lo leen
+    todos los autenticados; lo mantienen el tintorero y el administrador. Eliminar es
+    solo del administrador y se rechaza si alguna fórmula usa el material: se desactiva."""
+
+    serializer_class = MaterialSustratoSerializer
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated()]
+        if self.action == "destroy":
+            return [IsAuthenticated(), IsSystemAdmin()]
+        return [IsAuthenticated(), IsTintoreroOrAdmin()]
+
+    def get_queryset(self):
+        qs = _filtrar_por_sede_usuario(MaterialSustrato.objects.all(), self.request)
+        activo = self.request.query_params.get("activo")
+        if activo is not None:
+            qs = qs.filter(activo=activo.lower() in ("1", "true"))
+        return qs
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        try:
+            super().perform_destroy(instance)
+        except DjangoValidationError as e:
+            raise ValidationError({"detail": e.messages}) from e
+
+
+def _anotar_material(qs):
+    """Nombre del material de cada fórmula, leído del catálogo de su sede (sin N+1)."""
+    nombre = MaterialSustrato.objects.filter(clave=OuterRef("tipo_sustrato"), sede=OuterRef("sede")).values(
+        "nombre"
+    )[:1]
+    return qs.annotate(nombre_material=Subquery(nombre))
+
+
 def _texto_dosis(calculo):
     """Dosis tal como figura en la receta: concentración en g/L o porcentaje sobre la tela."""
     if calculo.tipo_calculo == "gr_l" and calculo.concentracion_gr_l is not None:
@@ -136,8 +177,10 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
     def get_queryset(self):
         oficial = VersionFormula.objects.filter(formula=OuterRef("pk"), es_oficial=True).values("numero")[:1]
         qs = _filtrar_por_sede_usuario(
-            FormulaColor.objects.prefetch_related("fases__proceso", "fases__detalles__producto").annotate(
-                numero_version_oficial=Subquery(oficial)
+            _anotar_material(
+                FormulaColor.objects.prefetch_related("fases__proceso", "fases__detalles__producto").annotate(
+                    numero_version_oficial=Subquery(oficial)
+                )
             ),
             self.request,
         )
@@ -271,7 +314,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             "generado_en": timezone.now().isoformat(),
             "formula_codigo": formula.codigo,
             "formula_nombre": formula.nombre_color,
-            "tipo_sustrato": formula.tipo_sustrato or None,
+            "tipo_sustrato": MaterialSustrato.nombre_de(formula.tipo_sustrato, formula.sede_id) or None,
             "version_numero": version.numero if version else None,
             "es_oficial": bool(version and version.es_oficial),
             "peso_kg": float(resultado.kg_tela),
@@ -389,7 +432,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
     def derivadas(self, request, pk=None):
         """GET /formula-colors/{id}/derivadas/ — fórmulas nacidas de esta."""
         formula = self.get_object()
-        qs = formula.derivadas.select_related("version_origen").all()
+        qs = _anotar_material(formula.derivadas.select_related("version_origen", "formula_origen"))
         return Response(FormulaColorSerializer(qs, many=True, context={"request": request}).data)
 
     @action(detail=True, methods=["get", "post"], url_path="versiones")

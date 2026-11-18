@@ -12,6 +12,10 @@ import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { SelectorMaterial } from '../tintura/SelectorMaterial';
+
+/** Material por defecto de una fórmula nueva: algodón, que toda sede tiene de base. */
+const MATERIAL_POR_DEFECTO = 'algodon';
 
 interface ManageFormulasProps {
   formulas: FormulaColor[];
@@ -30,6 +34,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     codigo: '',
     nombre_color: '',
     description: '',
+    tipo_sustrato: MATERIAL_POR_DEFECTO,
     _justificacion_auditoria: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,6 +64,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       codigo: '',
       nombre_color: '',
       description: '',
+      tipo_sustrato: MATERIAL_POR_DEFECTO,
       _justificacion_auditoria: '',
     });
     setErrors({});
@@ -86,7 +92,6 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     // conserva la receta (fases e insumos se editan en el panel del tintorero).
     const datosGenerales = {
       ...formData,
-      tipo_sustrato: editingFormula?.tipo_sustrato || 'algodon',
       observaciones: editingFormula?.observaciones || '',
     };
 
@@ -110,6 +115,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       codigo: formula.codigo,
       nombre_color: formula.nombre_color,
       description: formula.description || '',
+      tipo_sustrato: formula.tipo_sustrato || MATERIAL_POR_DEFECTO,
       _justificacion_auditoria: '',
     });
     setIsOpen(true);
@@ -154,6 +160,12 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
                 <div className="space-y-2">
                   <Label htmlFor="description">Descripción</Label>
                   <Input id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tipo_sustrato">Tipo de material</Label>
+                  <SelectorMaterial id="tipo_sustrato" value={formData.tipo_sustrato}
+                    etiquetaActual={editingFormula?.tipo_sustrato_display}
+                    onChange={(clave) => setFormData({ ...formData, tipo_sustrato: clave })} />
                 </div>
                 {editingFormula && (
                   <div className="space-y-2">

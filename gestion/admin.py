@@ -15,6 +15,7 @@ from .models import (
     MaquinaProceso,
     OrdenProduccion,
     PedidoVenta,
+    MaterialSustrato,
     ProcesoTintoreria,
     ProcessStep,
     Producto,
@@ -77,6 +78,7 @@ admin.site.register(Producto)
 admin.site.register(ProcessStep)
 admin.site.register(FormulaColor)
 admin.site.register(ProcesoTintoreria)
+admin.site.register(MaterialSustrato)
 admin.site.register(MaquinaProceso)
 admin.site.register(DetalleFormula)
 admin.site.register(Cliente)

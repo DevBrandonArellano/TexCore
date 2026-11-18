@@ -179,7 +179,8 @@ TexCore es un **sistema de gestión de órdenes de producción** con funciones d
 ║  │              INFRAESTRUCTURA TRANSVERSAL                       │  ║
 ║  │                                                                │  ║
 ║  │  · AuditMiddleware (get_current_user, get_current_ip)          │  ║
-║  │  · CookieJWTAuthentication (httpOnly cookies)                  │  ║
+║  │  · CookieJWTAuthentication (httpOnly cookies; fija el usuario  │  ║
+║  │    de la auditoría con set_current_user)                       │  ║
 ║  │  · texcore_exception_handler (errores sin stack trace)         │  ║
 ║  │  · RFC5424Formatter (logging estructurado syslog)              │  ║
 ║  │  · drf_spectacular (OpenAPI 3.1 en /api/docs/)                 │  ║

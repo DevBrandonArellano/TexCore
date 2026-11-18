@@ -19,6 +19,7 @@ import { CrearVarianteDialog, DerivarFormulaDatos, ImprimirDosificacionDialog } 
 import { FormulaDetalle } from './FormulaDetalle';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
 import { calcularCantidad } from './calcularCantidad';
+import { SelectorMaterial } from './SelectorMaterial';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -198,6 +199,8 @@ export function FormulaQuimica({
   const [formulaVariante, setFormulaVariante] = useState<FormulaColor | null>(null);
   const [formulaImprimir, setFormulaImprimir] = useState<FormulaColor | null>(null);
   const [formulaDetalle, setFormulaDetalle] = useState<FormulaColor | null>(null);
+  // Nombre del material de la fórmula en edición, por si ya está inactivo en el catálogo.
+  const [etiquetaMaterialActual, setEtiquetaMaterialActual] = useState<string | undefined>(undefined);
   const procesosActivos = useMemo(() => procesos.filter((p) => p.activo), [procesos]);
   const nombreProceso = (id?: number) => procesos.find((p) => p.id === id)?.nombre ?? 'Sin proceso';
   const busqueda = searchParams.get('q') || '';
@@ -237,6 +240,7 @@ export function FormulaQuimica({
   const fasesWatcher = useWatch({ control: form.control, name: "fases" });
 
   const abrirEditar = (formula: FormulaColor) => {
+    setEtiquetaMaterialActual(formula.tipo_sustrato_display);
     form.reset({
       id: formula.id,
       codigo: formula.codigo,
@@ -279,6 +283,7 @@ export function FormulaQuimica({
   });
 
   const abrirNuevo = () => {
+    setEtiquetaMaterialActual(undefined);
     form.reset({
       codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '',
       es_laboratorio: false, fases: [faseVacia('pre_tratamiento', 1)]
@@ -466,6 +471,18 @@ export function FormulaQuimica({
                   <Label>Nombre del Color <span className="text-red-500">*</span></Label>
                   <Input {...form.register('nombre_color')} placeholder="ROJO INTENSO" className="uppercase" />
                   {form.formState.errors.nombre_color && <span className="text-xs text-red-500">{form.formState.errors.nombre_color.message}</span>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="formula-material">Tipo de material</Label>
+                  <Controller
+                    control={form.control}
+                    name="tipo_sustrato"
+                    render={({ field }) => (
+                      <SelectorMaterial id="formula-material" value={field.value ?? ''} onChange={field.onChange}
+                        etiquetaActual={etiquetaMaterialActual} />
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">¿No está el material? Créelo en la pestaña Materiales.</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Estado</Label>

@@ -2,7 +2,8 @@
  * Técnicas ISTQB aplicadas (CTFL v4.0):
  * - Partición de equivalencia (EP): sin formulas / formulas existentes / loading en true / busqueda por codigo
  *   / busqueda por nombre de color.
- * - Transición de estados (STT): formula aprobada con justificacion.
+ * - Transición de estados (STT): formula aprobada con justificacion; material actual ya inactivo.
+ * - Material (EP): elegido al crear / conservado al editar.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -20,6 +21,16 @@ vi.mock('sonner', () => ({
     success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
+
+const mockListarMateriales = vi.fn();
+vi.mock('../../lib/api/materialesSustratoApi', () => ({
+  materialesSustratoApi: { listar: (...args: unknown[]) => mockListarMateriales(...args) },
+}));
+const MATERIALES = [
+  { id: 1, clave: 'algodon', nombre: 'Algodón', activo: true, sede: 1 },
+  { id: 2, clave: 'poliester', nombre: 'Poliéster', activo: true, sede: 1 },
+  { id: 3, clave: 'seda', nombre: 'Seda', activo: true, sede: 1 },
+];
 
 const FORMULA_1: FormulaColor = {
   id: 1,
@@ -66,6 +77,42 @@ describe('ManageFormulas', () => {
   beforeEach(() => {
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
+    mockListarMateriales.mockReset();
+    mockListarMateriales.mockResolvedValue(MATERIALES);
+  });
+
+  it('dado un material elegido cuando crea una formula entonces la envía con ese material', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+
+    await userEvent.click(screen.getByRole('button', { name: /Nueva Fórmula/i }));
+    await userEvent.type(screen.getByLabelText(/Código/), 'SED-001');
+    await userEvent.type(screen.getByLabelText(/Nombre del Color/), 'Azul Seda');
+    await screen.findByRole('option', { name: 'Seda' });
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de material'), 'seda');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(expect.objectContaining({
+      codigo: 'SED-001', tipo_sustrato: 'seda',
+    })));
+  });
+
+  it('dado editar una formula cuando abre el dialogo entonces precarga su material', async () => {
+    renderComponent({ formulas: [FORMULA_2] });
+    const [editButton] = within(getRow('AZL-002')).getAllByRole('button');
+    await userEvent.click(editButton);
+
+    await screen.findByRole('option', { name: 'Poliéster' });
+    expect(screen.getByLabelText('Tipo de material')).toHaveValue('poliester');
+  });
+
+  it('dado una formula con material ya inactivo cuando la edita entonces lo conserva como opción', async () => {
+    renderComponent({ formulas: [{ ...FORMULA_1, tipo_sustrato: 'lino', tipo_sustrato_display: 'Lino' }] });
+    const [editButton] = within(getRow('ROJ-001')).getAllByRole('button');
+    await userEvent.click(editButton);
+
+    expect(await screen.findByRole('option', { name: 'Lino (inactivo)' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Tipo de material')).toHaveValue('lino');
   });
 
   it('dado sin formulas cuando carga entonces la tabla no muestra filas de datos', async () => {

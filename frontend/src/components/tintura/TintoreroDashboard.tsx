@@ -8,6 +8,7 @@ import { FormulaQuimica, type FormulaFormValues } from '../tintura/FormulaQuimic
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
 import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
 import { ManageProcesosTintoreria } from './ManageProcesosTintoreria';
+import { ManageMaterialesSustrato } from './ManageMaterialesSustrato';
 import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintoreria';
 import { ImprimirFormulasPanel } from '../tintura/ImprimirFormulasPanel';
 import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
@@ -48,6 +49,8 @@ export function TintoreroDashboard() {
     ? 'descargas'
     : pathname.includes('/imprimir')
     ? 'imprimir'
+    : pathname.includes('/materiales')
+    ? 'materiales'
     : 'formulas';
 
   // Filtros desde URL (Modelo Híbrido)
@@ -227,6 +230,7 @@ export function TintoreroDashboard() {
           <TabsTrigger value="historial">Historial de Órdenes</TabsTrigger>
           <TabsTrigger value="descargas">Descargas de Químicos</TabsTrigger>
           <TabsTrigger value="procesos">Procesos</TabsTrigger>
+          <TabsTrigger value="materiales">Materiales</TabsTrigger>
         </TabsList>
 
         <TabsContent value="formulas" className="flex-1">
@@ -255,6 +259,10 @@ export function TintoreroDashboard() {
 
         <TabsContent value="procesos" className="flex-1">
           <ManageProcesosTintoreria onCatalogoCambiado={fetchData} />
+        </TabsContent>
+
+        <TabsContent value="materiales" className="flex-1">
+          <ManageMaterialesSustrato onCatalogoCambiado={fetchData} />
         </TabsContent>
 
         <TabsContent value="stock" className="flex-1">

@@ -12,6 +12,7 @@ from .core_views import (
 )
 from .formula_views import (
     FormulaColorViewSet,
+    MaterialSustratoViewSet,
     ProcesoTintoreriaViewSet,
     ProcessStepViewSet,
 )
@@ -89,6 +90,7 @@ __all__ = [
     "PedidoVentaViewSet",
     "PlanProduccionViewSet",
     "PlantaPulsoDiarioView",
+    "MaterialSustratoViewSet",
     "ProcesoTintoreriaViewSet",
     "ProcessStepViewSet",
     "ProduccionHistorialProductoView",

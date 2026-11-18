@@ -20,7 +20,14 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Max
 
-from gestion.models import DetalleFormula, FaseReceta, FormulaColor, ProcesoTintoreria, VersionFormula
+from gestion.models import (
+    DetalleFormula,
+    FaseReceta,
+    FormulaColor,
+    MaterialSustrato,
+    ProcesoTintoreria,
+    VersionFormula,
+)
 
 
 def _decimal_o_none(valor):
@@ -162,10 +169,13 @@ class VersionadoFormulaService:
         versión concreta de otra fórmula (oficial o ensayo, a elección del tintorero).
         La derivada arranca sin versiones propias; el primer `crear_version` que se le
         haga será su v1."""
+        tipo_sustrato = datos.get("tipo_sustrato") or formula_origen.tipo_sustrato
+        if tipo_sustrato != formula_origen.tipo_sustrato:
+            MaterialSustrato.validar_disponible(tipo_sustrato, formula_origen.sede_id)
         nueva = FormulaColor.objects.create(
             codigo=datos["codigo"],
             nombre_color=datos["nombre_color"],
-            tipo_sustrato=datos.get("tipo_sustrato") or formula_origen.tipo_sustrato,
+            tipo_sustrato=tipo_sustrato,
             estado="en_pruebas",
             sede=formula_origen.sede,
             creado_por=usuario,

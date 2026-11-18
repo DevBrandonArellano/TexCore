@@ -2,21 +2,114 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator
 from django.db import models
+from django.utils.text import slugify
 
 from .catalogo import Producto
 from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 
 
-class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
-    campos_auditables = ["codigo", "nombre_color", "tipo_sustrato", "estado", "observaciones"]
+CLAVE_MATERIAL_MAX = 20
+
+
+def clave_de_material(nombre: str) -> str:
+    """Clave estable de un material a partir de su nombre: «Lino Orgánico» -> «lino_organico»."""
+    return slugify(nombre or "").replace("-", "_")[:CLAVE_MATERIAL_MAX].strip("_")
+
+
+class MaterialSustrato(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    """Catálogo por sede de los materiales (tipos de sustrato) con los que trabaja el
+    tintorero. FormulaColor.tipo_sustrato guarda la `clave`, que se genera del nombre al
+    crear el material y no cambia después: renombrarlo no rompe las fórmulas que lo usan.
+
+    Auditado: crear no pide justificación; renombrarlo, activarlo o desactivarlo, sí."""
+
+    campos_auditables = ["clave", "nombre", "activo", "sede"]
     requiere_justificacion_auditoria = True
-    TIPO_SUSTRATO_CHOICES = [
-        ("algodon", "Algodon"),
-        ("poliester", "Poliester"),
+
+    MATERIALES_BASE = [
+        ("algodon", "Algodón"),
+        ("poliester", "Poliéster"),
         ("nylon", "Nylon"),
         ("mixto", "Mixto"),
         ("otro", "Otro"),
     ]
+
+    clave = models.CharField(max_length=CLAVE_MATERIAL_MAX, editable=False)
+    nombre = models.CharField(max_length=60, validators=[MinLengthValidator(2)])
+    activo = models.BooleanField(default=True)
+    sede = models.ForeignKey(
+        Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name="materiales_sustrato"
+    )
+
+    class Meta:
+        verbose_name = "Material (tipo de sustrato)"
+        verbose_name_plural = "Materiales (tipos de sustrato)"
+        ordering = ["nombre"]
+        unique_together = ("clave", "sede")
+
+    def __str__(self):
+        return self.nombre
+
+    def get_audit_sede_id(self):
+        return self.sede_id
+
+    def clean(self):
+        super().clean()
+        if not self.clave:
+            self.clave = clave_de_material(self.nombre)
+        if not self.clave:
+            raise ValidationError({"nombre": "El nombre debe tener al menos una letra o un número."})
+
+    def validate_unique(self, exclude=None):
+        # La clave no es editable: Django la excluiría de la validación de unicidad.
+        super().validate_unique(exclude=exclude)
+        duplicado = MaterialSustrato.objects.filter(clave=self.clave, sede_id=self.sede_id).exclude(pk=self.pk)
+        if duplicado.exists():
+            raise ValidationError({"nombre": f'Ya existe un material equivalente a "{self.nombre}" en esta sede.'})
+
+    def formulas_que_lo_usan(self):
+        return FormulaColor.objects.filter(tipo_sustrato=self.clave, sede_id=self.sede_id)
+
+    def delete(self, *args, **kwargs):
+        if self.formulas_que_lo_usan().exists():
+            raise ValidationError(
+                f'El material "{self.nombre}" lo usan fórmulas de la sede: desactívelo en lugar de eliminarlo.'
+            )
+        return super().delete(*args, **kwargs)
+
+    @classmethod
+    def sembrar_base(cls, sede):
+        """Crea en la sede los materiales base que aún no tenga. Uno por uno, no en
+        bloque, para que cada alta quede en la auditoría con la sede que la originó."""
+        existentes = set(cls.objects.filter(sede=sede).values_list("clave", flat=True))
+        for clave, nombre in cls.MATERIALES_BASE:
+            if clave in existentes:
+                continue
+            material = cls(clave=clave, nombre=nombre, sede=sede)
+            material._justificacion_auditoria = f'Material base sembrado al crear la sede "{sede.nombre}"'
+            material.save()
+
+    @classmethod
+    def validar_disponible(cls, clave, sede_id):
+        """El material debe existir activo en la sede. Sin sede (administrador global),
+        basta con que exista activo en alguna."""
+        qs = cls.objects.filter(clave=clave, activo=True)
+        if sede_id is not None:
+            qs = qs.filter(sede_id=sede_id)
+        if not qs.exists():
+            raise ValidationError(
+                {"tipo_sustrato": f'El material "{clave}" no existe o está inactivo en el catálogo de la sede.'}
+            )
+
+    @classmethod
+    def nombre_de(cls, clave, sede_id):
+        nombre = cls.objects.filter(clave=clave, sede_id=sede_id).values_list("nombre", flat=True).first()
+        return nombre or clave
+
+
+class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    campos_auditables = ["codigo", "nombre_color", "tipo_sustrato", "estado", "observaciones"]
+    requiere_justificacion_auditoria = True
     ESTADO_CHOICES = [
         ("en_pruebas", "En Pruebas"),
         ("aprobada", "Aprobada"),
@@ -26,10 +119,9 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
     nombre_color = models.CharField(max_length=100)
     description = models.TextField(blank=True, default="")
     tipo_sustrato = models.CharField(
-        max_length=20,
-        choices=TIPO_SUSTRATO_CHOICES,
+        max_length=CLAVE_MATERIAL_MAX,
         default="algodon",
-        help_text="Tipo de fibra o sustrato al que aplica esta formula",
+        help_text="Clave del material (MaterialSustrato de la sede) al que aplica esta formula",
     )
     version = models.PositiveIntegerField(
         default=1, help_text="Numero de version. Se incrementa al duplicar la formula"

@@ -7,12 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '@/lib/axios';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es } from 'date-fns/locale';
+
 import { RegistroAuditoria } from '../../lib/types';
 import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 const ITEMS_PER_PAGE = 20;
 const SIN_REGISTROS: RegistroAuditoria[] = [];
+
+/** Módulo auditado (tabla afectada) para el filtro por módulo. */
+interface ModuloAuditoria {
+  valor: string;
+  etiqueta: string;
+}
+
+const listaDeModulos = (data: unknown): ModuloAuditoria[] => (Array.isArray(data) ? data : []);
 
 interface AuditLogViewerProps {
   sedeId?: string;
@@ -28,6 +37,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
   const [accion, setAccion] = useState("");
+  const [modulo, setModulo] = useState("");
   const [errorFiltro, setErrorFiltro] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
@@ -35,12 +45,19 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
   const effectiveSedeId = (permitirVerTodasSedes && verTodas) ? undefined : sedeId;
 
   // Los filtros del formulario se aplican al enviar; la página y «ver todas» al cambiar.
-  const [aplicados, setAplicados] = useState({ search: "", desde: "", hasta: "", accion: "" });
+  const [aplicados, setAplicados] = useState({ search: "", desde: "", hasta: "", accion: "", modulo: "" });
   const filtros = [
     aplicados.desde && `&fecha_desde=${aplicados.desde}`,
     aplicados.hasta && `&fecha_hasta=${aplicados.hasta}`,
     aplicados.accion && `&accion=${aplicados.accion}`,
+    aplicados.modulo && `&tabla=${encodeURIComponent(aplicados.modulo)}`,
   ].filter(Boolean).join('');
+  // Sin el catálogo de módulos el visor sigue funcionando: el filtro solo queda vacío.
+  const catalogoModulos = useCargaRemota(
+    () => apiClient.get<ModuloAuditoria[]>('/inventory/audit-logs/modulos/').then((r) => listaDeModulos(r.data)),
+    'modulos-auditoria',
+  );
+  const modulos = catalogoModulos.datos ?? [];
   const url = `/inventory/audit-logs/?search=${encodeURIComponent(aplicados.search)}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}${filtros}`;
   const carga = useCargaRemota(
     () =>
@@ -67,7 +84,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
       return;
     }
     setErrorFiltro(null);
-    setAplicados({ search, desde, hasta, accion });
+    setAplicados({ search, desde, hasta, accion, modulo });
     setPage(1);
     // Volver a buscar con los mismos filtros también consulta de nuevo.
     fetchLogs();
@@ -141,6 +158,14 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                 <option value="CREATE">Creación</option>
                 <option value="UPDATE">Edición</option>
                 <option value="DELETE">Eliminación</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="audit-modulo" className="text-xs text-muted-foreground">Módulo</label>
+              <select id="audit-modulo" value={modulo} onChange={(e) => setModulo(e.target.value)}
+                className="h-9 rounded-md border bg-background px-2 text-sm">
+                <option value="">Todos</option>
+                {modulos.map((m) => <option key={m.valor} value={m.valor}>{m.etiqueta}</option>)}
               </select>
             </div>
             <Button type="submit" className="self-end">Buscar</Button>

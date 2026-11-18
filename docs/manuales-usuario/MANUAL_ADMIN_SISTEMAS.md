@@ -37,7 +37,7 @@ Es la pestaña principal de trabajo de este rol. Tiene 11 sub-secciones:
 | **Áreas** | Crear, editar y eliminar las áreas de producción dentro de cada sede. |
 | **Productos** | Catálogo maestro de productos (materia prima y producto terminado). |
 | **Químicos** | Catálogo maestro de insumos químicos. |
-| **Fórmulas** | Catálogo global de fórmulas de color: código, nombre y descripción. La receta completa (fases, químicos), la aprobación y el historial de versiones se gestionan desde el Panel de Tintorería. |
+| **Fórmulas** | Catálogo global de fórmulas de color: código, nombre, descripción y **tipo de material** (del catálogo de materiales de la sede, que mantiene el tintorero). La receta completa (fases, químicos), la aprobación y el historial de versiones se gestionan desde el Panel de Tintorería. |
 | **Bodegas** | Crear, editar y eliminar bodegas dentro de cada sede. |
 | **Clientes** | Vista global de clientes de todas las sedes. |
 | **Proveedores** | Catálogo de proveedores. |
@@ -55,10 +55,13 @@ Por defecto se ven los cambios de los **últimos 30 días**. Para consultar otro
 1. Escriba en el buscador parte del nombre de usuario, el nombre de la tabla (por ejemplo, *pedidoventa* o *stockbodega*) o el ID exacto del registro (opcional).
 2. Elija las fechas **Desde** y **Hasta** (opcional; con **Desde** se pueden consultar registros de cualquier antigüedad).
 3. Elija la **Operación**: *Todas*, *Creación*, *Edición* o *Eliminación*.
-4. Pulse **Buscar**.
+4. Elija el **Módulo** (opcional): *Material*, *Fórmula Color*, *Usuario*, *Producto*… para ver solo los cambios de ese tipo de registro.
+5. Pulse **Buscar**.
 
 Los registros de auditoría no se pueden modificar ni borrar desde ningún lugar del sistema.
 
+- **Materiales de tintorería:** quedan registrados cuando el tintorero crea, renombra, activa o desactiva un material. Para renombrar, activar o desactivar, el sistema le pide una justificación, que aparece en la columna **Justificación**. Los cinco materiales base que se crean con cada sede nueva figuran como creaciones, con la justificación *Material base sembrado al crear la sede «…»*.
+- Cada registro muestra el usuario que hizo el cambio. Los cambios que hace el propio sistema (procesos automáticos, carga inicial) aparecen como *Sistema*.
 - Un registro pertenece a una sede si lo hizo un usuario de esa sede **en ese momento** o si el objeto modificado es de esa sede. Si un usuario cambia de sede, sus registros anteriores se quedan en la sede donde ocurrieron.
 
 ## 9. Crear un usuario nuevo
@@ -81,7 +84,7 @@ Para editar o dar de baja un usuario existente, deben usarse las acciones dispon
 
 Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsabilidad de este rol crearlas antes de que el resto de los usuarios pueda operar:
 
-1. Vaya a **Gestión → Sedes** para crear la sede (nombre, ubicación, datos generales).
+1. Vaya a **Gestión → Sedes** para crear la sede (nombre, ubicación, datos generales). La sede nace con los cinco materiales base de tintorería (algodón, poliéster, nylon, mixto y otro).
 2. Vaya a **Gestión → Áreas**, seleccione la sede correspondiente y cree las áreas de producción que la componen (por ejemplo, Tejeduría, Tintorería, Empaque).
 3. Luego, cree las **Bodegas** de esa sede en **Gestión → Bodegas**.
 4. Registre (o pida al Administrador de Sede que registre) las **equivalencias de empaque** de la sede en **Gestión → Sedes**.

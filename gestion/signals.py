@@ -19,6 +19,7 @@ from .models import (
     FaseReceta,
     LoteProduccion,
     Maquina,
+    MaterialSustrato,
     PagoCliente,
     ProcessStep,
     Proveedor,
@@ -277,7 +278,22 @@ for _model in _MODELOS_AUDITABLES_GESTION:
     post_save.connect(_create_audit_for_model, sender=_model)
     pre_delete.connect(_delete_audit_for_model, sender=_model)
 
+@receiver(post_save, sender=Sede)
+def sembrar_materiales_de_sede(sender, instance, created, raw=False, **kwargs):
+    """Una sede nueva arranca con los materiales base (algodón, poliéster...); el
+    tintorero agrega después los suyos."""
+    if created and not raw:
+        MaterialSustrato.sembrar_base(instance)
+
+
 # Registrar señales para modelos de Inventario
+
+
+def modelos_auditados_por_senal():
+    """Modelos sin AuditableModelMixin cuya auditoría registran las señales de este módulo."""
+    from inventory.models import HistorialDespacho, MRPEjecucion
+
+    return [*_MODELOS_AUDITABLES_GESTION, CustomUser, HistorialDespacho, MRPEjecucion]
 
 
 def _register_inventory_signals():

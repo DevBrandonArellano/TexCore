@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
@@ -5,6 +6,7 @@ from gestion.models import (
     DetalleFormula,
     FaseReceta,
     FormulaColor,
+    MaterialSustrato,
     ProcesoTintoreria,
     ProcessStep,
     VersionFormula,
@@ -41,6 +43,43 @@ class ProcesoTintoreriaSerializer(serializers.ModelSerializer):
         if ProcesoTintoreria.objects.filter(codigo=codigo, sede=sede).exists():
             raise serializers.ValidationError({"codigo": f'Ya existe un proceso con codigo "{codigo}" en esta sede.'})
         return attrs
+
+
+class MaterialSustratoSerializer(serializers.ModelSerializer):
+    """La clave se genera del nombre al crear y no se edita; la sede la asigna
+    SedeAutoAssignMixin y tampoco cambia después (OWASP A01)."""
+
+    # Obligatoria al editar (renombrar, activar o desactivar): queda en la auditoría.
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = MaterialSustrato
+        fields = ["id", "clave", "nombre", "activo", "sede", "_justificacion_auditoria"]
+        read_only_fields = ["clave", "sede"]
+
+    def validate(self, attrs):
+        self._justificacion = (attrs.pop("_justificacion_auditoria", "") or "").strip() or None
+        # La unicidad (clave, sede) depende de la sede efectiva, que llega en
+        # perform_create; se valida aquí con el modelo para responder 400 y no 500.
+        instancia = self.instance or MaterialSustrato(sede=self._sede_del_usuario())
+        for campo, valor in attrs.items():
+            setattr(instancia, campo, valor)
+        if self.instance is None:
+            instancia.clave = ""
+        instancia._justificacion_auditoria = self._justificacion
+        try:
+            instancia.full_clean()
+        except DjangoValidationError as e:
+            errores = e.message_dict if hasattr(e, "error_dict") else {"_justificacion_auditoria": e.messages}
+            raise serializers.ValidationError(errores) from e
+        return attrs
+
+    def update(self, instance, validated_data):
+        instance._justificacion_auditoria = self._justificacion
+        return super().update(instance, validated_data)
+
+    def _sede_del_usuario(self):
+        return getattr(getattr(self.context.get("request"), "user", None), "sede", None)
 
 
 class DetalleFormulaSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
@@ -160,7 +199,8 @@ class DerivarFormulaSerializer(serializers.Serializer):
 
     codigo = serializers.CharField(max_length=100)
     nombre_color = serializers.CharField(max_length=100)
-    tipo_sustrato = serializers.ChoiceField(choices=FormulaColor.TIPO_SUSTRATO_CHOICES, required=False)
+    # Clave de un material del catálogo de la sede; lo valida VersionadoFormulaService.derivar.
+    tipo_sustrato = serializers.CharField(max_length=20, required=False)
     version_origen = serializers.IntegerField(min_value=1)
     motivo_derivacion = serializers.CharField(required=False, allow_blank=True, default="")
     es_laboratorio = serializers.BooleanField(required=False, default=False)
@@ -172,7 +212,7 @@ class FormulaColorSerializer(serializers.ModelSerializer):
     version_oficial = serializers.SerializerMethodField()
     creado_por_nombre = serializers.CharField(source="creado_por.username", read_only=True)
     estado_display = serializers.CharField(source="get_estado_display", read_only=True)
-    tipo_sustrato_display = serializers.CharField(source="get_tipo_sustrato_display", read_only=True)
+    tipo_sustrato_display = serializers.SerializerMethodField()
     # Derivación (spec 2026-09-24 §5.7): de dónde nació esta fórmula, si aplica.
     formula_origen_codigo = serializers.CharField(source="formula_origen.codigo", read_only=True, default=None)
     version_origen_numero = serializers.IntegerField(source="version_origen.numero", read_only=True, default=None)
@@ -205,6 +245,13 @@ class FormulaColorSerializer(serializers.ModelSerializer):
             "es_laboratorio",
         ]
         read_only_fields = ["fecha_creacion", "fecha_modificacion", "creado_por"]
+
+    def get_tipo_sustrato_display(self, obj):
+        # FormulaColorViewSet anota el nombre del material (sin N+1); el fallback cubre
+        # instancias recién creadas o actualizadas.
+        if hasattr(obj, "nombre_material"):
+            return obj.nombre_material or obj.tipo_sustrato
+        return MaterialSustrato.nombre_de(obj.tipo_sustrato, obj.sede_id)
 
     def get_version_oficial(self, obj):
         # FormulaColorViewSet.get_queryset lo anota con un Subquery (sin N+1); el
@@ -247,6 +294,28 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
         # La respuesta de create/update es la representación de lectura completa
         # (fases con proceso, version_oficial...), igual que en list/retrieve.
         return FormulaColorSerializer(instance, context=self.context).data
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        clave = attrs.get("tipo_sustrato")
+        # Una fórmula que ya usaba un material desactivado puede seguir editándose.
+        sin_cambio = self.instance is not None and clave == self.instance.tipo_sustrato
+        if clave is not None and not sin_cambio:
+            try:
+                MaterialSustrato.validar_disponible(clave, self._sede_id_efectiva(attrs))
+            except DjangoValidationError as e:
+                raise serializers.ValidationError(e.message_dict) from e
+        return attrs
+
+    def _sede_id_efectiva(self, attrs):
+        """La sede de la fórmula: la enviada, la que ya tiene o la del usuario (la asigna
+        SedeAutoAssignMixin al crear)."""
+        if attrs.get("sede"):
+            return attrs["sede"].id
+        if self.instance is not None:
+            return self.instance.sede_id
+        usuario = getattr(self.context.get("request"), "user", None)
+        return getattr(usuario, "sede_id", None)
 
     def validate_estado(self, value):
         # El estado lo cambia VersionadoFormulaService.marcar_oficial(), no un PUT/POST directo.

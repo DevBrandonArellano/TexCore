@@ -23,6 +23,7 @@ from .formula import (
     DetalleFormula,
     FaseReceta,
     FormulaColor,
+    MaterialSustrato,
     ProcesoTintoreria,
     VersionFormula,
 )
@@ -101,6 +102,7 @@ __all__ = [
     "Maquina",
     "MaquinaProceso",
     "MateriaPrimaLote",
+    "MaterialSustrato",
     "MermaDesperdicio",
     "OperacionProduccion",
     "OrdenProduccion",

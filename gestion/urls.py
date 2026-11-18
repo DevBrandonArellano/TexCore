@@ -29,6 +29,7 @@ from .views import (
     PedidoVentaViewSet,
     PlanProduccionViewSet,
     PlantaPulsoDiarioView,
+    MaterialSustratoViewSet,
     ProcesoTintoreriaViewSet,
     ProcessStepViewSet,
     ProduccionHistorialProductoView,
@@ -57,6 +58,7 @@ router.register(r"bodegas", BodegaViewSet, basename="bodega")
 router.register(r"process-steps", ProcessStepViewSet, basename="processstep")
 router.register(r"formula-colors", FormulaColorViewSet, basename="formulacolor")
 router.register(r"procesos-tintoreria", ProcesoTintoreriaViewSet, basename="procesotintoreria")
+router.register(r"materiales-sustrato", MaterialSustratoViewSet, basename="materialsustrato")
 router.register(r"clientes", ClienteViewSet, basename="cliente")
 router.register(r"ordenes-produccion", OrdenProduccionViewSet, basename="ordenproduccion")
 router.register(r"lotes-produccion", LoteProduccionViewSet, basename="loteproduccion")

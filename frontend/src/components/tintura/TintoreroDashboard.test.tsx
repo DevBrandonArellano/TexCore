@@ -73,6 +73,10 @@ vi.mock('./StockQuimicosDashboard', () => ({
   StockQuimicosDashboard: () => <div data-testid="stock-quimicos-mock">Stock Mock</div>,
 }));
 
+vi.mock('./ManageMaterialesSustrato', () => ({
+  ManageMaterialesSustrato: () => <div data-testid="materiales-mock">Materiales Mock</div>,
+}));
+
 vi.mock('./ImprimirFormulasPanel', () => ({
   ImprimirFormulasPanel: () => <div data-testid="imprimir-formulas-mock">Imprimir Mock</div>,
 }));
@@ -188,6 +192,15 @@ describe('TintoreroDashboard', () => {
 
     await waitFor(() => expect(screen.getByTestId('imprimir-formulas-mock')).toBeInTheDocument());
     expect(screen.getByRole('tab', { name: 'Imprimir Fórmulas' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'inactive');
+  });
+
+  it('dado pathname que contiene materiales cuando monta entonces la pestaña activa es materiales y se muestra el catálogo', async () => {
+    mockFetch([], []);
+    renderAt('/materiales');
+
+    await waitFor(() => expect(screen.getByTestId('materiales-mock')).toBeInTheDocument());
+    expect(screen.getByRole('tab', { name: 'Materiales' })).toHaveAttribute('data-state', 'active');
     expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'inactive');
   });
 

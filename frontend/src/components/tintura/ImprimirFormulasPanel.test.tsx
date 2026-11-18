@@ -2,7 +2,9 @@
  * Técnicas ISTQB aplicadas (CTFL v4.0):
  * - Partición de equivalencia (EP): catálogo con/sin fórmulas; color con uno o varios
  *   materiales; fórmula con/sin versión estándar; versión oficial y no oficial.
- * - Caja negra (CN): cascada color → material → fórmula; impresión de una versión concreta.
+ * - Caja negra (CN): tabla de colores → material → fórmula; impresión de una versión concreta.
+ * - Búsqueda (EP/BVA): sin texto, por nombre, por código, con tildes y mayúsculas, sin coincidencias.
+ * - Transición de estados (STT): sin color elegido → color elegido → otro color elegido.
  * - Caja blanca (CB): rama de error al cargar el historial de versiones.
  */
 import React from 'react';
@@ -45,8 +47,12 @@ const VERSIONES_AZ_ALG = [
   { id: 10, numero: 1, es_oficial: true, motivo: 'Receta aprobada en laboratorio', observaciones: '', fecha: '2026-11-01T10:00:00Z', creada_por: null, creada_por_nombre: 'tintorero1' },
 ];
 
+const tablaColores = () => screen.findByRole('table', { name: 'Colores' });
+const coloresVisibles = () =>
+  within(screen.getByRole('table', { name: 'Colores' })).queryAllByRole('button').map((b) => b.textContent);
+
 async function elegirColorYMaterial(user: ReturnType<typeof userEvent.setup>, color: string, material: string) {
-  await user.selectOptions(screen.getByLabelText('Color'), color);
+  await user.click(within(await tablaColores()).getByRole('button', { name: color }));
   await user.selectOptions(screen.getByLabelText('Tipo de material'), material);
 }
 
@@ -66,26 +72,82 @@ describe('ImprimirFormulasPanel', () => {
     mockImprimir.mockResolvedValue(new Blob(['%PDF']));
   });
 
-  it('dado el catálogo de la sede cuando carga entonces ofrece cada color una sola vez', async () => {
+  it('dado el catálogo de la sede cuando carga entonces muestra cada color una vez con sus materiales', async () => {
     render(<ImprimirFormulasPanel />);
-    const colores = await screen.findByLabelText('Color');
-    const opciones = within(colores).getAllByRole('option').map((o) => o.textContent);
-    expect(opciones).toEqual(['Seleccione un color', 'Azul Marino', 'Rojo Intenso']);
+    const tabla = await tablaColores();
+    expect(coloresVisibles()).toEqual(['Azul Marino', 'Rojo Intenso']);
+    const filaAzul = within(tabla).getByRole('button', { name: 'Azul Marino' }).closest('tr') as HTMLElement;
+    expect(within(filaAzul).getByText('Algodón, Poliéster')).toBeInTheDocument();
+    expect(within(filaAzul).getByText('2')).toBeInTheDocument();
   });
 
-  it('dado un color cuando se elige entonces ofrece solo los materiales de ese color', async () => {
+  it('dado un texto de búsqueda cuando escribe parte del nombre entonces filtra los colores', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await user.selectOptions(await screen.findByLabelText('Color'), 'Azul Marino');
+    await tablaColores();
+    await user.type(screen.getByLabelText('Buscar color'), 'rojo');
+    expect(coloresVisibles()).toEqual(['Rojo Intenso']);
+  });
+
+  it('dado un texto con otras mayúsculas y tildes cuando busca entonces encuentra el color igual', async () => {
+    const user = userEvent.setup();
+    mockListar.mockResolvedValueOnce([...CATALOGO, formula({ id: 4, codigo: 'LM-ALG', nombre_color: 'Limón Ácido' })]);
+    render(<ImprimirFormulasPanel />);
+    await tablaColores();
+    await user.type(screen.getByLabelText('Buscar color'), 'LIMON ACIDO');
+    expect(coloresVisibles()).toEqual(['Limón Ácido']);
+  });
+
+  it('dado el código de una fórmula cuando busca entonces muestra el color de esa fórmula', async () => {
+    const user = userEvent.setup();
+    render(<ImprimirFormulasPanel />);
+    await tablaColores();
+    await user.type(screen.getByLabelText('Buscar color'), 'az-pol');
+    expect(coloresVisibles()).toEqual(['Azul Marino']);
+  });
+
+  it('dado un texto sin coincidencias cuando busca entonces lo indica', async () => {
+    const user = userEvent.setup();
+    render(<ImprimirFormulasPanel />);
+    await tablaColores();
+    await user.type(screen.getByLabelText('Buscar color'), 'violeta');
+    expect(coloresVisibles()).toEqual([]);
+    expect(screen.getByText('Ningún color coincide con «violeta».')).toBeInTheDocument();
+  });
+
+  it('dado un color cuando se hace clic entonces ofrece solo los materiales de ese color', async () => {
+    const user = userEvent.setup();
+    render(<ImprimirFormulasPanel />);
+    await user.click(within(await tablaColores()).getByRole('button', { name: 'Azul Marino' }));
 
     const materiales = within(screen.getByLabelText('Tipo de material')).getAllByRole('option').map((o) => o.textContent);
     expect(materiales).toEqual(['Seleccione un material', 'Algodón', 'Poliéster']);
   });
 
+  it('dado un color con un solo material cuando se hace clic entonces lo elige y muestra sus versiones', async () => {
+    const user = userEvent.setup();
+    render(<ImprimirFormulasPanel />);
+    await user.click(within(await tablaColores()).getByRole('button', { name: 'Rojo Intenso' }));
+
+    expect(screen.getByLabelText('Tipo de material')).toHaveValue('algodon');
+    expect(await screen.findByText('v2 (oficial)')).toBeInTheDocument();
+    expect(mockVersiones).toHaveBeenCalledWith(3);
+  });
+
+  it('dado un color ya elegido cuando hace clic en otro entonces reinicia el material', async () => {
+    const user = userEvent.setup();
+    render(<ImprimirFormulasPanel />);
+    await elegirColorYMaterial(user, 'Azul Marino', 'poliester');
+    await user.click(within(screen.getByRole('table', { name: 'Colores' })).getByRole('button', { name: 'Rojo Intenso' }));
+
+    expect(screen.getByLabelText('Tipo de material')).toHaveValue('algodon');
+    expect(screen.queryByText('Sin versión estándar')).not.toBeInTheDocument();
+  });
+
   it('dado color y material cuando se eligen entonces ofrece la fórmula de ese par', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'poliester');
 
     expect(within(screen.getByLabelText('Fórmula')).getByRole('option', { name: /AZ-POL/ })).toBeInTheDocument();
@@ -95,7 +157,7 @@ describe('ImprimirFormulasPanel', () => {
   it('dado una fórmula con versión oficial cuando se selecciona entonces muestra la estándar y las demás versiones', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'algodon');
 
     expect(await screen.findByText('Versión estándar')).toBeInTheDocument();
@@ -111,7 +173,7 @@ describe('ImprimirFormulasPanel', () => {
     const user = userEvent.setup();
     mockVersiones.mockResolvedValueOnce([]);
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'poliester');
 
     expect(await screen.findByText('Sin versión estándar')).toBeInTheDocument();
@@ -121,7 +183,7 @@ describe('ImprimirFormulasPanel', () => {
   it('dado una versión cuando se pulsa imprimir entonces abre el diálogo y envía ese número de versión', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'algodon');
     const otras = await screen.findByRole('list', { name: 'Otras versiones' });
 
@@ -136,7 +198,7 @@ describe('ImprimirFormulasPanel', () => {
   it('dado la versión estándar cuando se pulsa imprimir entonces envía el número de la oficial', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'algodon');
     await screen.findByRole('list', { name: 'Otras versiones' });
 
@@ -151,7 +213,7 @@ describe('ImprimirFormulasPanel', () => {
   it('dado una fórmula cuando se elige entonces muestra sus matices (derivadas)', async () => {
     const user = userEvent.setup();
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'algodon');
 
     expect(await screen.findByTestId('matices')).toHaveTextContent('Matices de la fórmula 1');
@@ -167,7 +229,7 @@ describe('ImprimirFormulasPanel', () => {
     const user = userEvent.setup();
     mockVersiones.mockRejectedValueOnce(new Error('500'));
     render(<ImprimirFormulasPanel />);
-    await screen.findByLabelText('Color');
+    await tablaColores();
     await elegirColorYMaterial(user, 'Azul Marino', 'algodon');
 
     expect(await screen.findByText('No se pudo cargar el historial de versiones.')).toBeInTheDocument();

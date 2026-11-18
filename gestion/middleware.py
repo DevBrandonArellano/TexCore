@@ -103,6 +103,11 @@ class AuditMiddleware:
         return response
 
 
+def set_current_user(user):
+    """Usuario de la petición en curso para la auditoría; lo fija la autenticación JWT."""
+    _local.user = user
+
+
 def get_current_user():
     user = getattr(_local, "user", None)
     if user:

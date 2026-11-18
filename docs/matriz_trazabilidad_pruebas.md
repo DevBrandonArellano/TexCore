@@ -283,6 +283,26 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | KPI ejecutivo del MRP (última ejecución completada por sede) | `inventory/tests/test_executive_kpi_service.py` (`MRPKPIsTestCase`) | EP | ✅ |
 | Frontend: panel MRP, Plan MTS con desglose, requisitos de la orden y KPI | `MRPDashboard.test.tsx`, `mrpApi.test.ts`, `PlanProduccionMTS.test.tsx`, `RequisitosMaterialesDialog.test.tsx`, `EjecutivosDashboard.test.tsx` | EP | ✅ |
 
+### Tintorería: catálogo de materiales creable por el tintorero (18-nov-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Modelo `MaterialSustrato`: siembra de los cinco materiales base al crear una sede, clave estable generada del nombre, unicidad por sede, nombre de 1, 2, 60 y 61 caracteres, renombrar conserva la clave, eliminar con o sin fórmulas que lo usan | `gestion/tests/test_materiales_sustrato.py` (`MaterialSustratoModelTestCase`) | EP, BVA, CB | ✅ |
+| API `/materiales-sustrato/`: crear como tintorero o admin; operario y bodeguero → 403; nombre repetido o vacío → 400; lista solo de la sede; filtro `activo`; renombrar sin cambiar la clave; eliminar solo admin, y 400 si está en uso | `gestion/tests/test_materiales_sustrato.py` (`MaterialSustratoApiTestCase`) | EP, BVA, TD | ✅ |
+| Fórmula con material del catálogo: material nuevo, inexistente, de otra sede o inactivo; reactivado; fórmula existente con material desactivado; nombre del material en el listado; derivar con material inexistente | `gestion/tests/test_materiales_sustrato.py` (`FormulaConMaterialTestCase`) | EP, STT | ✅ |
+| `materialesSustratoApi`: listar (todos o activos), crear y actualizar | `frontend/src/lib/api/materialesSustratoApi.test.ts` | EP | ✅ |
+| `ManageMaterialesSustrato`: lista con estado, crear, nombre vacío o de 1 carácter, renombrar, activar y desactivar, error del servidor | `frontend/src/components/tintura/ManageMaterialesSustrato.test.tsx` | EP, BVA, STT, CB | ✅ |
+| `SelectorMaterial`: materiales activos, material actual inactivo, opción vacía, error de carga | `frontend/src/components/tintura/SelectorMaterial.test.tsx` | EP, STT, CB | ✅ |
+| Formulario de fórmula: el material elegido se envía en `tipo_sustrato` | `frontend/src/components/tintura/FormulaQuimica.test.tsx` | EP | ✅ |
+| Pestaña «Materiales» del Tintorero (ruta `/materiales`) | `frontend/src/components/tintura/TintoreroDashboard.test.tsx` | EP | ✅ |
+| Auditoría de materiales: editar sin justificación → error o 400; crear sin justificación; desactivar con justificación registra sede, valores y motivo; la siembra de una sede nueva deja un registro por material con la sede | `gestion/tests/test_materiales_sustrato.py` (`MaterialSustratoAuditoriaTestCase`) | EP, STT | ✅ |
+| Usuario de la auditoría con JWT en cookie: registra al usuario real, no queda colgado en el hilo, token inválido → 401 sin registro | `gestion/tests/test_auditoria_usuario_jwt.py` | EP, CN | ✅ |
+| Auditoría por módulo: filtro `tabla`, módulo inexistente, nombre legible «Material», catálogo `audit-logs/modulos/` ordenado, operario → 403 | `inventory/tests/test_audit_modulos.py` | EP, CN | ✅ |
+| `AuditLogViewer`: catálogo de módulos, filtro por módulo con página 1, sin módulo no envía `tabla` | `frontend/src/components/shared/AuditLogViewer.test.tsx` | EP | ✅ |
+| `ManageMaterialesSustrato`: justificación al renombrar, activar y desactivar; sin justificación no envía; crear no la pide | `frontend/src/components/tintura/ManageMaterialesSustrato.test.tsx` | EP, STT | ✅ |
+| `ManageFormulas` (Admin Sistemas): material elegido al crear, precargado al editar y material inactivo conservado | `frontend/src/components/admin-sistemas/ManageFormulas.test.tsx` | EP, STT | ✅ |
+| «Imprimir Fórmulas»: tabla de colores con sus materiales y número de fórmulas; búsqueda por nombre, por código, con tildes y mayúsculas y sin coincidencias; clic en un color, material único preseleccionado y cambio de color | `frontend/src/components/tintura/ImprimirFormulasPanel.test.tsx` | EP, STT | ✅ |
+
 ### Tintorería: impresión de fórmulas por color y material (17-nov-2026)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |

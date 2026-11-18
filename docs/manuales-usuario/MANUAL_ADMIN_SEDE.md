@@ -26,7 +26,8 @@ Por defecto se ven los cambios de los **últimos 30 días**. Para consultar otro
 1. Escriba en el buscador parte del nombre de usuario, el nombre de la tabla (por ejemplo, *pedidoventa* o *stockbodega*) o el ID exacto del registro (opcional).
 2. Elija las fechas **Desde** y **Hasta** (opcional; con **Desde** se pueden consultar registros de cualquier antigüedad).
 3. Elija la **Operación**: *Todas*, *Creación*, *Edición* o *Eliminación*.
-4. Pulse **Buscar**.
+4. Elija el **Módulo** (opcional): *Material*, *Fórmula Color*, *Usuario*, *Producto*… para ver solo los cambios de ese tipo de registro.
+5. Pulse **Buscar**.
 
 Los registros de auditoría no se pueden modificar ni borrar desde ningún lugar del sistema.
 
